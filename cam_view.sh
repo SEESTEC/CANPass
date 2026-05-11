@@ -332,13 +332,13 @@ show_camera() {
             fi
 
         done < <(
-            # Detector: decodifica o stream, seleciona apenas frames com alteração
-            # significativa e imprime o score em stdout via pipe:1
-            ffmpeg -loglevel error \
+            # Detector: decodifica o stream, seleciona frames com alteração significativa
+            # e captura os scores de cena via stderr (loglevel info) filtrado por grep
+            ffmpeg -loglevel info \
                 -rtsp_transport tcp \
                 -i "$RTSP_URL" \
-                -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:file=pipe\:1:key=lavfi.scene_score" \
-                -f null - 2>/dev/null
+                -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:key=lavfi.scene_score" \
+                -f null /dev/null 2>&1 | grep --line-buffered "lavfi.scene_score"
         )
 
         # Garante que a gravação seja encerrada se o loop sair inesperadamente
