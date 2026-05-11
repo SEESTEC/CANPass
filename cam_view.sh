@@ -114,10 +114,14 @@ detect_cameras() {
         # Deve ser um character device acessível
         [[ -c "$dev" && -r "$dev" ]] || continue
 
-        # Se v4l2-ctl disponível, confirma que suporta captura de vídeo
         if command -v v4l2-ctl &>/dev/null; then
+            # Confirma capacidade de captura de vídeo
             v4l2-ctl --device="$dev" --all 2>/dev/null \
                 | grep -qi "Video Capture" || continue
+
+            # Confirma que existe ao menos um formato de pixel (exclui nós de metadados)
+            v4l2-ctl --device="$dev" --list-formats-ext 2>/dev/null \
+                | grep -qi "Pixel Format" || continue
         fi
 
         cams+=("$dev")
