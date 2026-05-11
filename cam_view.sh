@@ -273,7 +273,7 @@ show_camera() {
         local recording_tmp_file=""
 
         _start_recording() {
-            recording_start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
+            recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
             recording_tmp_file="${rec_dir}/.rec_${recording_start_ts}.mp4"
             ffmpeg -loglevel error \
                 -rtsp_transport tcp \
@@ -289,7 +289,7 @@ show_camera() {
             kill "$recorder_pid" 2>/dev/null
             wait "$recorder_pid" 2>/dev/null
             local recording_end_ts
-            recording_end_ts=$(date +"%H_%M_%S")
+            recording_end_ts=$(date +"%H-%M-%S")
             local final_filename="${rec_dir}/${recording_start_ts}-${recording_end_ts}.mp4"
             [[ -f "$recording_tmp_file" ]] && mv "$recording_tmp_file" "$final_filename"
             log_info "Sem movimento — arquivo salvo: $(basename "$final_filename")"
