@@ -147,9 +147,9 @@ setup_alias() {
     fi
 }
 
-# ─── 7. Captura, transmite via RTSP e exibe localmente ───────────────────────
+# ─── 7. Captura e transmite via RTSP (exibição local opcional com --display) ──
 # ffmpeg: lê o dispositivo V4L2 e envia stream H.264 ao MediaMTX (background)
-# ffplay: consome o stream RTSP para exibição local (foreground)
+# ffplay: consome o stream RTSP para exibição local — apenas com flag --display
 #
 # Flags de captura:
 #   -probesize 32768     ~32 KB — mínimo viável para timestamps estáveis
@@ -166,6 +166,7 @@ setup_alias() {
 
 show_camera() {
     local dev="$1"
+    local display="${2:-}"
     local ffmpeg_pid=""
 
     ensure_mediamtx
@@ -215,13 +216,17 @@ show_camera() {
     echo
     log_ok "Stream RTSP ativo:   ${RTSP_URL}"
     log_ok "Stream WebRTC:       http://${ip}:8889/stream  (abra no navegador de outra máquina)"
-    log_info "Iniciando visualização local — pressione Q para sair."
-    echo
-
-    SDL_RENDER_VSYNC=1 ffplay \
-        -fflags nobuffer -flags low_delay -sync video \
-        -window_title "CANPass: $dev" -loglevel warning \
-        "$RTSP_URL"
+    if [[ "$display" == "--display" ]]; then
+        log_info "Iniciando visualização local — pressione Q para sair."
+        echo
+        SDL_RENDER_VSYNC=1 ffplay \
+            -fflags nobuffer -flags low_delay -sync video \
+            -window_title "CANPass: $dev" -loglevel warning \
+            "$RTSP_URL"
+    else
+        log_info "Stream ativo em background. Pressione Ctrl+C para encerrar."
+        wait "$ffmpeg_pid"
+    fi
 
     trap - EXIT INT TERM
     cleanup
@@ -230,6 +235,11 @@ show_camera() {
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
+    local display=""
+    for arg in "$@"; do
+        [[ "$arg" == "--display" ]] && display="--display"
+    done
+
     echo -e "${BOLD}${CYAN}"
     echo    "╔══════════════════════════════════════╗"
     echo    "║        CANPass — Camera Viewer       ║"
@@ -277,7 +287,7 @@ main() {
     fi
 
     echo
-    show_camera "$selected"
+    show_camera "$selected" "$display"
 }
 
 main "$@"
