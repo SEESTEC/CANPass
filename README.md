@@ -54,6 +54,17 @@ canpass --display
 | RTSP | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP |
 | HLS | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
 
+**Gravação automática:**
+
+Os vídeos são gravados em segmentos de 5 minutos no diretório `canpass_rec/`, criado automaticamente ao lado do script. O nome de cada arquivo segue o formato:
+
+```
+dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4
+ └─ data   └─ início  └─ fim real
+```
+
+Exemplo: `11_05_2026-14_32_00-14_37_03.mp4`
+
 **Diagnóstico (câmera não detectada):**
 
 ```bash
@@ -73,6 +84,12 @@ cmake --build build
 ```
 
 ## Changelog
+
+### 0.3.0 — 2026-05-11
+
+- Gravação automática em background: segmentos de 5 minutos em `canpass_rec/`.
+- Nome do arquivo com horário real de início e fim: `dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4`.
+- Gravação inicia independente do modo de exibição (`--display` ou headless).
 
 ### 0.2.0 — 2026-05-11
 

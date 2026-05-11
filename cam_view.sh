@@ -248,8 +248,43 @@ show_camera() {
     _ffmpeg_loop &
     loop_pid=$!
 
-    # Encerra o loop ao sair (Q, Ctrl+C ou término normal)
-    cleanup() { kill "$loop_pid" 2>/dev/null; }
+    # ── Gravação em segmentos de 5 minutos ───────────────────────────────────
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local rec_dir="${script_dir}/canpass_rec"
+    mkdir -p "$rec_dir"
+
+    _record_loop() {
+        # Aguarda o stream RTSP estabilizar antes de iniciar a gravação
+        sleep 3
+        while true; do
+            local start_ts tmp_file
+            start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
+            tmp_file="${rec_dir}/.rec_${start_ts}.mp4"
+
+            ffmpeg -loglevel error \
+                -rtsp_transport tcp \
+                -i "$RTSP_URL" \
+                -c copy \
+                -t 300 \
+                "$tmp_file" 2>/dev/null
+
+            local rc=$?
+            local end_ts
+            end_ts=$(date +"%H_%M_%S")
+
+            # Renomeia com horário real de início e fim
+            [[ -f "$tmp_file" ]] && mv "$tmp_file" "${rec_dir}/${start_ts}-${end_ts}.mp4"
+
+            (( rc >= 128 )) && return  # encerrado por sinal — para o loop
+            sleep 1
+        done
+    }
+    _record_loop &
+    local rec_pid=$!
+
+    # Encerra os loops ao sair (Q, Ctrl+C ou término normal)
+    cleanup() { kill "$loop_pid" "$rec_pid" 2>/dev/null; }
     trap cleanup EXIT INT TERM
 
     local ip
@@ -257,6 +292,7 @@ show_camera() {
     echo
     log_ok "Stream RTSP ativo:   ${RTSP_URL}"
     log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (abra no navegador de outra máquina)"
+    log_ok "Gravando em:         ${rec_dir}  (segmentos de 5 min)"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo
