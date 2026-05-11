@@ -54,16 +54,35 @@ canpass --display
 | RTSP | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP |
 | HLS | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
 
-**Gravação automática:**
+**Gravação por detecção de movimento:**
 
-Os vídeos são gravados em segmentos de 5 minutos no diretório `canpass_rec/`, criado automaticamente ao lado do script. O nome de cada arquivo segue o formato:
+A gravação ocorre apenas quando movimento é detectado. Os arquivos são salvos em `canpass_rec/`, criado automaticamente ao lado do script.
 
 ```
 dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4
  └─ data   └─ início  └─ fim real
 ```
 
-Exemplo: `11_05_2026-14_32_00-14_37_03.mp4`
+Exemplo: `11_05_2026-14_32_00-14_35_47.mp4`
+
+| Variável de ambiente | Padrão | Descrição |
+|---|---|---|
+| `MOTION_THRESHOLD` | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
+| `MOTION_COOLDOWN_SECS` | `10` | Segundos sem movimento antes de encerrar a gravação |
+
+```bash
+MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
+```
+
+**Como funciona:**
+
+```
+RTSP → ffmpeg detector (select filter) → scores de cena → máquina de estados bash
+                                                                    ↓
+                                                       ffmpeg recorder (-c copy → MP4)
+```
+
+O detector lê o stream RTSP e emite apenas frames onde ≥ `MOTION_THRESHOLD` da imagem mudou. A máquina de estados inicia a gravação ao detectar movimento e a encerra após `MOTION_COOLDOWN_SECS` segundos sem atividade.
 
 **Diagnóstico (câmera não detectada):**
 
@@ -87,9 +106,11 @@ cmake --build build
 
 ### 0.3.0 — 2026-05-11
 
-- Gravação automática em background: segmentos de 5 minutos em `canpass_rec/`.
+- Gravação por detecção de movimento usando filtro `select` do ffmpeg.
+- Detector lê o RTSP e emite scores de cena; máquina de estados bash controla o recorder.
+- Gravação inicia ao detectar movimento e para após cooldown configurável.
+- Threshold e cooldown ajustáveis via variáveis de ambiente (`MOTION_THRESHOLD`, `MOTION_COOLDOWN_SECS`).
 - Nome do arquivo com horário real de início e fim: `dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4`.
-- Gravação inicia independente do modo de exibição (`--display` ou headless).
 
 ### 0.2.0 — 2026-05-11
 

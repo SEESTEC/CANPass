@@ -16,7 +16,9 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 # ─── Constantes ──────────────────────────────────────────────────────────────
 CONTAINER_NAME="mediamtx"
 RTSP_URL="rtsp://localhost:8554/stream"
-HLS_PATH="/stream"   # MediaMTX serve HLS em http://<ip>:8888<HLS_PATH>
+HLS_PATH="/stream"                             # MediaMTX serve HLS em http://<ip>:8888<HLS_PATH>
+MOTION_THRESHOLD="${MOTION_THRESHOLD:-0.02}"   # fração de pixels alterados que caracteriza movimento (0.0–1.0)
+MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-10}"  # segundos sem movimento antes de encerrar gravação
 
 # ─── 1. Verifica / instala pacote ────────────────────────────────────────────
 
@@ -248,43 +250,106 @@ show_camera() {
     _ffmpeg_loop &
     loop_pid=$!
 
-    # ── Gravação em segmentos de 5 minutos ───────────────────────────────────
+    # ── Gravação por detecção de movimento ───────────────────────────────────
+    # Arquitetura:
+    #   ffmpeg detector  →  select filter (scene score)  →  bash state machine
+    #                                                              ↓
+    #                                                   ffmpeg recorder (-c copy → MP4)
+    #
+    # O detector lê o RTSP e emite apenas frames onde ≥ MOTION_THRESHOLD da
+    # imagem mudou. A máquina de estados inicia/para a gravação conforme o fluxo
+    # de eventos e o cooldown configurado.
+
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local rec_dir="${script_dir}/canpass_rec"
     mkdir -p "$rec_dir"
 
-    _record_loop() {
-        # Aguarda o stream RTSP estabilizar antes de iniciar a gravação
-        sleep 3
-        while true; do
-            local start_ts tmp_file
-            start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
-            tmp_file="${rec_dir}/.rec_${start_ts}.mp4"
+    _motion_recording_loop() {
+        local motion_active=0
+        local last_motion_epoch=0
+        local recorder_pid=""
+        local recording_start_ts=""
+        local recording_tmp_file=""
 
+        _start_recording() {
+            recording_start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
+            recording_tmp_file="${rec_dir}/.rec_${recording_start_ts}.mp4"
             ffmpeg -loglevel error \
                 -rtsp_transport tcp \
                 -i "$RTSP_URL" \
                 -c copy \
-                -t 300 \
-                "$tmp_file" 2>/dev/null
+                "$recording_tmp_file" 2>/dev/null &
+            recorder_pid=$!
+            log_info "Movimento detectado — gravando: ${recording_start_ts}"
+        }
 
-            local rc=$?
-            local end_ts
-            end_ts=$(date +"%H_%M_%S")
+        _stop_recording() {
+            [[ -z "$recorder_pid" ]] && return
+            kill "$recorder_pid" 2>/dev/null
+            wait "$recorder_pid" 2>/dev/null
+            local recording_end_ts
+            recording_end_ts=$(date +"%H_%M_%S")
+            local final_filename="${rec_dir}/${recording_start_ts}-${recording_end_ts}.mp4"
+            [[ -f "$recording_tmp_file" ]] && mv "$recording_tmp_file" "$final_filename"
+            log_info "Sem movimento — arquivo salvo: $(basename "$final_filename")"
+            recorder_pid=""
+            recording_start_ts=""
+            recording_tmp_file=""
+        }
 
-            # Renomeia com horário real de início e fim
-            [[ -f "$tmp_file" ]] && mv "$tmp_file" "${rec_dir}/${start_ts}-${end_ts}.mp4"
+        sleep 3  # aguarda o stream RTSP estabilizar
 
-            (( rc >= 128 )) && return  # encerrado por sinal — para o loop
-            sleep 1
-        done
+        # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento
+        # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo
+        while true; do
+            local line="" read_status
+            IFS= read -r -t "${MOTION_COOLDOWN_SECS}" line
+            read_status=$?
+            local now
+            now=$(date +%s)
+
+            if (( read_status == 0 )); then
+                # Frame com movimento recebido: extrai o score e atualiza estado
+                if [[ "$line" =~ lavfi\.scene_score=([0-9.eE+\-]+) ]]; then
+                    local scene_score="${BASH_REMATCH[1]}"
+                    if awk "BEGIN{exit !($scene_score > ${MOTION_THRESHOLD})}"; then
+                        last_motion_epoch=$now
+                        if [[ $motion_active -eq 0 ]]; then
+                            motion_active=1
+                            _start_recording
+                        fi
+                    fi
+                fi
+            elif (( read_status == 1 )); then
+                break  # EOF — detector encerrado (stream RTSP caiu)
+            fi
+            # read_status > 128 = timeout (nenhum frame de movimento no intervalo)
+            # Verifica cooldown em ambos os casos (timeout e frame sem score relevante)
+            if [[ $motion_active -eq 1 ]] && (( now - last_motion_epoch >= MOTION_COOLDOWN_SECS )); then
+                motion_active=0
+                _stop_recording
+            fi
+
+        done < <(
+            # Detector: decodifica o stream, seleciona apenas frames com alteração
+            # significativa e imprime o score em stdout via pipe:1
+            ffmpeg -loglevel error \
+                -rtsp_transport tcp \
+                -i "$RTSP_URL" \
+                -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:file=pipe\:1:key=lavfi.scene_score" \
+                -f null - 2>/dev/null
+        )
+
+        # Garante que a gravação seja encerrada se o loop sair inesperadamente
+        [[ $motion_active -eq 1 ]] && _stop_recording
     }
-    _record_loop &
-    local rec_pid=$!
+
+    _motion_recording_loop &
+    local motion_rec_pid=$!
 
     # Encerra os loops ao sair (Q, Ctrl+C ou término normal)
-    cleanup() { kill "$loop_pid" "$rec_pid" 2>/dev/null; }
+    cleanup() { kill "$loop_pid" "$motion_rec_pid" 2>/dev/null; }
     trap cleanup EXIT INT TERM
 
     local ip
@@ -292,7 +357,7 @@ show_camera() {
     echo
     log_ok "Stream RTSP ativo:   ${RTSP_URL}"
     log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (abra no navegador de outra máquina)"
-    log_ok "Gravando em:         ${rec_dir}  (segmentos de 5 min)"
+    log_ok "Gravando em:         ${rec_dir}  (somente com movimento, threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo
