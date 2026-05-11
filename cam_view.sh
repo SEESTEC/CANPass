@@ -85,8 +85,16 @@ ensure_mediamtx() {
     fi
 
     if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-        log_ok "Container '${CONTAINER_NAME}' já está em execução."
-        return 0
+        # Verifica se está rodando com --network host; reinicia se não estiver
+        local net_mode
+        net_mode=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$CONTAINER_NAME" 2>/dev/null)
+        if [[ "$net_mode" == "host" ]]; then
+            log_ok "Container '${CONTAINER_NAME}' já está em execução."
+            return 0
+        fi
+        log_warn "Container '${CONTAINER_NAME}' em modo de rede '${net_mode}' — reiniciando com --network host..."
+        docker stop "$CONTAINER_NAME" &>/dev/null
+        sleep 1
     fi
 
     log_info "Iniciando container MediaMTX..."
@@ -229,7 +237,7 @@ show_camera() {
         read -ra input_args <<< "$working_args"
         while true; do
             ffmpeg -loglevel error "${BASE[@]}" "${input_args[@]}" -i "$dev" \
-                "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL"
+                "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
             local rc=$?
             (( rc >= 128 )) && return  # encerrado por sinal — para o loop
             log_warn "Stream encerrado (código ${rc}) — reconectando em 2s..."
