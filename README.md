@@ -49,10 +49,10 @@ canpass --display
 
 **Endpoints disponíveis após iniciar:**
 
-| Protocolo | Endereço | Acesso |
-|-----------|----------|--------|
-| RTSP | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP |
-| HLS | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
+| Protocolo | Endereço                  | Acesso                            |
+|-----------|---------------------------|-----------------------------------|
+| RTSP      | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP           |
+| HLS       | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
 
 **Gravação por detecção de movimento:**
 
@@ -65,10 +65,10 @@ dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4
 
 Exemplo: `11_05_2026-14_32_00-14_35_47.mp4`
 
-| Variável de ambiente | Padrão | Descrição |
-|---|---|---|
-| `MOTION_THRESHOLD` | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
-| `MOTION_COOLDOWN_SECS` | `10` | Segundos sem movimento antes de encerrar a gravação |
+| Variável de ambiente   | Padrão | Descrição                                                      |
+|------------------------|--------|----------------------------------------------------------------|
+| `MOTION_THRESHOLD`     | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
+| `MOTION_COOLDOWN_SECS` | `10`   | Segundos sem movimento antes de encerrar a gravação            |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
