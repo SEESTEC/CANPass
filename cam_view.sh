@@ -119,15 +119,15 @@ detect_cameras() {
             v4l2-ctl --device="$dev" --all 2>/dev/null \
                 | grep -qi "Video Capture" || continue
 
-            # Confirma que existe ao menos um formato de pixel (exclui nós de metadados)
-            v4l2-ctl --device="$dev" --list-formats-ext 2>/dev/null \
-                | grep -qi "Pixel Format" || continue
+            # Confirma ao menos um formato de pixel listado (exclui nós de metadados)
+            v4l2-ctl --device="$dev" --list-formats 2>/dev/null \
+                | grep -q "\[0\]" || continue
         fi
 
         cams+=("$dev")
     done
 
-    printf '%s\n' "${cams[@]+"${cams[@]}"}"
+    [[ ${#cams[@]} -gt 0 ]] && printf '%s\n' "${cams[@]}"
 }
 
 # ─── 5. Nome amigável da câmera ───────────────────────────────────────────────
