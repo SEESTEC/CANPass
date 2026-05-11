@@ -39,7 +39,36 @@ ensure_installed() {
     fi
 }
 
-# ─── 2. Detecta câmeras V4L2 ─────────────────────────────────────────────────
+# ─── 2. Instala Docker via script dedicado ───────────────────────────────────
+
+ensure_docker_installed() {
+    if command -v docker &>/dev/null; then
+        log_ok "docker já instalado em $(command -v docker)."
+        return 0
+    fi
+
+    log_warn "docker não encontrado. Executando docker-install.sh..."
+
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local installer="${script_dir}/docker-install.sh"
+
+    if [[ ! -f "$installer" ]]; then
+        log_error "docker-install.sh não encontrado em ${script_dir}. Abortando."
+        exit 1
+    fi
+
+    bash "$installer"
+
+    if command -v docker &>/dev/null; then
+        log_ok "docker instalado com sucesso."
+    else
+        log_error "Falha ao instalar docker. Abortando."
+        exit 1
+    fi
+}
+
+# ─── 4. Detecta câmeras V4L2 ─────────────────────────────────────────────────
 # Filtra apenas dispositivos de *captura* (não outputs de loopback/renderização).
 
 detect_cameras() {
@@ -61,7 +90,7 @@ detect_cameras() {
     printf '%s\n' "${cams[@]+"${cams[@]}"}"
 }
 
-# ─── 3. Nome amigável da câmera ───────────────────────────────────────────────
+# ─── 5. Nome amigável da câmera ───────────────────────────────────────────────
 
 camera_label() {
     local dev="$1"
@@ -74,7 +103,7 @@ camera_label() {
     echo "$dev"
 }
 
-# ─── 4. Exibe stream com ffplay ───────────────────────────────────────────────
+# ─── 6. Exibe stream com ffplay ───────────────────────────────────────────────
 # Flags balanceando latência e fluidez:
 #   -probesize 32768     sondagem mínima viável (~32 KB) para timestamps estáveis
 #   -analyzeduration 0   elimina janela de análise  (padrão: 5 s)
@@ -127,6 +156,7 @@ main() {
     # Garante ffmpeg (inclui ffplay) e v4l-utils (opcional, melhora detecção)
     ensure_installed ffmpeg ffplay
     ensure_installed v4l-utils v4l2-ctl
+    ensure_docker_installed
     echo
 
     # Detecta câmeras
