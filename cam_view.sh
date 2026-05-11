@@ -75,45 +75,44 @@ camera_label() {
 }
 
 # ─── 4. Exibe stream com ffplay ───────────────────────────────────────────────
-# Flags de latência mínima:
-#   -probesize 32        reduz sondagem inicial (padrão: 5 MB)
+# Flags balanceando latência e fluidez:
+#   -probesize 32768     sondagem mínima viável (~32 KB) para timestamps estáveis
 #   -analyzeduration 0   elimina janela de análise  (padrão: 5 s)
 #   -fflags nobuffer     desativa buffer do demuxer
 #   -flags low_delay     modo low-delay no decoder
-#   -framedrop           descarta frames atrasados em vez de acumular
 #   -sync video          sincroniza pelo relógio de vídeo (sem áudio)
+#   SDL_RENDER_VSYNC=1   sincroniza a exibição com o refresh do monitor (evita tearing)
 
 show_camera() {
     local dev="$1"
-    log_info "Iniciando stream de ${dev} com latência mínima — pressione Q para sair."
+    log_info "Iniciando stream de ${dev} — pressione Q para sair."
     echo
 
     local -a LOW_LAT=(
-        -probesize 32
+        -probesize 32768
         -analyzeduration 0
         -fflags nobuffer
         -flags low_delay
-        -framedrop
         -sync video
     )
     local -a COMMON=( -window_title "Camera: $dev" -loglevel warning )
 
     # 1ª tentativa: MJPEG — menor latência USB, hardware-encoded na maioria das webcams
-    ffplay -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 \
+    SDL_RENDER_VSYNC=1 ffplay -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 \
            "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
     local rc=$?
     [[ $rc -eq 0 ]] && return  # usuário fechou normalmente
 
     # 2ª tentativa: formato nativo da câmera, mantendo resolução
     log_warn "MJPEG 1280x720 falhou (código $rc) — tentando formato nativo..."
-    ffplay -f v4l2 -framerate 30 -video_size 1280x720 \
+    SDL_RENDER_VSYNC=1 ffplay -f v4l2 -framerate 30 -video_size 1280x720 \
            "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
     rc=$?
     [[ $rc -eq 0 ]] && return
 
     # 3ª tentativa: sem restrições de formato ou resolução
     log_warn "Falha com resolução fixa (código $rc) — tentando parâmetros automáticos..."
-    ffplay -f v4l2 "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
+    SDL_RENDER_VSYNC=1 ffplay -f v4l2 "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
