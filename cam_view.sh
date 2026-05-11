@@ -82,7 +82,6 @@ camera_label() {
 #   -flags low_delay     modo low-delay no decoder
 #   -framedrop           descarta frames atrasados em vez de acumular
 #   -sync video          sincroniza pelo relógio de vídeo (sem áudio)
-#   -thread_queue_size 4 fila mínima de pacotes no leitor
 
 show_camera() {
     local dev="$1"
@@ -96,7 +95,6 @@ show_camera() {
         -flags low_delay
         -framedrop
         -sync video
-        -thread_queue_size 4
     )
     local -a COMMON=( -window_title "Camera: $dev" -loglevel warning )
 
