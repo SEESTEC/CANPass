@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cam_view.sh — Detecta câmeras V4L2 e exibe stream via ffplay.
+# cam_view.sh — Detecta câmeras V4L2, exibe localmente via ffplay e transmite via RTSP.
 # Testado em Ubuntu 22.04 LTS.
 
 set -uo pipefail
@@ -12,6 +12,10 @@ log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
 log_ok()    { echo -e "${GREEN}[ OK ]${NC}  $*"; }
 log_warn()  { echo -e "${YELLOW}[AVISO]${NC} $*"; }
 log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
+
+# ─── Constantes ──────────────────────────────────────────────────────────────
+CONTAINER_NAME="mediamtx"
+RTSP_URL="rtsp://localhost:8554/stream"
 
 # ─── 1. Verifica / instala pacote ────────────────────────────────────────────
 
@@ -68,6 +72,29 @@ ensure_docker_installed() {
     fi
 }
 
+# ─── 3. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
+
+ensure_mediamtx() {
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        log_ok "Container '${CONTAINER_NAME}' já está em execução."
+        return 0
+    fi
+
+    log_info "Iniciando container MediaMTX..."
+    docker run -d --rm --name "$CONTAINER_NAME" \
+        -p 8554:8554 -p 8889:8889 \
+        bluenviron/mediamtx
+
+    sleep 2
+
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        log_ok "MediaMTX iniciado."
+    else
+        log_error "Falha ao iniciar o container MediaMTX. Abortando."
+        exit 1
+    fi
+}
+
 # ─── 4. Detecta câmeras V4L2 ─────────────────────────────────────────────────
 # Filtra apenas dispositivos de *captura* (não outputs de loopback/renderização).
 
@@ -103,45 +130,101 @@ camera_label() {
     echo "$dev"
 }
 
-# ─── 6. Exibe stream com ffplay ───────────────────────────────────────────────
-# Flags balanceando latência e fluidez:
-#   -probesize 32768     sondagem mínima viável (~32 KB) para timestamps estáveis
-#   -analyzeduration 0   elimina janela de análise  (padrão: 5 s)
+# ─── 6. Cria alias 'canpass' no ~/.bashrc ────────────────────────────────────
+
+setup_alias() {
+    local script_path
+    script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    local alias_line="alias canpass='${script_path}'"
+    local bashrc="${HOME}/.bashrc"
+
+    if grep -qF "alias canpass=" "$bashrc" 2>/dev/null; then
+        log_ok "Alias 'canpass' já existe em ${bashrc}."
+    else
+        printf '\n# CANPass camera viewer\n%s\n' "$alias_line" >> "$bashrc"
+        log_ok "Alias 'canpass' adicionado em ${bashrc}."
+        log_info "Execute 'source ~/.bashrc' ou abra um novo terminal para ativar."
+    fi
+}
+
+# ─── 7. Captura, transmite via RTSP e exibe localmente ───────────────────────
+# ffmpeg: lê o dispositivo V4L2 e envia stream H.264 ao MediaMTX (background)
+# ffplay: consome o stream RTSP para exibição local (foreground)
+#
+# Flags de captura:
+#   -probesize 32768     ~32 KB — mínimo viável para timestamps estáveis
+#   -analyzeduration 0   elimina janela de análise (padrão: 5 s)
 #   -fflags nobuffer     desativa buffer do demuxer
 #   -flags low_delay     modo low-delay no decoder
-#   -sync video          sincroniza pelo relógio de vídeo (sem áudio)
-#   SDL_RENDER_VSYNC=1   sincroniza a exibição com o refresh do monitor (evita tearing)
+#
+# Encoding:
+#   -preset ultrafast / -tune zerolatency   H.264 de baixa latência
+#
+# Exibição local:
+#   -sync video          sincroniza pelo relógio de vídeo
+#   SDL_RENDER_VSYNC=1   sincroniza com o refresh do monitor (evita tearing)
 
 show_camera() {
     local dev="$1"
-    log_info "Iniciando stream de ${dev} — pressione Q para sair."
-    echo
+    local ffmpeg_pid=""
 
-    local -a LOW_LAT=(
+    ensure_mediamtx
+
+    local -a BASE=(
         -probesize 32768
         -analyzeduration 0
         -fflags nobuffer
         -flags low_delay
-        -sync video
     )
-    local -a COMMON=( -window_title "Camera: $dev" -loglevel warning )
+    local -a ENCODE=( -c:v libx264 -preset ultrafast -tune zerolatency )
 
-    # 1ª tentativa: MJPEG — menor latência USB, hardware-encoded na maioria das webcams
-    SDL_RENDER_VSYNC=1 ffplay -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 \
-           "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
-    local rc=$?
-    [[ $rc -eq 0 ]] && return  # usuário fechou normalmente
+    # Tenta iniciar ffmpeg com fallbacks de formato de entrada
+    local started=0
+    local attempt_label=""
+    for args_str in \
+        "-f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720" \
+        "-f v4l2 -framerate 30 -video_size 1280x720" \
+        "-f v4l2"
+    do
+        [[ -n "$attempt_label" ]] && log_warn "Tentativa '${attempt_label}' falhou — próximo formato..."
+        attempt_label="$args_str"
 
-    # 2ª tentativa: formato nativo da câmera, mantendo resolução
-    log_warn "MJPEG 1280x720 falhou (código $rc) — tentando formato nativo..."
-    SDL_RENDER_VSYNC=1 ffplay -f v4l2 -framerate 30 -video_size 1280x720 \
-           "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
-    rc=$?
-    [[ $rc -eq 0 ]] && return
+        read -ra input_args <<< "$args_str"
+        ffmpeg -loglevel warning "${BASE[@]}" "${input_args[@]}" -i "$dev" \
+            "${ENCODE[@]}" -f rtsp "$RTSP_URL" &
+        ffmpeg_pid=$!
 
-    # 3ª tentativa: sem restrições de formato ou resolução
-    log_warn "Falha com resolução fixa (código $rc) — tentando parâmetros automáticos..."
-    SDL_RENDER_VSYNC=1 ffplay -f v4l2 "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
+        sleep 2
+        if kill -0 "$ffmpeg_pid" 2>/dev/null; then
+            started=1
+            break
+        fi
+    done
+
+    if [[ $started -eq 0 ]]; then
+        log_error "Não foi possível iniciar o stream para ${dev}. Abortando."
+        return 1
+    fi
+
+    # Encerra ffmpeg ao sair (Q, Ctrl+C ou término normal)
+    cleanup() { kill "$ffmpeg_pid" 2>/dev/null; }
+    trap cleanup EXIT INT TERM
+
+    local ip
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    echo
+    log_ok "Stream RTSP ativo:   ${RTSP_URL}"
+    log_ok "Stream WebRTC:       http://${ip}:8889/stream  (abra no navegador de outra máquina)"
+    log_info "Iniciando visualização local — pressione Q para sair."
+    echo
+
+    SDL_RENDER_VSYNC=1 ffplay \
+        -fflags nobuffer -flags low_delay -sync video \
+        -window_title "CANPass: $dev" -loglevel warning \
+        "$RTSP_URL"
+
+    trap - EXIT INT TERM
+    cleanup
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -153,13 +236,12 @@ main() {
     echo    "╚══════════════════════════════════════╝"
     echo -e "${NC}"
 
-    # Garante ffmpeg (inclui ffplay) e v4l-utils (opcional, melhora detecção)
     ensure_installed ffmpeg ffplay
     ensure_installed v4l-utils v4l2-ctl
     ensure_docker_installed
+    setup_alias
     echo
 
-    # Detecta câmeras
     log_info "Procurando câmeras em /dev/video*..."
     mapfile -t cameras < <(detect_cameras)
 
@@ -178,7 +260,6 @@ main() {
     done
     echo
 
-    # Seleção automática se houver apenas uma câmera
     local selected
     if [[ ${#cameras[@]} -eq 1 ]]; then
         selected="${cameras[0]}"
