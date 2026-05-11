@@ -91,7 +91,7 @@ ensure_mediamtx() {
 
     log_info "Iniciando container MediaMTX..."
     docker run -d --rm --name "$CONTAINER_NAME" \
-        -p 8554:8554 -p 8889:8889 \
+        --network host \
         bluenviron/mediamtx
 
     sleep 2
