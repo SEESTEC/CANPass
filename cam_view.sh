@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# camera_viewer.sh — Detecta câmeras V4L2 e exibe stream via ffplay.
+# cam_view.sh — Detecta câmeras V4L2 e exibe stream via ffplay.
 # Testado em Ubuntu 22.04 LTS.
 
 set -uo pipefail
@@ -51,8 +51,7 @@ detect_cameras() {
 
         # Se v4l2-ctl disponível, confirma que suporta captura de vídeo
         if command -v v4l2-ctl &>/dev/null; then
-            v4l2-ctl --device="$dev" --list-formats-ext &>/dev/null \
-                && v4l2-ctl --device="$dev" --all 2>/dev/null \
+            v4l2-ctl --device="$dev" --all 2>/dev/null \
                 | grep -qi "Video Capture" || continue
         fi
 
@@ -76,20 +75,47 @@ camera_label() {
 }
 
 # ─── 4. Exibe stream com ffplay ───────────────────────────────────────────────
+# Flags de latência mínima:
+#   -probesize 32        reduz sondagem inicial (padrão: 5 MB)
+#   -analyzeduration 0   elimina janela de análise  (padrão: 5 s)
+#   -fflags nobuffer     desativa buffer do demuxer
+#   -flags low_delay     modo low-delay no decoder
+#   -framedrop           descarta frames atrasados em vez de acumular
+#   -sync video          sincroniza pelo relógio de vídeo (sem áudio)
+#   -thread_queue_size 4 fila mínima de pacotes no leitor
 
 show_camera() {
     local dev="$1"
-    log_info "Iniciando stream de ${dev} — pressione Q ou feche a janela para sair."
+    log_info "Iniciando stream de ${dev} com latência mínima — pressione Q para sair."
     echo
 
-    # Tenta 30 fps / 1280×720; se falhar, deixa ffplay escolher os parâmetros
-    if ! ffplay -f v4l2 -framerate 30 -video_size 1280x720 \
-                -i "$dev" -window_title "Camera: $dev" \
-                -loglevel warning 2>/dev/null; then
+    local -a LOW_LAT=(
+        -probesize 32
+        -analyzeduration 0
+        -fflags nobuffer
+        -flags low_delay
+        -framedrop
+        -sync video
+        -thread_queue_size 4
+    )
+    local -a COMMON=( -window_title "Camera: $dev" -loglevel warning )
 
-        log_warn "Resolução padrão não suportada — tentando com parâmetros automáticos..."
-        ffplay -f v4l2 -i "$dev" -window_title "Camera: $dev" -loglevel warning
-    fi
+    # 1ª tentativa: MJPEG — menor latência USB, hardware-encoded na maioria das webcams
+    ffplay -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 \
+           "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
+    local rc=$?
+    [[ $rc -eq 0 ]] && return  # usuário fechou normalmente
+
+    # 2ª tentativa: formato nativo da câmera, mantendo resolução
+    log_warn "MJPEG 1280x720 falhou (código $rc) — tentando formato nativo..."
+    ffplay -f v4l2 -framerate 30 -video_size 1280x720 \
+           "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
+    rc=$?
+    [[ $rc -eq 0 ]] && return
+
+    # 3ª tentativa: sem restrições de formato ou resolução
+    log_warn "Falha com resolução fixa (código $rc) — tentando parâmetros automáticos..."
+    ffplay -f v4l2 "${LOW_LAT[@]}" -i "$dev" "${COMMON[@]}"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
