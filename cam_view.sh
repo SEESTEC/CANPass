@@ -16,6 +16,7 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 # ─── Constantes ──────────────────────────────────────────────────────────────
 CONTAINER_NAME="mediamtx"
 RTSP_URL="rtsp://localhost:8554/stream"
+HLS_PATH="/stream"   # MediaMTX serve HLS em http://<ip>:8888<HLS_PATH>
 
 # ─── 1. Verifica / instala pacote ────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ show_camera() {
     ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     echo
     log_ok "Stream RTSP ativo:   ${RTSP_URL}"
-    log_ok "Stream WebRTC:       http://${ip}:8889/stream  (abra no navegador de outra máquina)"
+    log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (abra no navegador de outra máquina)"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo

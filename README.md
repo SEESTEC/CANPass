@@ -52,7 +52,7 @@ canpass --display
 | Protocolo | Endereço | Acesso |
 |-----------|----------|--------|
 | RTSP | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP |
-| WebRTC | `http://<ip>:8889/stream` | Navegador (outra máquina na rede) |
+| HLS | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
 
 **Diagnóstico (câmera não detectada):**
 
