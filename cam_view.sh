@@ -168,6 +168,7 @@ setup_alias() {
 #
 # Encoding:
 #   -preset ultrafast / -tune zerolatency   H.264 de baixa latência
+#   -pix_fmt yuv420p                        garante compatibilidade com navegadores e players
 #
 # Exibição local:
 #   -sync video          sincroniza pelo relógio de vídeo
@@ -186,7 +187,7 @@ show_camera() {
         -fflags nobuffer
         -flags low_delay
     )
-    local -a ENCODE=( -c:v libx264 -preset ultrafast -tune zerolatency )
+    local -a ENCODE=( -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p )
 
     # Tenta iniciar ffmpeg com fallbacks de formato de entrada
     local started=0

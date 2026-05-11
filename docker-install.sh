@@ -25,8 +25,5 @@ sudo apt update
 # Install the Docker packages
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Add current user to docker group (evita necessidade de sudo)
-sudo usermod -aG docker "$USER"
-
-echo ""
-echo "IMPORTANTE: execute 'newgrp docker' ou abra um novo terminal para usar Docker sem sudo."
+# Add current user to docker group
+sudo usermod -aG docker "$USER" # && newgrp docker
