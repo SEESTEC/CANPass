@@ -25,11 +25,8 @@ sudo apt update
 # Install the Docker packages
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# After installation, verify that Docker is running:
-# sudo systemctl status docker
-#
-# If Docker is not running, start it manually:
-# sudo systemctl start docker
-# 
-# Verify that the installation is successful by running the hello-world image:
-# sudo docker run hello-world
+# Add current user to docker group (evita necessidade de sudo)
+sudo usermod -aG docker "$USER"
+
+echo ""
+echo "IMPORTANTE: execute 'newgrp docker' ou abra um novo terminal para usar Docker sem sudo."

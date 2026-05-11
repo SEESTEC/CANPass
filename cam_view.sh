@@ -75,6 +75,15 @@ ensure_docker_installed() {
 # ─── 3. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
 ensure_mediamtx() {
+    local docker_test
+    docker_test=$(docker ps 2>&1)
+    if echo "$docker_test" | grep -q "permission denied"; then
+        log_error "Sem permissão para acessar o Docker daemon."
+        log_info  "Adicione seu usuário ao grupo docker e reinicie o terminal:"
+        log_info  "  sudo usermod -aG docker \$USER && newgrp docker"
+        exit 1
+    fi
+
     if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
         log_ok "Container '${CONTAINER_NAME}' já está em execução."
         return 0
