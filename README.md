@@ -55,5 +55,4 @@ cmake --build build
 ### 0.1.0 — 2026-05-11
 
 - Script `cam_view.sh`: detecção automática de câmeras V4L2, instalação de dependências, exibição via ffplay.
-- `CLAUDE.md`: documentação para Claude Code.
 - `.gitignore`: configurado para C/C++ + CMake + vcpkg.
