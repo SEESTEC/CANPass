@@ -181,7 +181,7 @@ setup_alias() {
 show_camera() {
     local dev="$1"
     local display="${2:-}"
-    local ffmpeg_pid=""
+    local loop_pid=""
 
     ensure_mediamtx
 
@@ -193,36 +193,54 @@ show_camera() {
     )
     local -a ENCODE=( -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p )
 
-    # Tenta iniciar ffmpeg com fallbacks de formato de entrada
-    local started=0
+    # ── Detecta formato de entrada funcional ─────────────────────────────────
+    local working_args=""
     local attempt_label=""
     for args_str in \
         "-f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720" \
         "-f v4l2 -framerate 30 -video_size 1280x720" \
         "-f v4l2"
     do
-        [[ -n "$attempt_label" ]] && log_warn "Tentativa '${attempt_label}' falhou — próximo formato..."
+        [[ -n "$attempt_label" ]] && log_warn "Formato '${attempt_label}' indisponível — tentando próximo..."
         attempt_label="$args_str"
 
-        read -ra input_args <<< "$args_str"
-        ffmpeg -loglevel warning "${BASE[@]}" "${input_args[@]}" -i "$dev" \
-            "${ENCODE[@]}" -f rtsp "$RTSP_URL" &
-        ffmpeg_pid=$!
+        read -ra probe_args <<< "$args_str"
+        ffmpeg -loglevel error "${BASE[@]}" "${probe_args[@]}" -i "$dev" \
+            "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL" &
+        local probe_pid=$!
 
         sleep 2
-        if kill -0 "$ffmpeg_pid" 2>/dev/null; then
-            started=1
+        if kill -0 "$probe_pid" 2>/dev/null; then
+            kill "$probe_pid" 2>/dev/null
+            wait "$probe_pid" 2>/dev/null
+            working_args="$args_str"
             break
         fi
     done
 
-    if [[ $started -eq 0 ]]; then
+    if [[ -z "$working_args" ]]; then
         log_error "Não foi possível iniciar o stream para ${dev}. Abortando."
         return 1
     fi
 
-    # Encerra ffmpeg ao sair (Q, Ctrl+C ou término normal)
-    cleanup() { kill "$ffmpeg_pid" 2>/dev/null; }
+    # ── Inicia ffmpeg em loop de reconexão (background) ──────────────────────
+    _ffmpeg_loop() {
+        local -a input_args
+        read -ra input_args <<< "$working_args"
+        while true; do
+            ffmpeg -loglevel error "${BASE[@]}" "${input_args[@]}" -i "$dev" \
+                "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL"
+            local rc=$?
+            (( rc >= 128 )) && return  # encerrado por sinal — para o loop
+            log_warn "Stream encerrado (código ${rc}) — reconectando em 2s..."
+            sleep 2
+        done
+    }
+    _ffmpeg_loop &
+    loop_pid=$!
+
+    # Encerra o loop ao sair (Q, Ctrl+C ou término normal)
+    cleanup() { kill "$loop_pid" 2>/dev/null; }
     trap cleanup EXIT INT TERM
 
     local ip
@@ -239,7 +257,7 @@ show_camera() {
             "$RTSP_URL"
     else
         log_info "Stream ativo em background. Pressione Ctrl+C para encerrar."
-        wait "$ffmpeg_pid"
+        wait "$loop_pid"
     fi
 
     trap - EXIT INT TERM
