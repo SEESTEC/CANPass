@@ -32,8 +32,10 @@ _probe_csi_cameras() {
     gst-inspect-1.0 nvarguscamerasrc &>/dev/null 2>&1 || return
     local id
     for id in 0 1 2 3; do
-        timeout 3 gst-launch-1.0 -q \
-            nvarguscamerasrc sensor-id="$id" num-buffers=1 ! fakesink 2>/dev/null \
+        timeout 4 gst-launch-1.0 -q \
+            nvarguscamerasrc sensor-id="$id" num-buffers=1 ! \
+            nvvidconv ! "video/x-raw,format=I420" ! \
+            fakesink sync=false 2>/dev/null \
             && echo "csi:${id}"
     done
 }
@@ -180,10 +182,11 @@ show_camera() {
         local csi_w=1280 csi_h=720 csi_fps=30
         for res_str in "1920 1080 30" "1280 720 30" "640 480 30"; do
             read -r w h fps <<< "$res_str"
-            if timeout 3 gst-launch-1.0 -q \
+            if timeout 4 gst-launch-1.0 -q \
                nvarguscamerasrc sensor-id="$sensor_id" num-buffers=1 ! \
                "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12" ! \
-               fakesink 2>/dev/null; then
+               nvvidconv ! "video/x-raw,format=I420" ! \
+               fakesink sync=false 2>/dev/null; then
                 csi_w=$w; csi_h=$h; csi_fps=$fps
                 log_ok "Resolução CSI: ${csi_w}x${csi_h} @ ${csi_fps} fps"
                 break
@@ -191,17 +194,25 @@ show_camera() {
             log_warn "Resolução ${w}x${h}@${fps}fps indisponível — tentando próxima..."
         done
 
-        # Loop CSI: usa encoder H.264 de hardware (nvv4l2h264enc) e envia
-        # diretamente ao MediaMTX via rtspclientsink — sem passar pelo CPU
+        # Loop CSI: GStreamer captura e converte (NV12→I420) via pipe para
+        # ffmpeg, que faz encode H.264 e envia ao MediaMTX por RTSP.
+        # nvv4l2h264enc e rtspclientsink são evitados por inconsistência entre
+        # versões de JetPack — ffmpeg garante compatibilidade.
         _ffmpeg_loop() {
             while true; do
                 gst-launch-1.0 -q \
                     nvarguscamerasrc sensor-id="$sensor_id" ! \
                     "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
-                    nvv4l2h264enc idrinterval=6 bitrate=4000000 ! \
-                    h264parse config-interval=-1 ! \
-                    rtspclientsink location="$RTSP_URL" protocols=tcp 2>/dev/null
-                local rc=$?
+                    nvvidconv ! "video/x-raw,format=I420" ! \
+                    fdsink fd=1 2>/dev/null | \
+                ffmpeg -loglevel error \
+                    -f rawvideo -pix_fmt yuv420p \
+                    -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
+                    -fflags nobuffer -flags low_delay -analyzeduration 0 \
+                    -i pipe:0 \
+                    "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
+                local rc=${PIPESTATUS[1]}
                 (( rc >= 128 )) && return
                 log_warn "Stream CSI encerrado (código ${rc}) — reconectando em 2s..."
                 sleep 2
