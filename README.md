@@ -19,7 +19,7 @@ CANPass é um projeto C/C++ voltado para comunicação via barramento CAN *(Cont
 Cole o comando abaixo no terminal e execute:
 
 ```bash
-sudo apt install -y unzip wget && wget -P "$HOME" https://github.com/SEESTEC/axxon_linux_install/archive/refs/heads/main.zip && unzip "$HOME/main.zip" -d "$HOME" && sudo chmod +x "$HOME/axxon_linux_install-main/install.sh" && sudo "$HOME/axxon_linux_install-main/install.sh"
+sudo apt install -y unzip wget && wget -P "$HOME" https://github.com/SEESTEC/CANPass/archive/refs/heads/main.zip && unzip "$HOME/main.zip" -d "$HOME" && sudo chmod +x "$HOME/CANPass-main/install.sh" && sudo "$HOME/CANPass-main/install.sh"
 ```
 
 O instalador cuida automaticamente de:
