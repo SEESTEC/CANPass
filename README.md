@@ -1,6 +1,6 @@
 # CANPass
 
-> **v0.3.4** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
+> **v0.3.5** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
 
 ## Descrição
 
@@ -170,6 +170,11 @@ CANPass/
 ---
 
 ## Changelog
+
+### v0.3.5 — 2026-05-12
+
+- `install.sh`: adicionada regra sudoers NOPASSWD em `/etc/sudoers.d/canpass-nvargus` para Jetson, permitindo que `cam_view.sh` reinicie o `nvargus-daemon` sem senha; serviço systemd passa a executar `ExecStartPre=-/bin/systemctl restart nvargus-daemon`.
+- `cam_view.sh`: reinicia `nvargus-daemon` via `sudo -n` antes de cada sessão CSI — sessões encerradas abruptamente (Ctrl+C, testes) deixam o daemon em estado inválido causando "No cameras available"; log truncado a cada tentativa; loop interrompido com mensagem de erro acionável em caso de falha fatal (em vez de reconectar indefinidamente).
 
 ### v0.3.4 — 2026-05-12
 

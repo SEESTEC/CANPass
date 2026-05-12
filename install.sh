@@ -89,6 +89,20 @@ install_jetson_gstreamer() {
     log_ok "Pacotes GStreamer instalados."
 }
 
+# ─── 1c. Sudoers nvargus-daemon (apenas Jetson/Tegra) ────────────────────────
+# Permite que o usuário reinicie o nvargus-daemon sem senha.
+# Necessário porque sessões CSI encerradas abruptamente deixam o daemon em estado
+# inválido; cam_view.sh reinicia o daemon automaticamente antes de cada stream.
+
+setup_jetson_sudoers() {
+    grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return 0
+    local sudoers_file="/etc/sudoers.d/canpass-nvargus"
+    echo "${CALLING_USER} ALL=(ALL) NOPASSWD: /bin/systemctl restart nvargus-daemon" | \
+        $SUDO_CMD tee "$sudoers_file" > /dev/null
+    $SUDO_CMD chmod 440 "$sudoers_file"
+    log_ok "Permissão NOPASSWD para reiniciar nvargus-daemon configurada em ${sudoers_file}."
+}
+
 # ─── 2. Scripts ──────────────────────────────────────────────────────────────
 
 install_scripts() {
@@ -137,6 +151,7 @@ Requires=docker.service
 [Service]
 Type=simple
 User=${CALLING_USER}
+ExecStartPre=-/bin/systemctl restart nvargus-daemon
 ExecStart=${INSTALL_DIR}/watchdog.sh
 Restart=on-failure
 RestartSec=3
@@ -172,6 +187,7 @@ main() {
     install_apt_package v4l-utils v4l2-ctl
     install_docker
     install_jetson_gstreamer
+    setup_jetson_sudoers
 
     log_step "2/4 — Instalando scripts em ${INSTALL_DIR}"
     install_scripts
