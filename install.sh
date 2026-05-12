@@ -162,6 +162,9 @@ main() {
 
     log_step "3/4 — Configurando alias 'canpass'"
     setup_alias
+    # Carrega o alias na sessão atual sem precisar fechar o terminal
+    # shellcheck disable=SC1090
+    source "$BASHRC" 2>/dev/null || true
 
     log_step "4/4 — Configurando serviço systemd"
     setup_systemd_service
