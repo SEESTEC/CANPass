@@ -273,9 +273,12 @@ show_camera() {
         local recording_tmp_file=""
 
         _start_recording() {
-            recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
+            recording_start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
             recording_tmp_file="${rec_dir}/.rec_${recording_start_ts}.mp4"
             ffmpeg -loglevel error \
+                -fflags nobuffer \
+                -analyzeduration 0 \
+                -probesize 32768 \
                 -rtsp_transport tcp \
                 -i "$RTSP_URL" \
                 -c copy \
@@ -298,7 +301,7 @@ show_camera() {
             recording_tmp_file=""
         }
 
-        sleep 3  # aguarda o stream RTSP estabilizar
+        sleep 1  # aguarda o stream RTSP estabilizar
 
         # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento
         # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo
@@ -363,7 +366,7 @@ show_camera() {
         echo
         SDL_RENDER_VSYNC=1 ffplay \
             -fflags nobuffer -flags low_delay -sync video \
-            -window_title "CANPass: $dev" -loglevel warning \
+            -loglevel warning \
             "$RTSP_URL"
     else
         log_info "Stream ativo em background. Pressione Ctrl+C para encerrar."
