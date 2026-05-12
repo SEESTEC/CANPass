@@ -20,62 +20,7 @@ HLS_PATH="/stream"                             # MediaMTX serve HLS em http://<i
 MOTION_THRESHOLD="${MOTION_THRESHOLD:-0.02}"   # fração de pixels alterados que caracteriza movimento (0.0–1.0)
 MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-10}"  # segundos sem movimento antes de encerrar gravação
 
-# ─── 1. Verifica / instala pacote ────────────────────────────────────────────
-
-ensure_installed() {
-    local pkg="$1" cmd="${2:-$1}"
-
-    if command -v "$cmd" &>/dev/null; then
-        log_ok "$cmd já instalado em $(command -v "$cmd")."
-        return 0
-    fi
-
-    log_warn "$cmd não encontrado. Instalando $pkg..."
-
-    local apt
-    apt="$([ "$EUID" -eq 0 ] && echo 'apt-get' || echo 'sudo apt-get')"
-
-    $apt update -qq
-    $apt install -y "$pkg"
-
-    if command -v "$cmd" &>/dev/null; then
-        log_ok "$pkg instalado com sucesso."
-    else
-        log_error "Falha ao instalar $pkg. Abortando."
-        exit 1
-    fi
-}
-
-# ─── 2. Instala Docker via script dedicado ───────────────────────────────────
-
-ensure_docker_installed() {
-    if command -v docker &>/dev/null; then
-        log_ok "docker já instalado em $(command -v docker)."
-        return 0
-    fi
-
-    log_warn "docker não encontrado. Executando docker-install.sh..."
-
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local installer="${script_dir}/docker-install.sh"
-
-    if [[ ! -f "$installer" ]]; then
-        log_error "docker-install.sh não encontrado em ${script_dir}. Abortando."
-        exit 1
-    fi
-
-    bash "$installer"
-
-    if command -v docker &>/dev/null; then
-        log_ok "docker instalado com sucesso."
-    else
-        log_error "Falha ao instalar docker. Abortando."
-        exit 1
-    fi
-}
-
-# ─── 3. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
+# ─── 1. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
 ensure_mediamtx() {
     local docker_test
@@ -118,7 +63,7 @@ ensure_mediamtx() {
     fi
 }
 
-# ─── 4. Detecta câmeras V4L2 ─────────────────────────────────────────────────
+# ─── 2. Detecta câmeras V4L2 ─────────────────────────────────────────────────
 # Filtra apenas dispositivos de *captura* (não outputs de loopback/renderização).
 
 detect_cameras() {
@@ -144,7 +89,7 @@ detect_cameras() {
     [[ ${#cams[@]} -gt 0 ]] && printf '%s\n' "${cams[@]}"
 }
 
-# ─── 5. Nome amigável da câmera ───────────────────────────────────────────────
+# ─── 3. Nome amigável da câmera ───────────────────────────────────────────────
 
 camera_label() {
     local dev="$1"
@@ -157,24 +102,7 @@ camera_label() {
     echo "$dev"
 }
 
-# ─── 6. Cria alias 'canpass' no ~/.bashrc ────────────────────────────────────
-
-setup_alias() {
-    local script_path
-    script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
-    local alias_line="alias canpass='${script_path}'"
-    local bashrc="${HOME}/.bashrc"
-
-    if grep -qF "alias canpass=" "$bashrc" 2>/dev/null; then
-        log_ok "Alias 'canpass' já existe em ${bashrc}."
-    else
-        printf '\n# CANPass camera viewer\n%s\n' "$alias_line" >> "$bashrc"
-        log_ok "Alias 'canpass' adicionado em ${bashrc}."
-        log_info "Execute 'source ~/.bashrc' ou abra um novo terminal para ativar."
-    fi
-}
-
-# ─── 7. Captura e transmite via RTSP (exibição local opcional com --display) ──
+# ─── 4. Captura e transmite via RTSP (exibição local opcional com --display) ──
 # ffmpeg: lê o dispositivo V4L2 e envia stream H.264 ao MediaMTX (background)
 # ffplay: consome o stream RTSP para exibição local — apenas com flag --display
 #
@@ -263,9 +191,7 @@ show_camera() {
     # imagem mudou. A máquina de estados inicia/para a gravação conforme o fluxo
     # de eventos e o cooldown configurado.
 
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local rec_dir="${script_dir}/canpass_rec"
+    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     mkdir -p "$rec_dir"
 
     _motion_recording_loop() {
@@ -398,12 +324,6 @@ main() {
     echo    "║        CANPass — Camera Viewer       ║"
     echo    "╚══════════════════════════════════════╝"
     echo -e "${NC}"
-
-    ensure_installed ffmpeg ffplay
-    ensure_installed v4l-utils v4l2-ctl
-    ensure_docker_installed
-    setup_alias
-    echo
 
     log_info "Procurando câmeras em /dev/video*..."
     mapfile -t cameras < <(detect_cameras)
