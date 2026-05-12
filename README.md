@@ -11,49 +11,30 @@ CANPass é um projeto C/C++ voltado para comunicação via barramento CAN *(Cont
 ### Requisitos
 
 - Ubuntu 22.04 LTS (ou derivado)
-- Acesso à internet (para download de dependências)
+- Acesso à internet
 - Permissão `sudo`
 
-### Passo a passo
+### Instalar
 
-**1. Instalar o Git** (caso ainda não esteja instalado):
-
-```bash
-sudo apt update && sudo apt install -y git
-```
-
-**2. Clonar o repositório:**
+Cole o comando abaixo no terminal e execute:
 
 ```bash
-git clone https://github.com/SEESTEC/CANPass.git
-cd CANPass
-```
-
-**3. Conceder permissão de execução e rodar o instalador:**
-
-```bash
-sudo chmod +x install.sh
-sudo ./install.sh
+sudo apt install -y unzip wget && wget -P "$HOME" https://github.com/SEESTEC/axxon_linux_install/archive/refs/heads/main.zip && unzip "$HOME/main.zip" -d "$HOME" && sudo chmod +x "$HOME/axxon_linux_install-main/install.sh" && sudo "$HOME/axxon_linux_install-main/install.sh"
 ```
 
 O instalador cuida automaticamente de:
 
 - Instalar `ffmpeg`, `v4l-utils` e `docker` (via `docker-install.sh` embutido)
 - Adicionar o usuário ao grupo `docker`
-- Copiar `cam_view.sh` e `watchdog.sh` para `/usr/local/bin/`
+- Copiar `cam_view.sh` e `watchdog.sh` para `/usr/bin/`
 - Registrar o alias `canpass` em `~/.bashrc`
 - Criar e registrar o serviço systemd `canpass`
-- Remover o próprio arquivo `install.sh` ao final
+- Remover o arquivo `.zip` e a pasta de instalação ao final
 
-**4. Ativar o alias na sessão atual:**
+**Após a instalação:**
 
 ```bash
 source ~/.bashrc
-```
-
-**5. Iniciar:**
-
-```bash
 canpass
 ```
 
