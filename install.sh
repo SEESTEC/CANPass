@@ -172,8 +172,8 @@ main() {
     log_info "Para usar: source ~/.bashrc && canpass"
     echo -e "${CYAN}────────────────────────────────────────${NC}"
 
-    log_info "Removendo instalador..."
-    rm -f "${BASH_SOURCE[0]}"
+    log_info "Removendo repositório clonado..."
+    rm -rf "$SCRIPT_DIR"
 }
 
 main "$@"
