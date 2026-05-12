@@ -199,22 +199,26 @@ show_camera() {
         # nvv4l2h264enc e rtspclientsink são evitados por inconsistência entre
         # versões de JetPack — ffmpeg garante compatibilidade.
         _ffmpeg_loop() {
+            local csi_log="/tmp/canpass_csi_${sensor_id}.log"
+            : > "$csi_log"
+            log_info "Log de erros CSI: ${csi_log}"
+            sleep 1  # aguarda nvargus estabilizar após os probes
             while true; do
                 gst-launch-1.0 -q \
                     nvarguscamerasrc sensor-id="$sensor_id" ! \
                     "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
                     nvvidconv ! "video/x-raw,format=I420" ! \
-                    fdsink fd=1 2>/dev/null | \
-                ffmpeg -loglevel error \
+                    fdsink fd=1 2>>"$csi_log" | \
+                ffmpeg -loglevel warning \
                     -f rawvideo -pix_fmt yuv420p \
                     -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
                     -fflags nobuffer -flags low_delay -analyzeduration 0 \
                     -i pipe:0 \
                     "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
-                local rc=${PIPESTATUS[1]}
-                (( rc >= 128 )) && return
-                log_warn "Stream CSI encerrado (código ${rc}) — reconectando em 2s..."
+                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
+                local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
+                (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
+                log_warn "Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
                 sleep 2
             done
         }

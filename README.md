@@ -1,6 +1,6 @@
 # CANPass
 
-> **v0.2.6** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
+> **v0.3.3** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
 
 ## Descrição
 
@@ -168,6 +168,11 @@ CANPass/
 ---
 
 ## Changelog
+
+### v0.3.3 — 2026-05-12
+
+- `install.sh`: substituído `chmod 666` por `chown "$CALLING_USER"` em `/tmp/.canpass_src_dir` — o sticky bit de `/tmp` impede que um usuário comum delete arquivos pertencentes ao root mesmo com permissão 666.
+- `cam_view.sh`: erros do GStreamer e ffmpeg no loop CSI agora são gravados em `/tmp/canpass_csi_<id>.log` em vez de descartados, facilitando diagnóstico; adicionado `sleep 1` antes da primeira tentativa de stream para deixar o daemon nvargus estabilizar após os probes; mensagem de reconexão agora exibe os códigos de saída individuais de gst-launch e ffmpeg.
 
 ### v0.2.6 — 2026-05-12
 
