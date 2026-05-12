@@ -14,7 +14,7 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 log_step()  { echo -e "\n${BOLD}${CYAN}▶ $*${NC}"; }
 
 # ─── Constantes ──────────────────────────────────────────────────────────────
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="/usr/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="canpass"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"

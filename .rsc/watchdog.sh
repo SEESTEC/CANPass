@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
 log_warn() { echo -e "${YELLOW}[AVISO]${NC} $*"; }
 
-CAM_VIEW="/usr/local/bin/cam_view.sh"
+CAM_VIEW="/usr/bin/cam_view.sh"
 RESTART_DELAY_SECS=3
 
 # Códigos que indicam encerramento intencional pelo usuário
