@@ -18,7 +18,7 @@ CONTAINER_NAME="mediamtx"
 RTSP_URL="rtsp://localhost:8554/stream"
 HLS_PATH="/stream"                             # MediaMTX serve HLS em http://<ip>:8888<HLS_PATH>
 MOTION_THRESHOLD="${MOTION_THRESHOLD:-0.02}"   # fração de pixels alterados que caracteriza movimento (0.0–1.0)
-MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-10}"  # segundos sem movimento antes de encerrar gravação
+MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-30}"  # segundos sem movimento antes de encerrar gravação
 
 # ─── 1. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
@@ -49,8 +49,8 @@ ensure_mediamtx() {
     docker run -d --rm --name "$CONTAINER_NAME" \
         --network host \
         -e MTX_HLSVARIANT=lowLatency \
-        -e MTX_HLSSEGMENTDURATION=500ms \
-        -e MTX_HLSPARTDURATION=100ms \
+        -e MTX_HLSSEGMENTDURATION=200ms \
+        -e MTX_HLSPARTDURATION=50ms \
         bluenviron/mediamtx
 
     sleep 2
@@ -115,7 +115,7 @@ camera_label() {
 # Encoding:
 #   -preset ultrafast / -tune zerolatency   H.264 de baixa latência
 #   -pix_fmt yuv420p                        garante compatibilidade com navegadores e players
-#   -g 15 / -keyint_min 15 / -sc_threshold 0   GOP fixo de 15 frames (500 ms @ 30 fps),
+#   -g 6 / -keyint_min 6 / -sc_threshold 0     GOP fixo de 6 frames (200 ms @ 30 fps),
 #                                               alinhado ao segmento HLS; sem keyframes extras
 #                                               por cena (o principal causador de latência alta)
 #   -flush_packets 1                        força flush de cada pacote codificado imediatamente
@@ -142,7 +142,7 @@ show_camera() {
     )
     local -a ENCODE=(
         -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-        -g 15 -keyint_min 15 -sc_threshold 0
+        -g 6 -keyint_min 6 -sc_threshold 0
         -flush_packets 1
     )
 
@@ -298,9 +298,10 @@ show_camera() {
     local ip
     ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     echo
-    log_ok "Stream RTSP ativo:   ${RTSP_URL}"
-    log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (abra no navegador de outra máquina)"
-    log_ok "Gravando em:         ${rec_dir}  (somente com movimento, threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
+    log_ok "Stream RTSP:         ${RTSP_URL}"
+    log_ok "Stream WebRTC:       http://${ip}:8889${HLS_PATH}  (~100 ms — recomendado para browser)"
+    log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (~200 ms — fallback para browser)"
+    log_ok "Gravando em:         ${rec_dir}  (movimento: threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo

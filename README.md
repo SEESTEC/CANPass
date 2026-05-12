@@ -73,10 +73,11 @@ canpass --display
 
 **Endpoints disponíveis após iniciar:**
 
-| Protocolo | Endereço                        | Acesso                            |
-|-----------|---------------------------------|-----------------------------------|
-| RTSP      | `rtsp://<ip>:8554/stream`       | VLC, ffplay, câmeras IP           |
-| HLS       | `http://<ip>:8888/stream`       | Navegador (outra máquina na rede) |
+| Protocolo | Endereço                        | Latência   | Acesso                            |
+|-----------|---------------------------------|------------|-----------------------------------|
+| RTSP      | `rtsp://<ip>:8554/stream`       | ~50 ms     | VLC, ffplay, câmeras IP           |
+| WebRTC    | `http://<ip>:8889/stream`       | ~100 ms    | Navegador (recomendado)           |
+| HLS       | `http://<ip>:8888/stream`       | ~200 ms    | Navegador (fallback)              |
 
 ---
 
@@ -113,7 +114,7 @@ Exemplo: `11-05-2026_14_32_00_14_35_47.mp4`
 | Variável de ambiente   | Padrão | Descrição                                                      |
 |------------------------|--------|----------------------------------------------------------------|
 | `MOTION_THRESHOLD`     | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
-| `MOTION_COOLDOWN_SECS` | `10`   | Segundos sem movimento antes de encerrar a gravação            |
+| `MOTION_COOLDOWN_SECS` | `30`   | Segundos sem movimento antes de encerrar a gravação            |
 | `CANPASS_REC_DIR`      | `~/canpass_rec` | Diretório de destino das gravações                    |
 
 ```bash
