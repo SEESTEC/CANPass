@@ -55,9 +55,9 @@ install_docker() {
         log_ok "docker já instalado em $(command -v docker)."
     else
         log_warn "docker não encontrado. Executando docker-install.sh..."
-        local installer="${SCRIPT_DIR}/docker-install.sh"
+        local installer="${SCRIPT_DIR}/.rsc/docker-install.sh"
         if [[ ! -f "$installer" ]]; then
-            log_error "docker-install.sh não encontrado em ${SCRIPT_DIR}. Abortando."
+            log_error "docker-install.sh não encontrado em ${SCRIPT_DIR}/.rsc/. Abortando."
             exit 1
         fi
         bash "$installer"
@@ -78,7 +78,7 @@ install_docker() {
 
 install_scripts() {
     for script in cam_view.sh watchdog.sh; do
-        local source_path="${SCRIPT_DIR}/${script}"
+        local source_path="${SCRIPT_DIR}/.rsc/${script}"
         local dest_path="${INSTALL_DIR}/${script}"
 
         if [[ ! -f "$source_path" ]]; then
@@ -171,6 +171,9 @@ main() {
     echo -e "${CYAN}────────────────────────────────────────${NC}"
     log_info "Para usar: source ~/.bashrc && canpass"
     echo -e "${CYAN}────────────────────────────────────────${NC}"
+
+    log_info "Removendo instalador..."
+    rm -f "${BASH_SOURCE[0]}"
 }
 
 main "$@"

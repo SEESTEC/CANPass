@@ -1,31 +1,75 @@
 # CANPass
 
-> **v0.2.0** — Stream de câmeras V4L2 via RTSP/WebRTC com exibição local opcional.
+> **v0.2** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
 
 ## Descrição
 
-CANPass é um projeto C/C++ voltado para comunicação via barramento CAN *(Controller Area Network)*, com utilitários de suporte para captura e visualização de câmeras em sistemas Linux embarcados.
+CANPass é um projeto C/C++ voltado para comunicação via barramento CAN *(Controller Area Network)*, com utilitários de suporte para captura, transmissão e gravação de câmeras em sistemas Linux embarcados.
 
-## Requisitos
+## Instalação
 
-- Ubuntu 22.04 LTS
-- `ffmpeg` / `ffplay` (instalado automaticamente pelo script)
-- `v4l-utils` (instalado automaticamente pelo script)
-- `docker` (instalado automaticamente via `docker-install.sh`)
-- Permissão de acesso a `/dev/video*` (usuário no grupo `video` ou execução com `sudo`)
+### Requisitos
+
+- Ubuntu 22.04 LTS (ou derivado)
+- Acesso à internet (para download de dependências)
+- Permissão `sudo`
+
+### Passo a passo
+
+**1. Instalar o Git** (caso ainda não esteja instalado):
+
+```bash
+sudo apt update && sudo apt install -y git
+```
+
+**2. Clonar o repositório:**
+
+```bash
+git clone https://github.com/SEESTEC/CANPass.git
+cd CANPass
+```
+
+**3. Conceder permissão de execução e rodar o instalador:**
+
+```bash
+sudo chmod +x install.sh
+sudo ./install.sh
+```
+
+O instalador cuida automaticamente de:
+
+- Instalar `ffmpeg`, `v4l-utils` e `docker` (via `docker-install.sh` embutido)
+- Adicionar o usuário ao grupo `docker`
+- Copiar `cam_view.sh` e `watchdog.sh` para `/usr/local/bin/`
+- Registrar o alias `canpass` em `~/.bashrc`
+- Criar e registrar o serviço systemd `canpass`
+- Remover o próprio arquivo `install.sh` ao final
+
+**4. Ativar o alias na sessão atual:**
+
+```bash
+source ~/.bashrc
+```
+
+**5. Iniciar:**
+
+```bash
+canpass
+```
+
+> Se for a primeira vez usando Docker, pode ser necessário fazer logout/login ou executar `newgrp docker` para que o grupo seja aplicado à sessão atual.
+
+---
 
 ## Utilitários
 
-### `cam_view.sh` — Visualizador de câmera
+### `cam_view.sh` — Visualizador e transmissor de câmera
 
-Detecta câmeras V4L2, sobe um servidor RTSP/WebRTC via Docker e transmite o stream da câmera selecionada. Na primeira execução, registra o alias `canpass` no `~/.bashrc`.
+Detecta câmeras V4L2, sobe um servidor RTSP/HLS via Docker e transmite o stream da câmera selecionada. Grava automaticamente quando detecta movimento.
 
 **Uso básico** (só stream, sem janela local):
 
 ```bash
-chmod +x cam_view.sh
-./cam_view.sh
-# ou, após a primeira execução:
 canpass
 ```
 
@@ -37,38 +81,59 @@ canpass --display
 
 **Fluxo:**
 
-1. Verifica e instala `ffmpeg`, `v4l-utils` e `docker` se necessário.
-2. Sobe o container `mediamtx` (RTSP/WebRTC) se não estiver em execução.
-3. Registra o alias `canpass` em `~/.bashrc` na primeira execução.
-4. Varre `/dev/video*` filtrando apenas dispositivos de captura real.
-5. Se houver mais de uma câmera, solicita seleção interativa.
-6. Inicia `ffmpeg` em background capturando o dispositivo e enviando H.264 ao MediaMTX.
-7. Exibe os endereços de acesso ao stream.
-8. Com `--display`: abre `ffplay` lendo do RTSP para visualização local.
-9. Pressione **Ctrl+C** (modo headless) ou **Q** (modo `--display`) para encerrar.
+1. Verifica permissão Docker e sobe o container `mediamtx` (RTSP/HLS) se necessário.
+2. Varre `/dev/video*` filtrando apenas dispositivos de captura real.
+3. Se houver mais de uma câmera, solicita seleção interativa.
+4. Inicia `ffmpeg` em background capturando o dispositivo e enviando H.264 ao MediaMTX.
+5. Exibe os endereços de acesso ao stream.
+6. Inicia gravação por detecção de movimento em background.
+7. Com `--display`: abre `ffplay` lendo do RTSP para visualização local.
+8. Pressione **Ctrl+C** (modo headless) ou **Q** (modo `--display`) para encerrar.
 
 **Endpoints disponíveis após iniciar:**
 
-| Protocolo | Endereço                  | Acesso                            |
-|-----------|---------------------------|-----------------------------------|
-| RTSP      | `rtsp://<ip>:8554/stream` | VLC, ffplay, câmeras IP           |
-| HLS       | `http://<ip>:8888/stream` | Navegador (outra máquina na rede) |
+| Protocolo | Endereço                        | Acesso                            |
+|-----------|---------------------------------|-----------------------------------|
+| RTSP      | `rtsp://<ip>:8554/stream`       | VLC, ffplay, câmeras IP           |
+| HLS       | `http://<ip>:8888/stream`       | Navegador (outra máquina na rede) |
 
-**Gravação por detecção de movimento:**
+---
 
-A gravação ocorre apenas quando movimento é detectado. Os arquivos são salvos em `canpass_rec/`, criado automaticamente ao lado do script.
+### `watchdog.sh` — Supervisor de processo
+
+Supervisiona o `cam_view.sh` e reinicia automaticamente em caso de falha inesperada. Encerramento explícito pelo usuário (Ctrl+C ou SIGTERM) **não** dispara reinício.
+
+O alias `canpass` aponta para o `watchdog.sh`, portanto o supervisor é sempre ativado ao chamar o comando.
+
+**Serviço systemd:**
+
+```bash
+sudo systemctl start   canpass   # inicia agora
+sudo systemctl enable  canpass   # habilita no boot
+sudo systemctl status  canpass   # verifica estado
+sudo systemctl stop    canpass   # encerra
+```
+
+---
+
+### Gravação por detecção de movimento
+
+A gravação ocorre apenas quando movimento é detectado, independente de usar ou não o modo `--display`. Os arquivos são salvos em `~/canpass_rec/` por padrão (sobreponível via `CANPASS_REC_DIR`).
+
+**Formato do nome:**
 
 ```
-dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4
+dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4
  └─ data   └─ início  └─ fim real
 ```
 
-Exemplo: `11_05_2026-14_32_00-14_35_47.mp4`
+Exemplo: `11-05-2026_14_32_00_14_35_47.mp4`
 
 | Variável de ambiente   | Padrão | Descrição                                                      |
 |------------------------|--------|----------------------------------------------------------------|
 | `MOTION_THRESHOLD`     | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
 | `MOTION_COOLDOWN_SECS` | `10`   | Segundos sem movimento antes de encerrar a gravação            |
+| `CANPASS_REC_DIR`      | `~/canpass_rec` | Diretório de destino das gravações                    |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
@@ -93,6 +158,8 @@ dmesg | grep video          # log do kernel
 sudo usermod -aG video $USER && newgrp video   # adiciona usuário ao grupo video
 ```
 
+---
+
 ## Build (C/C++)
 
 O projeto usa **CMake** com **vcpkg** para dependências.
@@ -102,25 +169,39 @@ cmake -B build -S .
 cmake --build build
 ```
 
+---
+
+## Estrutura do repositório
+
+```
+CANPass/
+├── README.md          # documentação
+├── install.sh         # instalador (auto-remove após execução)
+└── .rsc/
+    ├── cam_view.sh    # script principal
+    ├── watchdog.sh    # supervisor de processo
+    └── docker-install.sh  # instalador do Docker
+```
+
+---
+
 ## Changelog
 
-### 0.3.0 — 2026-05-11
+### v0.2 — 2026-05-12
 
+- Instalador `install.sh`: instala dependências, copia scripts, configura alias e serviço systemd; auto-remove após instalação bem-sucedida.
+- Supervisor `watchdog.sh`: reinicia `cam_view.sh` em falhas inesperadas, respeita encerramento intencional (Ctrl+C / SIGTERM).
+- Scripts movidos para `.rsc/`; raiz contém apenas `README.md` e `install.sh`.
 - Gravação por detecção de movimento usando filtro `select` do ffmpeg.
 - Detector lê o RTSP e emite scores de cena; máquina de estados bash controla o recorder.
 - Gravação inicia ao detectar movimento e para após cooldown configurável.
 - Threshold e cooldown ajustáveis via variáveis de ambiente (`MOTION_THRESHOLD`, `MOTION_COOLDOWN_SECS`).
-- Nome do arquivo com horário real de início e fim: `dd_mm_aaaa-hh_mm_ss-hh_mm_ss.mp4`.
-
-### 0.2.0 — 2026-05-11
-
+- Nome do arquivo com horário real de início e fim: `dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4`.
 - Stream RTSP via container `bluenviron/mediamtx` gerenciado automaticamente.
-- Endpoint WebRTC acessível por navegador em `http://<ip>:8889/stream`.
+- Endpoint HLS acessível por navegador em `http://<ip>:8888/stream` (LL-HLS, ~300 ms de latência).
 - Flag `--display` para abrir janela local via ffplay (desativada por padrão).
-- Alias `canpass` registrado automaticamente em `~/.bashrc` na primeira execução.
-- Instalação automática do Docker via `docker-install.sh` se necessário.
 
-### 0.1.0 — 2026-05-11
+### v0.1 — 2026-05-11
 
 - Script `cam_view.sh`: detecção automática de câmeras V4L2, instalação de dependências, exibição via ffplay.
 - `.gitignore`: configurado para C/C++ + CMake + vcpkg.
