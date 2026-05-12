@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Uninstall all conflicting packages
-sudo apt remove --purge $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
+# Uninstall all conflicting packages (ignores if none are installed)
+sudo apt remove --purge docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc 2>/dev/null || true
 sudo apt update
 
 # Add Docker's official GPG key:

@@ -1,6 +1,6 @@
 # CANPass
 
-> **v0.2** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
+> **v0.2.6** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
 
 ## Descrição
 
@@ -167,6 +167,32 @@ CANPass/
 ---
 
 ## Changelog
+
+### v0.2.6 — 2026-05-12
+
+- `docker-install.sh`: corrigido `apt remove --purge` que falhava quando nenhum pacote conflitante estava instalado; shebang atualizado para `#!/usr/bin/env bash`.
+- README: versão e changelog atualizados.
+
+### v0.2.5 — 2026-05-12
+
+- README: corrigida URL de download e nome da pasta extraída (`CANPass-main`).
+
+### v0.2.4 — 2026-05-12
+
+- `install.sh`: separada limpeza entre `install.sh` (remove tudo exceto si mesmo, salva caminho em `/tmp/.canpass_src_dir`) e `watchdog.sh` (remove o diretório na primeira execução).
+
+### v0.2.3 — 2026-05-12
+
+- `install.sh`: passa a remover a pasta inteira do repositório clonado com `rm -rf`.
+
+### v0.2.2 — 2026-05-12
+
+- README: instalação migrada para comando único via `wget` + `unzip`; removido processo de `git clone`.
+- `install.sh`: remove `main.zip` de `$HOME` ao final da instalação.
+
+### v0.2.1 — 2026-05-12
+
+- `install.sh` e `watchdog.sh`: destino dos scripts alterado de `/usr/local/bin` para `/usr/bin`.
 
 ### v0.2 — 2026-05-12
 
