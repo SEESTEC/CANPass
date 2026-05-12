@@ -25,6 +25,18 @@ is_intentional_exit() {
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+_cleanup_install_dir() {
+    local src_file="/tmp/.canpass_src_dir"
+    [[ -f "$src_file" ]] || return
+    local src_dir
+    src_dir=$(cat "$src_file")
+    rm -f "$src_file"
+    [[ -d "$src_dir" ]] || return
+    rm -rf "$src_dir"
+    log_info "Repositório de instalação removido: ${src_dir}"
+}
+_cleanup_install_dir
+
 log_info "Watchdog iniciado — supervisionando ${CAM_VIEW}"
 
 while true; do
