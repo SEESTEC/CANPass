@@ -30,13 +30,13 @@ _probe_csi_cameras() {
     grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return
     command -v gst-launch-1.0 &>/dev/null || return
     gst-inspect-1.0 nvarguscamerasrc &>/dev/null 2>&1 || return
+    # Não abre sessões nvarguscamerasrc aqui — cada probe esgota o daemon e impede
+    # o stream subsequente ("No cameras available"). Lista os IDs de CANPASS_CSI_SENSORS
+    # (padrão: 0) sem validação; o stream vai confirmar a disponibilidade real.
+    local ids="${CANPASS_CSI_SENSORS:-0}"
     local id
-    for id in 0 1 2 3; do
-        timeout 4 gst-launch-1.0 -q \
-            nvarguscamerasrc sensor-id="$id" num-buffers=1 ! \
-            nvvidconv ! "video/x-raw,format=I420" ! \
-            fakesink sync=false 2>/dev/null \
-            && echo "csi:${id}"
+    for id in $ids; do
+        echo "csi:${id}"
     done
 }
 
@@ -178,21 +178,13 @@ show_camera() {
     if [[ "$dev" == csi:* ]]; then
         local sensor_id="${dev#csi:}"
 
-        # Proba resoluções suportadas pelo sensor CSI
-        local csi_w=1280 csi_h=720 csi_fps=30
-        for res_str in "1920 1080 30" "1280 720 30" "640 480 30"; do
-            read -r w h fps <<< "$res_str"
-            if timeout 4 gst-launch-1.0 -q \
-               nvarguscamerasrc sensor-id="$sensor_id" num-buffers=1 ! \
-               "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12" ! \
-               nvvidconv ! "video/x-raw,format=I420" ! \
-               fakesink sync=false 2>/dev/null; then
-                csi_w=$w; csi_h=$h; csi_fps=$fps
-                log_ok "Resolução CSI: ${csi_w}x${csi_h} @ ${csi_fps} fps"
-                break
-            fi
-            log_warn "Resolução ${w}x${h}@${fps}fps indisponível — tentando próxima..."
-        done
+        # Resolução configurável via CANPASS_CSI_RES="WxH@FPS" (padrão: 1920x1080@30).
+        # Probes de resolução com nvarguscamerasrc foram removidas — cada probe abre uma
+        # sessão no daemon nvargus e impede o stream de iniciar ("No cameras available").
+        local res="${CANPASS_CSI_RES:-1920x1080@30}"
+        local csi_w csi_h csi_fps
+        IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
+        log_info "Stream CSI: sensor-id=${sensor_id}, ${csi_w}x${csi_h} @ ${csi_fps} fps"
 
         # Loop CSI: GStreamer captura e converte (NV12→I420) via pipe para
         # ffmpeg, que faz encode H.264 e envia ao MediaMTX por RTSP.
@@ -202,7 +194,6 @@ show_camera() {
             local csi_log="/tmp/canpass_csi_${sensor_id}.log"
             : > "$csi_log"
             log_info "Log de erros CSI: ${csi_log}"
-            sleep 1  # aguarda nvargus estabilizar após os probes
             while true; do
                 gst-launch-1.0 -q \
                     nvarguscamerasrc sensor-id="$sensor_id" ! \

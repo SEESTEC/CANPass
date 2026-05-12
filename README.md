@@ -1,6 +1,6 @@
 # CANPass
 
-> **v0.3.3** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
+> **v0.3.4** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
 
 ## Descrição
 
@@ -116,6 +116,8 @@ Exemplo: `11-05-2026_14_32_00_14_35_47.mp4`
 | `MOTION_THRESHOLD`     | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
 | `MOTION_COOLDOWN_SECS` | `30`   | Segundos sem movimento antes de encerrar a gravação            |
 | `CANPASS_REC_DIR`      | `~/canpass_rec` | Diretório de destino das gravações                    |
+| `CANPASS_CSI_RES`      | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30` |
+| `CANPASS_CSI_SENSORS`  | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1` |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
@@ -168,6 +170,10 @@ CANPass/
 ---
 
 ## Changelog
+
+### v0.3.4 — 2026-05-12
+
+- `cam_view.sh`: removidas todas as probes com `nvarguscamerasrc` (detecção de câmeras e probe de resolução) — cada probe abria uma sessão no daemon nvargus, esgotando os recursos e causando "No cameras available" ao tentar iniciar o stream. Câmeras CSI agora são listadas via variável `CANPASS_CSI_SENSORS` (padrão: `0`) sem abrir sessões. Resolução configurável via `CANPASS_CSI_RES` (padrão: `1920x1080@30`).
 
 ### v0.3.3 — 2026-05-12
 
