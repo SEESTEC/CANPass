@@ -103,6 +103,9 @@ ensure_mediamtx() {
     log_info "Iniciando container MediaMTX..."
     docker run -d --rm --name "$CONTAINER_NAME" \
         --network host \
+        -e MTX_HLSVARIANT=lowLatency \
+        -e MTX_HLSSEGMENTDURATION=500ms \
+        -e MTX_HLSPARTDURATION=100ms \
         bluenviron/mediamtx
 
     sleep 2
@@ -273,7 +276,7 @@ show_camera() {
         local recording_tmp_file=""
 
         _start_recording() {
-            recording_start_ts=$(date +"%d_%m_%Y-%H_%M_%S")
+            recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
             recording_tmp_file="${rec_dir}/.rec_${recording_start_ts}.mp4"
             ffmpeg -loglevel error \
                 -fflags nobuffer \
@@ -293,7 +296,7 @@ show_camera() {
             wait "$recorder_pid" 2>/dev/null
             local recording_end_ts
             recording_end_ts=$(date +"%H-%M-%S")
-            local final_filename="${rec_dir}/${recording_start_ts}-${recording_end_ts}.mp4"
+            local final_filename="${rec_dir}/${recording_start_ts}_${recording_end_ts}.mp4"
             [[ -f "$recording_tmp_file" ]] && mv "$recording_tmp_file" "$final_filename"
             log_info "Sem movimento — arquivo salvo: $(basename "$final_filename")"
             recorder_pid=""
@@ -365,7 +368,12 @@ show_camera() {
         log_info "Iniciando visualização local — pressione Q para sair."
         echo
         SDL_RENDER_VSYNC=1 ffplay \
-            -fflags nobuffer -flags low_delay -sync video \
+            -probesize 32 \
+            -analyzeduration 0 \
+            -fflags nobuffer+discardcorrupt \
+            -flags low_delay \
+            -avioflags direct \
+            -sync video \
             -loglevel warning \
             "$RTSP_URL"
     else
