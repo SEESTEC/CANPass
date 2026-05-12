@@ -20,7 +20,25 @@ HLS_PATH="/stream"                             # MediaMTX serve HLS em http://<i
 MOTION_THRESHOLD="${MOTION_THRESHOLD:-0.02}"   # fração de pixels alterados que caracteriza movimento (0.0–1.0)
 MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-30}"  # segundos sem movimento antes de encerrar gravação
 
-# ─── 1. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
+# ─── 1. Detecção de câmeras CSI (Jetson/Tegra) ───────────────────────────────
+# Em plataformas Jetson, câmeras CSI são gerenciadas pelo Argus daemon da NVIDIA
+# via GStreamer (nvarguscamerasrc). Elas NÃO aparecem como /dev/video*, apenas
+# como /dev/media* (controlador de mídia Tegra), portanto precisam de caminho
+# de captura separado do V4L2 padrão.
+
+_probe_csi_cameras() {
+    grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return
+    command -v gst-launch-1.0 &>/dev/null || return
+    gst-inspect-1.0 nvarguscamerasrc &>/dev/null 2>&1 || return
+    local id
+    for id in 0 1 2 3; do
+        timeout 3 gst-launch-1.0 -q \
+            nvarguscamerasrc sensor-id="$id" num-buffers=1 ! fakesink 2>/dev/null \
+            && echo "csi:${id}"
+    done
+}
+
+# ─── 2. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
 ensure_mediamtx() {
     local docker_test
@@ -63,22 +81,19 @@ ensure_mediamtx() {
     fi
 }
 
-# ─── 2. Detecta câmeras V4L2 ─────────────────────────────────────────────────
+# ─── 3. Detecta câmeras V4L2 e CSI ──────────────────────────────────────────
 # Filtra apenas dispositivos de *captura* (não outputs de loopback/renderização).
+# Em Jetson sem câmera USB, recorre ao probe CSI via GStreamer/Argus.
 
 detect_cameras() {
     local -a cams=()
 
     for dev in /dev/video*; do
-        # Deve ser um character device acessível
         [[ -c "$dev" && -r "$dev" ]] || continue
 
         if command -v v4l2-ctl &>/dev/null; then
-            # Confirma capacidade de captura de vídeo
             v4l2-ctl --device="$dev" --all 2>/dev/null \
                 | grep -qi "Video Capture" || continue
-
-            # Confirma ao menos um formato de pixel listado (exclui nós de metadados)
             v4l2-ctl --device="$dev" --list-formats 2>/dev/null \
                 | grep -q "\[0\]" || continue
         fi
@@ -86,13 +101,24 @@ detect_cameras() {
         cams+=("$dev")
     done
 
+    # Sem câmeras V4L2 — tenta CSI (Jetson/Tegra)
+    if [[ ${#cams[@]} -eq 0 ]]; then
+        while IFS= read -r csi; do
+            cams+=("$csi")
+        done < <(_probe_csi_cameras)
+    fi
+
     [[ ${#cams[@]} -gt 0 ]] && printf '%s\n' "${cams[@]}"
 }
 
-# ─── 3. Nome amigável da câmera ───────────────────────────────────────────────
+# ─── 4. Nome amigável da câmera ───────────────────────────────────────────────
 
 camera_label() {
     local dev="$1"
+    if [[ "$dev" == csi:* ]]; then
+        echo "CSI Camera — Jetson sensor-id ${dev#csi:}"
+        return
+    fi
     if command -v v4l2-ctl &>/dev/null; then
         local name
         name=$(v4l2-ctl --device="$dev" --info 2>/dev/null \
@@ -102,7 +128,7 @@ camera_label() {
     echo "$dev"
 }
 
-# ─── 4. Captura e transmite via RTSP (exibição local opcional com --display) ──
+# ─── 5. Captura e transmite via RTSP (exibição local opcional com --display) ──
 # ffmpeg: lê o dispositivo V4L2 e envia stream H.264 ao MediaMTX (background)
 # ffplay: consome o stream RTSP para exibição local — apenas com flag --display
 #
@@ -146,49 +172,86 @@ show_camera() {
         -flush_packets 1
     )
 
-    # ── Detecta formato de entrada funcional ─────────────────────────────────
-    local working_args=""
-    local attempt_label=""
-    for args_str in \
-        "-f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720" \
-        "-f v4l2 -framerate 30 -video_size 1280x720" \
-        "-f v4l2"
-    do
-        [[ -n "$attempt_label" ]] && log_warn "Formato '${attempt_label}' indisponível — tentando próximo..."
-        attempt_label="$args_str"
+    # ── Inicia captura: CSI (Jetson/Argus) ou V4L2 (USB/padrão) ────────────────
+    if [[ "$dev" == csi:* ]]; then
+        local sensor_id="${dev#csi:}"
 
-        read -ra probe_args <<< "$args_str"
-        ffmpeg -loglevel error "${BASE[@]}" "${probe_args[@]}" -i "$dev" \
-            "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" &
-        local probe_pid=$!
+        # Proba resoluções suportadas pelo sensor CSI
+        local csi_w=1280 csi_h=720 csi_fps=30
+        for res_str in "1920 1080 30" "1280 720 30" "640 480 30"; do
+            read -r w h fps <<< "$res_str"
+            if timeout 3 gst-launch-1.0 -q \
+               nvarguscamerasrc sensor-id="$sensor_id" num-buffers=1 ! \
+               "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12" ! \
+               fakesink 2>/dev/null; then
+                csi_w=$w; csi_h=$h; csi_fps=$fps
+                log_ok "Resolução CSI: ${csi_w}x${csi_h} @ ${csi_fps} fps"
+                break
+            fi
+            log_warn "Resolução ${w}x${h}@${fps}fps indisponível — tentando próxima..."
+        done
 
-        sleep 2
-        if kill -0 "$probe_pid" 2>/dev/null; then
-            kill "$probe_pid" 2>/dev/null
-            wait "$probe_pid" 2>/dev/null
-            working_args="$args_str"
-            break
+        # Loop CSI: usa encoder H.264 de hardware (nvv4l2h264enc) e envia
+        # diretamente ao MediaMTX via rtspclientsink — sem passar pelo CPU
+        _ffmpeg_loop() {
+            while true; do
+                gst-launch-1.0 -q \
+                    nvarguscamerasrc sensor-id="$sensor_id" ! \
+                    "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                    nvv4l2h264enc idrinterval=6 bitrate=4000000 ! \
+                    h264parse config-interval=-1 ! \
+                    rtspclientsink location="$RTSP_URL" protocols=tcp 2>/dev/null
+                local rc=$?
+                (( rc >= 128 )) && return
+                log_warn "Stream CSI encerrado (código ${rc}) — reconectando em 2s..."
+                sleep 2
+            done
+        }
+    else
+        # ── V4L2: proba formato de entrada funcional ──────────────────────────
+        local working_args=""
+        local attempt_label=""
+        for args_str in \
+            "-f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720" \
+            "-f v4l2 -framerate 30 -video_size 1280x720" \
+            "-f v4l2"
+        do
+            [[ -n "$attempt_label" ]] && log_warn "Formato '${attempt_label}' indisponível — tentando próximo..."
+            attempt_label="$args_str"
+
+            read -ra probe_args <<< "$args_str"
+            ffmpeg -loglevel error "${BASE[@]}" "${probe_args[@]}" -i "$dev" \
+                "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" &
+            local probe_pid=$!
+
+            sleep 2
+            if kill -0 "$probe_pid" 2>/dev/null; then
+                kill "$probe_pid" 2>/dev/null
+                wait "$probe_pid" 2>/dev/null
+                working_args="$args_str"
+                break
+            fi
+        done
+
+        if [[ -z "$working_args" ]]; then
+            log_error "Não foi possível iniciar o stream para ${dev}. Abortando."
+            return 1
         fi
-    done
 
-    if [[ -z "$working_args" ]]; then
-        log_error "Não foi possível iniciar o stream para ${dev}. Abortando."
-        return 1
+        _ffmpeg_loop() {
+            local -a input_args
+            read -ra input_args <<< "$working_args"
+            while true; do
+                ffmpeg -loglevel error "${BASE[@]}" "${input_args[@]}" -i "$dev" \
+                    "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
+                local rc=$?
+                (( rc >= 128 )) && return
+                log_warn "Stream encerrado (código ${rc}) — reconectando em 2s..."
+                sleep 2
+            done
+        }
     fi
 
-    # ── Inicia ffmpeg em loop de reconexão (background) ──────────────────────
-    _ffmpeg_loop() {
-        local -a input_args
-        read -ra input_args <<< "$working_args"
-        while true; do
-            ffmpeg -loglevel error "${BASE[@]}" "${input_args[@]}" -i "$dev" \
-                "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
-            local rc=$?
-            (( rc >= 128 )) && return  # encerrado por sinal — para o loop
-            log_warn "Stream encerrado (código ${rc}) — reconectando em 2s..."
-            sleep 2
-        done
-    }
     _ffmpeg_loop &
     loop_pid=$!
 

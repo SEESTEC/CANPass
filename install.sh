@@ -74,6 +74,21 @@ install_docker() {
     fi
 }
 
+# ─── 1b. GStreamer NVIDIA (apenas Jetson/Tegra) ───────────────────────────────
+
+install_jetson_gstreamer() {
+    grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return 0
+    log_info "Plataforma Jetson detectada — instalando GStreamer com suporte CSI..."
+    $SUDO_CMD apt-get install -y \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        nvidia-l4t-multimedia 2>/dev/null \
+        || log_warn "Alguns pacotes GStreamer NVIDIA não disponíveis — câmeras CSI podem não funcionar."
+    log_ok "Pacotes GStreamer instalados."
+}
+
 # ─── 2. Scripts ──────────────────────────────────────────────────────────────
 
 install_scripts() {
@@ -156,6 +171,7 @@ main() {
     install_apt_package ffmpeg ffplay
     install_apt_package v4l-utils v4l2-ctl
     install_docker
+    install_jetson_gstreamer
 
     log_step "2/4 — Instalando scripts em ${INSTALL_DIR}"
     install_scripts
