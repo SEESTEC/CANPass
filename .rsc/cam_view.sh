@@ -115,6 +115,13 @@ camera_label() {
 # Encoding:
 #   -preset ultrafast / -tune zerolatency   H.264 de baixa latência
 #   -pix_fmt yuv420p                        garante compatibilidade com navegadores e players
+#   -g 15 / -keyint_min 15 / -sc_threshold 0   GOP fixo de 15 frames (500 ms @ 30 fps),
+#                                               alinhado ao segmento HLS; sem keyframes extras
+#                                               por cena (o principal causador de latência alta)
+#   -flush_packets 1                        força flush de cada pacote codificado imediatamente
+#
+# Saída RTSP:
+#   -muxdelay 0 / -muxpreload 0             zera buffer interno do muxer RTSP
 #
 # Exibição local:
 #   -sync video          sincroniza pelo relógio de vídeo
@@ -133,7 +140,11 @@ show_camera() {
         -fflags nobuffer
         -flags low_delay
     )
-    local -a ENCODE=( -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p )
+    local -a ENCODE=(
+        -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+        -g 15 -keyint_min 15 -sc_threshold 0
+        -flush_packets 1
+    )
 
     # ── Detecta formato de entrada funcional ─────────────────────────────────
     local working_args=""
@@ -148,7 +159,7 @@ show_camera() {
 
         read -ra probe_args <<< "$args_str"
         ffmpeg -loglevel error "${BASE[@]}" "${probe_args[@]}" -i "$dev" \
-            "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL" &
+            "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" &
         local probe_pid=$!
 
         sleep 2
@@ -171,7 +182,7 @@ show_camera() {
         read -ra input_args <<< "$working_args"
         while true; do
             ffmpeg -loglevel error "${BASE[@]}" "${input_args[@]}" -i "$dev" \
-                "${ENCODE[@]}" -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
+                "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>/dev/null
             local rc=$?
             (( rc >= 128 )) && return  # encerrado por sinal — para o loop
             log_warn "Stream encerrado (código ${rc}) — reconectando em 2s..."
