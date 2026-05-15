@@ -40,7 +40,35 @@ _probe_csi_cameras() {
     done
 }
 
-# ─── 2. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
+# ─── 2. Coleta dados de câmera IP e monta URL RTSP ───────────────────────────
+
+_prompt_ip_camera() {
+    local ip port path user pass url
+    echo
+    read -rp "$(echo -e "${CYAN}  IP da câmera:${NC} ")" ip
+    [[ -z "$ip" ]] && return 1
+
+    read -rp "$(echo -e "${CYAN}  Porta RTSP [554]:${NC} ")" port
+    port="${port:-554}"
+
+    read -rp "$(echo -e "${CYAN}  Caminho do stream [/stream]:${NC} ")" path
+    path="${path:-/stream}"
+    [[ "$path" != /* ]] && path="/${path}"
+
+    read -rp "$(echo -e "${CYAN}  Usuário (Enter para nenhum):${NC} ")" user
+
+    if [[ -n "$user" ]]; then
+        read -rsp "$(echo -e "${CYAN}  Senha:${NC} ")" pass
+        echo
+        url="rtsp://${user}:${pass}@${ip}:${port}${path}"
+    else
+        url="rtsp://${ip}:${port}${path}"
+    fi
+
+    echo "ip:${url}"
+}
+
+# ─── 3. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
 ensure_mediamtx() {
     local docker_test
@@ -119,6 +147,12 @@ camera_label() {
     local dev="$1"
     if [[ "$dev" == csi:* ]]; then
         echo "CSI Camera — Jetson sensor-id ${dev#csi:}"
+        return
+    fi
+    if [[ "$dev" == ip:* ]]; then
+        local display_url
+        display_url=$(sed 's|rtsp://[^:]*:[^@]*@|rtsp://***:***@|' <<< "${dev#ip:}")
+        echo "Câmera IP — ${display_url}"
         return
     fi
     if command -v v4l2-ctl &>/dev/null; then
@@ -225,6 +259,27 @@ show_camera() {
                     return 1
                 fi
                 log_warn "Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
+                sleep 2
+            done
+        }
+    elif [[ "$dev" == ip:* ]]; then
+        # ── IP (RTSP): lê diretamente do stream da câmera ─────────────────────
+        local rtsp_in="${dev#ip:}"
+        local display_url
+        display_url=$(sed 's|rtsp://[^:]*:[^@]*@|rtsp://***:***@|' <<< "$rtsp_in")
+        log_info "Stream IP: ${display_url}"
+
+        _ffmpeg_loop() {
+            while true; do
+                ffmpeg -loglevel error \
+                    -rtsp_transport tcp \
+                    "${BASE[@]}" \
+                    -i "$rtsp_in" \
+                    "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                    -rtsp_transport tcp -f rtsp "$RTSP_URL"
+                local rc=$?
+                (( rc >= 128 )) && return
+                log_warn "Stream IP encerrado (código ${rc}) — reconectando em 2s..."
                 sleep 2
             done
         }
@@ -425,35 +480,35 @@ main() {
     mapfile -t cameras < <(detect_cameras)
 
     if [[ ${#cameras[@]} -eq 0 ]]; then
-        log_error "Nenhuma câmera encontrada."
-        log_info  "Verifique se o dispositivo está conectado e o módulo uvcvideo carregado:"
-        log_info  "  lsusb && lsmod | grep uvcvideo"
-        exit 1
+        log_warn "Nenhuma câmera local encontrada."
+    else
+        log_ok "${#cameras[@]} câmera(s) local(is) detectada(s):"
     fi
 
-    log_ok "${#cameras[@]} câmera(s) detectada(s):"
     for i in "${!cameras[@]}"; do
         local label
         label=$(camera_label "${cameras[$i]}")
         echo -e "  ${GREEN}[$i]${NC} ${cameras[$i]}  —  ${label}"
     done
+
+    local ip_idx=${#cameras[@]}
+    echo -e "  ${GREEN}[${ip_idx}]${NC}  + Câmera IP (RTSP)"
     echo
 
-    local selected
-    if [[ ${#cameras[@]} -eq 1 ]]; then
-        selected="${cameras[0]}"
-        log_info "Câmera única detectada: $selected"
-    else
-        local choice
-        while true; do
-            read -rp "$(echo -e "${CYAN}Selecione a câmera [0–$((${#cameras[@]}-1))]:${NC} ")" choice
-            if [[ "$choice" =~ ^[0-9]+$ && "$choice" -lt "${#cameras[@]}" ]]; then
+    local selected="" choice
+    while true; do
+        read -rp "$(echo -e "${CYAN}Selecione [0–${ip_idx}]:${NC} ")" choice
+        if [[ "$choice" =~ ^[0-9]+$ ]]; then
+            if (( choice < ${#cameras[@]} )); then
                 selected="${cameras[$choice]}"
                 break
+            elif (( choice == ip_idx )); then
+                selected=$(_prompt_ip_camera) || { log_warn "Câmera IP não configurada. Tente novamente."; continue; }
+                [[ -n "$selected" ]] && break
             fi
-            log_warn "Opção inválida. Tente novamente."
-        done
-    fi
+        fi
+        log_warn "Opção inválida. Tente novamente."
+    done
 
     echo
     show_camera "$selected" "$display"
