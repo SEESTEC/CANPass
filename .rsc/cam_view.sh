@@ -120,7 +120,7 @@ _prompt_ip_camera() {
 
     if [[ -n "$user" ]]; then
         read -rsp "$(echo -e "${CYAN}  Senha:${NC} ")" pass
-        echo
+        echo >&2
         url="rtsp://${user}:${pass}@${ip}:${port}${path}"
     else
         url="rtsp://${ip}:${port}${path}"
