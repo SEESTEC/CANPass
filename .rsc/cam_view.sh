@@ -265,7 +265,7 @@ show_camera() {
     )
     local -a ENCODE=(
         -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-        -g 6 -keyint_min 6 -sc_threshold 0
+        -g 2 -keyint_min 2 -sc_threshold 0
         -flush_packets 1
     )
 
