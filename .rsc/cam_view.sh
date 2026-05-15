@@ -331,18 +331,40 @@ show_camera() {
         log_info "Stream IP: ${display_url}"
 
         _ffmpeg_loop() {
+            local err_log
+            err_log=$(mktemp /tmp/canpass_ip_XXXXXX.log)
             while true; do
+                : > "$err_log"
                 ffmpeg -loglevel error \
                     -rtsp_transport tcp \
                     "${BASE[@]}" \
                     -i "$rtsp_in" \
                     "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                    -rtsp_transport tcp -f rtsp "$RTSP_URL"
+                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>"$err_log"
                 local rc=$?
-                (( rc >= 128 )) && return
+                cat "$err_log" >&2
+                # 404: path não existe na câmera — reconectar nunca vai resolver
+                if grep -q "404 Not Found" "$err_log"; then
+                    log_error "Path RTSP não encontrado na câmera (404)."
+                    log_info  "Paths comuns para câmeras Intelbras:"
+                    log_info  "  /cam/realmonitor?channel=1&subtype=0  (principal)"
+                    log_info  "  /cam/realmonitor?channel=1&subtype=1  (secundário)"
+                    log_info  "  /live"
+                    log_info  "Reinicie o canpass e informe o path correto."
+                    rm -f "$err_log"
+                    return 1
+                fi
+                # 401: credenciais inválidas — reconectar nunca vai resolver
+                if grep -q "401 Unauthorized" "$err_log"; then
+                    log_error "Câmera recusou autenticação (401) — verifique usuário e senha."
+                    rm -f "$err_log"
+                    return 1
+                fi
+                (( rc >= 128 )) && { rm -f "$err_log"; return; }
                 log_warn "Stream IP encerrado (código ${rc}) — reconectando em 2s..."
                 sleep 2
             done
+            rm -f "$err_log"
         }
     else
         # ── V4L2: proba formato de entrada funcional ──────────────────────────
