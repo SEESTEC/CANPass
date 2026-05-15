@@ -103,11 +103,11 @@ _check_and_configure_subnet() {
 
 _prompt_ip_camera() {
     local ip port path user pass url
-    echo
+    echo >&2
     read -rp "$(echo -e "${CYAN}  IP da câmera:${NC} ")" ip
     [[ -z "$ip" ]] && return 1
 
-    _check_and_configure_subnet "$ip"
+    _check_and_configure_subnet "$ip" >&2
 
     read -rp "$(echo -e "${CYAN}  Porta RTSP [554]:${NC} ")" port
     port="${port:-554}"
