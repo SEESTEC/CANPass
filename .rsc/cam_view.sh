@@ -333,6 +333,48 @@ show_camera() {
         _ffmpeg_loop() {
             local err_log
             err_log=$(mktemp /tmp/canpass_ip_XXXXXX.log)
+
+            _ip_check_err() {
+                cat "$err_log" >&2
+                if grep -q "404 Not Found" "$err_log"; then
+                    log_error "Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto."
+                    log_info  "Paths comuns para câmeras Intelbras:"
+                    log_info  "  /cam/realmonitor?channel=1&subtype=0  (principal)"
+                    log_info  "  /cam/realmonitor?channel=1&subtype=1  (secundário)"
+                    log_info  "  /live"
+                    return 1
+                fi
+                if grep -q "401 Unauthorized" "$err_log"; then
+                    log_error "Câmera recusou autenticação (401) — verifique usuário e senha."
+                    return 1
+                fi
+                return 0
+            }
+
+            # Probe: inicia o stream e aguarda 3s para confirmar que a câmera
+            # está respondendo e o MediaMTX já recebe dados antes de exibir os URLs.
+            log_info "Conectando à câmera IP (aguarde)..."
+            : > "$err_log"
+            ffmpeg -loglevel error \
+                -rtsp_transport tcp \
+                "${BASE[@]}" \
+                -i "$rtsp_in" \
+                "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>"$err_log" &
+            local probe_pid=$!
+            sleep 3
+            if ! kill -0 "$probe_pid" 2>/dev/null; then
+                wait "$probe_pid" 2>/dev/null
+                _ip_check_err || { rm -f "$err_log"; return 1; }
+                log_error "Câmera IP desconectou antes de iniciar o stream."
+                rm -f "$err_log"
+                return 1
+            fi
+            kill "$probe_pid" 2>/dev/null
+            wait "$probe_pid" 2>/dev/null
+            log_ok "Câmera IP conectada — stream disponível no MediaMTX."
+
+            # Loop de reconexão para quedas transitórias após o stream estar estável.
             while true; do
                 : > "$err_log"
                 ffmpeg -loglevel error \
@@ -342,24 +384,7 @@ show_camera() {
                     "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
                     -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>"$err_log"
                 local rc=$?
-                cat "$err_log" >&2
-                # 404: path não existe na câmera — reconectar nunca vai resolver
-                if grep -q "404 Not Found" "$err_log"; then
-                    log_error "Path RTSP não encontrado na câmera (404)."
-                    log_info  "Paths comuns para câmeras Intelbras:"
-                    log_info  "  /cam/realmonitor?channel=1&subtype=0  (principal)"
-                    log_info  "  /cam/realmonitor?channel=1&subtype=1  (secundário)"
-                    log_info  "  /live"
-                    log_info  "Reinicie o canpass e informe o path correto."
-                    rm -f "$err_log"
-                    return 1
-                fi
-                # 401: credenciais inválidas — reconectar nunca vai resolver
-                if grep -q "401 Unauthorized" "$err_log"; then
-                    log_error "Câmera recusou autenticação (401) — verifique usuário e senha."
-                    rm -f "$err_log"
-                    return 1
-                fi
+                _ip_check_err || { rm -f "$err_log"; return 1; }
                 (( rc >= 128 )) && { rm -f "$err_log"; return; }
                 log_warn "Stream IP encerrado (código ${rc}) — reconectando em 2s..."
                 sleep 2
@@ -463,51 +488,55 @@ show_camera() {
             recording_tmp_file=""
         }
 
-        sleep 1  # aguarda o stream RTSP estabilizar
+        sleep 5  # aguarda o stream estabilizar no MediaMTX (IP cameras precisam de mais tempo)
 
-        # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento
-        # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo
+        # Loop externo: reinicia o detector se ele cair (ex: stream não estava
+        # pronto no MediaMTX quando o detector conectou). É encerrado pelo SIGTERM
+        # enviado pelo cleanup() ao matar motion_rec_pid.
         while true; do
-            local line="" read_status
-            IFS= read -r -t "${MOTION_COOLDOWN_SECS}" line
-            read_status=$?
-            local now
-            now=$(date +%s)
+            motion_active=0
+            last_motion_epoch=0
 
-            if (( read_status == 0 )); then
-                # Frame com movimento recebido: extrai o score e atualiza estado
-                if [[ "$line" =~ lavfi\.scene_score=([0-9.eE+\-]+) ]]; then
-                    local scene_score="${BASH_REMATCH[1]}"
-                    if awk "BEGIN{exit !($scene_score > ${MOTION_THRESHOLD})}"; then
-                        last_motion_epoch=$now
-                        if [[ $motion_active -eq 0 ]]; then
-                            motion_active=1
-                            _start_recording
+            # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento.
+            # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo.
+            while true; do
+                local line="" read_status
+                IFS= read -r -t "${MOTION_COOLDOWN_SECS}" line
+                read_status=$?
+                local now
+                now=$(date +%s)
+
+                if (( read_status == 0 )); then
+                    if [[ "$line" =~ lavfi\.scene_score=([0-9.eE+\-]+) ]]; then
+                        local scene_score="${BASH_REMATCH[1]}"
+                        if awk "BEGIN{exit !($scene_score > ${MOTION_THRESHOLD})}"; then
+                            last_motion_epoch=$now
+                            if [[ $motion_active -eq 0 ]]; then
+                                motion_active=1
+                                _start_recording
+                            fi
                         fi
                     fi
+                elif (( read_status == 1 )); then
+                    break  # EOF — detector encerrado, sai do loop interno
                 fi
-            elif (( read_status == 1 )); then
-                break  # EOF — detector encerrado (stream RTSP caiu)
-            fi
-            # read_status > 128 = timeout (nenhum frame de movimento no intervalo)
-            # Verifica cooldown em ambos os casos (timeout e frame sem score relevante)
-            if [[ $motion_active -eq 1 ]] && (( now - last_motion_epoch >= MOTION_COOLDOWN_SECS )); then
-                motion_active=0
-                _stop_recording
-            fi
+                if [[ $motion_active -eq 1 ]] && (( now - last_motion_epoch >= MOTION_COOLDOWN_SECS )); then
+                    motion_active=0
+                    _stop_recording
+                fi
 
-        done < <(
-            # Detector: decodifica o stream, seleciona frames com alteração significativa
-            # e captura os scores de cena via stderr (loglevel info) filtrado por grep
-            ffmpeg -loglevel info \
-                -rtsp_transport tcp \
-                -i "$RTSP_URL" \
-                -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:key=lavfi.scene_score" \
-                -f null /dev/null 2>&1 | grep --line-buffered "lavfi.scene_score"
-        )
+            done < <(
+                ffmpeg -loglevel info \
+                    -rtsp_transport tcp \
+                    -i "$RTSP_URL" \
+                    -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:key=lavfi.scene_score" \
+                    -f null /dev/null 2>&1 | grep --line-buffered "lavfi.scene_score"
+            )
 
-        # Garante que a gravação seja encerrada se o loop sair inesperadamente
-        [[ $motion_active -eq 1 ]] && _stop_recording
+            # EOF: encerra gravação em curso e aguarda antes de reiniciar o detector
+            [[ $motion_active -eq 1 ]] && _stop_recording
+            sleep 5
+        done
     }
 
     _motion_recording_loop &
