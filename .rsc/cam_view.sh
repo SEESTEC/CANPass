@@ -553,13 +553,16 @@ show_camera() {
     }
     trap cleanup EXIT INT TERM
 
-    local ip
-    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     echo
-    log_ok "Stream RTSP:         ${RTSP_URL}"
-    log_ok "Stream WebRTC:       http://${ip}:8889${HLS_PATH}  (~100 ms — recomendado para browser)"
-    log_ok "Stream HLS:          http://${ip}:8888${HLS_PATH}  (~200 ms — fallback para browser)"
-    log_ok "Gravando em:         ${rec_dir}  (movimento: threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
+    log_ok "Stream RTSP:   ${RTSP_URL}"
+    while IFS= read -r iface_line; do
+        local iface iface_ip
+        iface=$(awk '{print $1}' <<< "$iface_line")
+        iface_ip=$(awk '{print $2}' <<< "$iface_line" | cut -d/ -f1)
+        log_ok "Stream WebRTC  [${iface}]:  http://${iface_ip}:8889${HLS_PATH}  (~100 ms)"
+        log_ok "Stream HLS     [${iface}]:  http://${iface_ip}:8888${HLS_PATH}  (~200 ms)"
+    done < <(ip -4 -o addr show | awk '$2 != "lo" {print $2, $4}')
+    log_ok "Gravando em:   ${rec_dir}  (movimento: threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo
