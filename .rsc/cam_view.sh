@@ -112,8 +112,8 @@ _prompt_ip_camera() {
     read -rp "$(echo -e "${CYAN}  Porta RTSP [554]:${NC} ")" port
     port="${port:-554}"
 
-    read -rp "$(echo -e "${CYAN}  Caminho do stream [/stream]:${NC} ")" path
-    path="${path:-/stream}"
+    read -rp "$(echo -e "${CYAN}  Caminho do stream [/cam/realmonitor?channel=1&subtype=0]:${NC} ")" path
+    path="${path:-/cam/realmonitor?channel=1&subtype=0}"
     [[ "$path" != /* ]] && path="/${path}"
 
     read -rp "$(echo -e "${CYAN}  Usuário (Enter para nenhum):${NC} ")" user
