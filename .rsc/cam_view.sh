@@ -19,6 +19,8 @@ RTSP_URL="rtsp://localhost:8554/stream"
 HLS_PATH="/stream"                             # MediaMTX serve HLS em http://<ip>:8888<HLS_PATH>
 MOTION_THRESHOLD="${MOTION_THRESHOLD:-0.02}"   # fração de pixels alterados que caracteriza movimento (0.0–1.0)
 MOTION_COOLDOWN_SECS="${MOTION_COOLDOWN_SECS:-30}"  # segundos sem movimento antes de encerrar gravação
+_TEMP_IP_ADDR=""   # IP temporário adicionado ao Jetson para alcançar câmera IP
+_TEMP_IP_IFACE=""  # Interface onde o IP temporário foi adicionado
 
 # ─── 1. Detecção de câmeras CSI (Jetson/Tegra) ───────────────────────────────
 # Em plataformas Jetson, câmeras CSI são gerenciadas pelo Argus daemon da NVIDIA
@@ -40,13 +42,72 @@ _probe_csi_cameras() {
     done
 }
 
-# ─── 2. Coleta dados de câmera IP e monta URL RTSP ───────────────────────────
+# ─── 2. Verifica sub-rede e configura IP temporário no Jetson se necessário ───
+# Câmeras IP saem de fábrica em 192.168.1.x/24. Se nenhuma interface do Jetson
+# estiver nessa faixa, o usuário pode atribuir um IP temporário aqui para
+# alcançar a câmera sem alterar a configuração permanente da rede.
+
+_check_and_configure_subnet() {
+    local cam_ip="$1"
+    local cam_prefix
+    cam_prefix=$(cut -d. -f1-3 <<< "$cam_ip")
+
+    # Já existe alguma interface na mesma faixa /24?
+    if ip -4 addr show 2>/dev/null | grep -q "inet ${cam_prefix}\."; then
+        return 0
+    fi
+
+    echo
+    log_warn "Nenhuma interface de rede está na faixa ${cam_prefix}.0/24 (câmera: ${cam_ip})."
+    log_info  "Para comunicar com a câmera, o Jetson precisa de um IP na mesma faixa."
+    echo -e "  ${CYAN}Deseja configurar um IP temporário agora? [s/N]:${NC} \c"
+    local ans
+    read -r ans
+    [[ "$ans" =~ ^[sS]$ ]] || return 0
+
+    # Lista interfaces disponíveis (exceto loopback)
+    local -a ifaces
+    mapfile -t ifaces < <(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$')
+    echo
+    local i iface cur_ip
+    for i in "${!ifaces[@]}"; do
+        iface="${ifaces[$i]}"
+        cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2}')
+        echo -e "  ${GREEN}[$i]${NC} ${iface}  ${cur_ip:-(sem IP atribuído)}"
+    done
+    echo
+
+    local iface_choice
+    while true; do
+        read -rp "$(echo -e "${CYAN}  Interface para configurar [0–$((${#ifaces[@]}-1))]:${NC} ")" iface_choice
+        [[ "$iface_choice" =~ ^[0-9]+$ && "$iface_choice" -lt "${#ifaces[@]}" ]] && break
+        log_warn "  Opção inválida."
+    done
+    local chosen_iface="${ifaces[$iface_choice]}"
+
+    local jetson_ip
+    read -rp "$(echo -e "${CYAN}  IP do Jetson na faixa ${cam_prefix}.x (ex: ${cam_prefix}.200):${NC} ")" jetson_ip
+    [[ -z "$jetson_ip" ]] && { log_warn "  Nenhum IP informado — continuando sem reconfigurar."; return 0; }
+
+    log_info "Adicionando ${jetson_ip}/24 em ${chosen_iface}..."
+    if sudo ip addr add "${jetson_ip}/24" dev "${chosen_iface}" 2>/dev/null; then
+        log_ok "IP ${jetson_ip}/24 configurado em ${chosen_iface}. Será removido ao encerrar o canpass."
+        _TEMP_IP_ADDR="${jetson_ip}/24"
+        _TEMP_IP_IFACE="${chosen_iface}"
+    else
+        log_warn "Falha ao configurar IP (já existe ou permissão insuficiente). Continuando..."
+    fi
+}
+
+# ─── 3. Coleta dados de câmera IP e monta URL RTSP ───────────────────────────
 
 _prompt_ip_camera() {
     local ip port path user pass url
     echo
     read -rp "$(echo -e "${CYAN}  IP da câmera:${NC} ")" ip
     [[ -z "$ip" ]] && return 1
+
+    _check_and_configure_subnet "$ip"
 
     read -rp "$(echo -e "${CYAN}  Porta RTSP [554]:${NC} ")" port
     port="${port:-554}"
@@ -430,8 +491,15 @@ show_camera() {
     _motion_recording_loop &
     local motion_rec_pid=$!
 
-    # Encerra os loops ao sair (Q, Ctrl+C ou término normal)
-    cleanup() { kill "$loop_pid" "$motion_rec_pid" 2>/dev/null; }
+    # Encerra os loops ao sair (Q, Ctrl+C ou término normal).
+    # Remove o IP temporário adicionado para câmera IP, se houver.
+    cleanup() {
+        kill "$loop_pid" "$motion_rec_pid" 2>/dev/null
+        if [[ -n "$_TEMP_IP_ADDR" && -n "$_TEMP_IP_IFACE" ]]; then
+            sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null \
+                && log_info "IP temporário ${_TEMP_IP_ADDR} removido de ${_TEMP_IP_IFACE}."
+        fi
+    }
     trap cleanup EXIT INT TERM
 
     local ip
