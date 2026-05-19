@@ -1,0 +1,4922 @@
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/Makefile b/hardware/nvidia/t23x/nv-public/overlay/Makefile
+index 93728f4..e8a60e2 100644
+--- a/hardware/nvidia/t23x/nv-public/overlay/Makefile
++++ b/hardware/nvidia/t23x/nv-public/overlay/Makefile
+@@ -9,6 +9,11 @@ dtb-y :=
+ dtbo-y :=
+ makefile-path := t23x/nv-public/overlay
+ 
++dtbo-y += tegra234-p3737-camera-overlay_ecam_ar0234_four_lane.dtbo
++dtbo-y += tegra234-p3737-camera-overlay_ecam_ar0821_four_lane.dtbo
++dtbo-y += tegra234-p3737-camera-overlay_ecam_ar0821_four_lane_four_cam.dtbo
++dtbo-y += tegra234-p3737-camera-overlay_ecam_isx031_narrow_angle.dtbo
++dtbo-y += tegra234-p3737-camera-overlay_ecam_isx031_wide_angle.dtbo
+ dtbo-y += tegra-optee.dtbo
+ dtbo-y += tegra234-audio-overlay.dtbo
+ dtbo-y += tegra234-carveouts.dtbo
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/sturdecam25_cuoagx_modes.dtsi b/hardware/nvidia/t23x/nv-public/overlay/sturdecam25_cuoagx_modes.dtsi
+new file mode 100644
+index 0000000..237850f
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/sturdecam25_cuoagx_modes.dtsi
+@@ -0,0 +1,112 @@
++					mode0 {		// MODE_1280x720
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = CAM_LANES_STRING;
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++						
++
++						active_w = "1280";
++						active_h = "720";
++						readout_orientation = "0";
++						deskew_initial_enable = "true";
++						deskew_periodic_enable = "true";
++						pix_clk_hz = "300000000";
++						serdes_pix_clk = "325000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "640";
++						inherent_gain = "1";
++						mclk_multiplier = "6.67";
++
++						min_gain_val = "1";
++						max_gain_val = "8";
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1";
++						max_framerate = "58";
++						min_exp_time = "10"; /* 1ms */
++						max_exp_time = "5000"; /* 500ms */
++						embedded_metadata_height = "0";
++					};
++					mode1 {		// MODE_1920x1080
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = CAM_LANES_STRING;
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++						
++
++						active_w = "1920";
++						active_h = "1080";
++						readout_orientation = "0";
++						deskew_initial_enable = "true";
++						deskew_periodic_enable = "true";
++						pix_clk_hz = "300000000";
++						serdes_pix_clk = "325000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "640";
++						inherent_gain = "1";
++						mclk_multiplier = "6.67";
++
++						min_gain_val = "1";
++						max_gain_val = "8";
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1";
++						max_framerate = "45";
++						min_exp_time = "10"; /* 1ms */
++						max_exp_time = "5000"; /* 500ms */
++						embedded_metadata_height = "0";
++					};
++					mode2 {		// MODE_1920x1200
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = CAM_LANES_STRING;
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++						
++
++						active_w = "1920";
++						active_h = "1200";
++						readout_orientation = "0";
++						deskew_initial_enable = "true";
++						deskew_periodic_enable = "true";
++						pix_clk_hz = "300000000";	
++						serdes_pix_clk = "325000000";	
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "960";
++						inherent_gain = "1";
++						mclk_multiplier = "6.67";
++
++						min_gain_val = "1";
++						max_gain_val = "8";
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1";
++						max_framerate = "58";
++						min_exp_time = "10"; /* 1ms */
++						max_exp_time = "5000"; /* 500ms */
++						embedded_metadata_height = "0";
++					};
++				
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/sturdecam31_cuoagx_modes.dtsi b/hardware/nvidia/t23x/nv-public/overlay/sturdecam31_cuoagx_modes.dtsi
+new file mode 100644
+index 0000000..eea0a3b
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/sturdecam31_cuoagx_modes.dtsi
+@@ -0,0 +1,87 @@
++				mode0 {/*mode ISX031_MODE_1920X1536_CROP_30FPS*/
++					mclk_khz = "24000";
++					vc_id = VC_ID;
++					num_lanes = "4";
++					tegra_sinterface = TEGRA_SINTERFACE;
++
++					discontinuous_clk = "no";
++					dpcm_enable = "false";
++					cil_settletime = "0";
++					dynamic_pixel_bit_depth = "16";
++					csi_pixel_bit_depth = "16";
++					mode_type = "yuv";
++					pixel_phase = "uyvy";
++
++					active_w = "1920";
++					active_h = "1536";
++					readout_orientation = "0";
++					line_length = "2800";
++					inherent_gain = "1";
++					pix_clk_hz = "216000000";
++					serdes_pix_clk_hz = "325000000";
++					mclk_multiplier = "4";
++
++					gain_factor = "10";
++					min_gain_val = "0"; /* dB */
++					max_gain_val = "300"; /* dB */
++					step_gain_val = "3"; /* 0.3 */
++					default_gain = "0";
++					min_hdr_ratio = "1";
++					max_hdr_ratio = "1";
++					framerate_factor = "1000000";
++					min_framerate = "30000000";
++					max_framerate = "30000000";
++					step_framerate = "1";
++					default_framerate = "30000000";
++					exposure_factor = "1000000";
++					min_exp_time = "118";
++					max_exp_time = "33333";
++					step_exp_time = "1";
++					default_exp_time = "33333";/* us */
++					embedded_metadata_height = "0";
++				};
++
++				mode1 {/*mode ISX031_MODE_1920X1080_CROP_30FPS*/
++					mclk_khz = "24000";
++					vc_id = VC_ID;
++					num_lanes = "4";
++					tegra_sinterface = TEGRA_SINTERFACE;
++
++					discontinuous_clk = "no";
++					dpcm_enable = "false";
++					cil_settletime = "0";
++					dynamic_pixel_bit_depth = "16";
++					csi_pixel_bit_depth = "16";
++					mode_type = "yuv";
++					pixel_phase = "uyvy";
++
++					active_w = "1920";
++					active_h = "1080";
++					readout_orientation = "0";
++					line_length = "2800";
++					inherent_gain = "1";
++					pix_clk_hz = "216000000";
++					serdes_pix_clk_hz = "325000000";
++					mclk_multiplier = "4";
++
++					gain_factor = "10";
++					min_gain_val = "0"; /* dB */
++					max_gain_val = "300"; /* dB */
++					step_gain_val = "3"; /* 0.3 */
++					default_gain = "0";
++					min_hdr_ratio = "1";
++					max_hdr_ratio = "1";
++					framerate_factor = "1000000";
++					min_framerate = "30000000";
++					max_framerate = "30000000";
++					step_framerate = "1";
++					default_framerate = "30000000";
++					exposure_factor = "1000000";
++					min_exp_time = "118";
++					max_exp_time = "33333";
++					step_exp_time = "1";
++					default_exp_time = "33333";/* us */
++					embedded_metadata_height = "0";
++				};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_eight_cam.dtsi b/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_eight_cam.dtsi
+new file mode 100644
+index 0000000..3fb8a4f
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_eight_cam.dtsi
+@@ -0,0 +1,103 @@
++					mode0 {		// MODE_1280X720
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1280";
++						active_h = "720";
++						readout_orientation = "90";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1280";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode1 {		// MODE_1920X1080
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1920";
++						active_h = "1080";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1920";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode2 {		// MODE_3840X2160
++						mclk_khz = "24000";
++						vc_id = VC_ID;
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "3840";
++						active_h = "2160";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "3840";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "16";
++						min_exp_time = "16";
++						max_exp_time = "660000";
++					};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_four_cam.dtsi b/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_four_cam.dtsi
+new file mode 100644
+index 0000000..c144d8e
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/sturdecam81_cuoagx_mode_four_cam.dtsi
+@@ -0,0 +1,101 @@
++					mode0 {		// MODE_1280X720
++						mclk_khz = "24000";
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1280";
++						active_h = "720";
++						readout_orientation = "90";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1280";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++						//embedded_metadata_height = "0";
++					};
++					mode1 {		// MODE_1920X1080
++						mclk_khz = "24000";
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1920";
++						active_h = "1080";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1920";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode2 {		// MODE_3840X2160
++						mclk_khz = "24000";
++						num_lanes = "4";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "3840";
++						active_h = "2160";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "300000000";
++						sedres_pix_clk_hz = "300000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "3840";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "16";
++						min_exp_time = "16";
++						max_exp_time = "660000";
++					};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0234_four_lane.dts b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0234_four_lane.dts
+new file mode 100644
+index 0000000..0f328da
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0234_four_lane.dts
+@@ -0,0 +1,953 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/clock/tegra234-clock.h>
++#include <dt-bindings/gpio/tegra234-gpio.h>
++
++#define PWM_MCU_BOOT_PIN	TEGRA234_MAIN_GPIO(AC, 0)
++#define PWM_MCU_RST_PIN	TEGRA234_MAIN_GPIO(AC, 1)
++
++#define CAM_LANES 4
++#define CAM_LANES_STRING "4"
++
++/ {
++	overlay-name = "Jetson Camera STURDeCAM25-AR0234";
++	jetson-header-name = "Jetson AGX CSI Connector";
++	compatible = "nvidia,p3737-0000+p3701-0000", "nvidia,p3737-0000+p3701-0004", "nvidia,p3737-0000+p3701-0005";
++
++    fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			tegra-capture-vi {
++				num-channels = <8>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;	
++					status = "okay";
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_vi_in0: endpoint {
++							status = "okay";
++							vc-id = <0>;
++					 		port-index = <0>;
++					 		bus-width = <CAM_LANES>;
++					 		remote-endpoint = <&ecam_csi_out0>;
++			 			};
++					};	
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_vi_in1: endpoint {
++							status = "okay";
++							vc-id = <1>;
++							port-index = <0>;
++				 			bus-width = <CAM_LANES>;
++				 			remote-endpoint = <&ecam_csi_out1>;
++			 			};
++					};
++					port@2 {
++                               	        	reg = <2>;
++						status = "okay";
++                                        	ecam_vi_in2: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                               	 	remote-endpoint = <&ecam_csi_out2>;
++                                        	};
++                                	};
++					port@3 {
++                                        	reg = <3>;
++						status = "okay";
++                                       	 	ecam_vi_in3: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                         	   	port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out3>;
++                                        	};
++                                	};
++					port@4 {
++                                       	reg = <4>;
++						status = "okay";
++                                        	ecam_vi_in4: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out4>;
++                                        	};
++                                	};
++					port@5 {
++						reg = <5>;
++						status = "okay";
++						ecam_vi_in5: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                       	        	port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out5>;
++                                        	};
++                                	};
++					port@6 {
++						reg = <6>;
++						status = "okay";
++                                        	ecam_vi_in6: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                                	port-index = <5>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out6>;
++                                        	};
++                                	};
++					port@7 {
++                                       		reg = <7>;
++						status = "okay";
++                                        	ecam_vi_in7: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                                	port-index = <5>;
++                                               		bus-width = <CAM_LANES>;
++                                               		remote-endpoint = <&ecam_csi_out7>;
++                                        	};
++                                	};
++				};
++			};
++
++			tegra-camera-platform {
++				compatible = "nvidia, tegra-camera-platform";
++				num_csi_lanes = <16>;
++				max_lane_speed = <2500000>;
++				min_bits_per_pixel = <16>;
++				vi_peak_byte_per_pixel = <2>;
++				vi_bw_margin_pct = <67>;
++				max_pixel_rate = <750000>;
++				isp_peak_byte_per_pixel = <5>;
++				isp_bw_margin_pct = <25>;
++				modules {
++					status = "okay";
++					module0 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "bottomleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 30-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0234_a@43";
++							status = "okay";
++						};
++					};
++					module1 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "bottomright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 30-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0234_b@44";
++							status = "okay";
++						};
++					};
++					module2 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "centerleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 30-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0234_c@45";
++							status = "okay";
++						};
++					};
++					module3 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "centerright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 30-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0234_d@46";
++							status = "okay";
++						};
++					};
++					module4 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "topleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 31-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0234_e@43";
++							status = "okay";
++						};
++					};
++					module5 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "topright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 31-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0234_f@44";
++							status = "okay";
++						};
++					};
++					module6 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "front";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 31-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0234_g@45";
++							status = "okay";
++						};
++					};
++					module7 {
++						status = "okay";
++						badge = "sturdecam25_cuoagx";
++						position = "rear";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0234 31-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0234_h@46";
++							status = "okay";
++						};
++					};
++				};
++			};
++
++			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <8>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						status = "okay";
++						channel@0 {
++							reg = <0>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in0: endpoint@0 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out0>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out0: endpoint@1 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in0>;
++									};
++								};
++							};
++						};
++                        			channel@1 {
++                                			reg = <1>;
++							status = "okay";
++                                			ports {
++                                        			#address-cells = <1>;
++                                       			 	#size-cells = <0>;
++                                       				port@0 {
++                                               		 	reg = <0>;
++									status = "okay";
++                                               			ecam_csi_in1: endpoint@2 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out1>;
++                                               		 	};
++                                        			};
++                                        			port@1 {
++                                        			        reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out1: endpoint@3 {
++										status = "okay";
++                                                       			remote-endpoint = <&ecam_vi_in1>;
++                                               			};
++                                        			};
++                               			};
++						};
++						channel@2 {
++                        			        reg = <2>;
++							status = "okay";
++                        			        ports {
++                                		       	#address-cells = <1>;
++                                		        	#size-cells = <0>;
++                                		        	port@0 {
++                                        			       reg = <0>;
++									status = "okay";
++                                        			       ecam_csi_in2: endpoint@4 {
++										status = "okay";
++                                                			        port-index = <2>;
++                                           		 		        bus-width = <CAM_LANES>;
++                                          				        remote-endpoint = <&ecam_ar0234_out2>;
++									};
++                                        			};
++                                        			port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out2: endpoint@5 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in2>;
++									};
++								};
++                         			       };
++                        			};
++						channel@3 {
++							reg = <3>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in3: endpoint@6 {
++										status = "okay";
++										port-index = <2>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out3>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out3: endpoint@7 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in3>;
++									};
++								};
++							};
++						};
++						channel@4 {
++							reg = <4>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in4: endpoint@8 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out4>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out4: endpoint@9 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in4>;
++									};
++								};
++							};
++						};
++						channel@5 {
++							reg = <5>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in5: endpoint@10 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out5>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out5: endpoint@11 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in5>;
++									};
++								};
++							};
++						};
++						channel@6 {
++							reg = <6>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in6: endpoint@12 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out6>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out6: endpoint@13 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in6>;
++									};
++								};
++							};
++						};
++						channel@7 {
++							reg = <7>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in7: endpoint@14 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0234_out7>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out7: endpoint@15 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in7>;
++									};
++								};
++							};
++						};
++					};
++				};
++
++				i2c@31e0000 {   
++     					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					skip_mux_detect = "no";
++					force_bus_start = <0x1e>;
++					//vcc-supply = <&vdd_1v8_sys>;
++					mcu_sync: mcu_pwm@42 {
++						status = "okay";
++						compatible = "nvidia,mcu_pwm";
++						reg = <0x42>;
++						avdd-reg = "vana";
++						iovdd-reg = "vif";
++						clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++						clock-names = "extperiph1", "pllp_grtba";
++						mclk = "extperiph1";
++						clock-frequency = <4000000>;
++						//vana-supply = <&p3737_avdd_cam_2v8>;
++						//vif-supply = <&p3737_vdd_1v8_sys>;	
++						reset-mcu = <&gpio PWM_MCU_RST_PIN GPIO_ACTIVE_LOW>;
++						boot-mcu = <&gpio PWM_MCU_BOOT_PIN GPIO_ACTIVE_LOW>;
++					};
++				};
++	
++				i2c@3180000 {
++					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					tca9548@70 {
++						compatible = "nxp,pca9548";
++						reg = <0x70>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						//vcc-supply = <&vdd_1v8_sys>;
++						skip_mux_detect = "no";
++						force_bus_start = <0x1e>;
++						status= "okay";
++						i2c@0 {
++							status = "okay";
++							reg = <0>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							e_con_dser_a: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "a";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_d: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_c: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_b: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_a: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							ar0234_d@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0234";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0234";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <CAM_LANES>;
++                                        			camera-mipi-clk = <1200>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_d>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam25_cuoagx_modes.dtsi"
++                                        			ports {
++                                      	 	 		        #address-cells = <1>;
++                                      				        #size-cells = <0>;
++                                       				        port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0234_out3: endpoint {
++											vc-id = <1>;
++                                                         	 	      		port-index = <2>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in3>;
++                                                                		};
++									};
++								};
++							};
++							ar0234_c@45 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0234";
++                                        			reg = <0x45>;
++                                        			sensor_model ="ar0234";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <576>;
++                                        			sio-port = "C";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0045";
++								nvidia,gmsl-ser-device = <&e_con_ser_c>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam25_cuoagx_modes.dtsi"
++                                        			ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0234_out2: endpoint {
++											vc-id = <0>;
++											port-index = <2>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in2>;
++                                                               		};
++                                                        		};
++                                                		};
++                                        		};	
++							ar0234_b@44 {
++								status = "okay";
++								compatible = "nvidia,ar0234";
++								reg = <0x44>;
++								sensor_model ="ar0234";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;	
++								camera-mipi-clk = <1200>;
++								sio-port = "B";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0044";	
++								nvidia,gmsl-ser-device = <&e_con_ser_b>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE	
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_a"
++#include "sturdecam25_cuoagx_modes.dtsi"	
++								ports {
++								#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0234_out1: endpoint {
++											vc-id = <1>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in1>;
++										};
++									};
++								};
++							};
++							ar0234_a@43 {
++								status = "okay";
++								compatible = "nvidia,ar0234";
++								reg = <0x43>;
++								sensor_model ="ar0234";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++						 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;
++								sio-port = "A";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_a>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#define TEGRA_SINTERFACE "serial_a"
++#define VC_ID "0"
++#include "sturdecam25_cuoagx_modes.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0234_out0: endpoint {
++											vc-id = <0>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in0>;
++										};
++									};
++								};
++							};
++						};
++						i2c@1{
++							
++            			                   	status = "okay";
++                       				reg = <1>;
++                      				   	i2c-mux,deselect-on-exit;
++                  			             	#address-cells = <1>;
++                               			#size-cells = <0>;
++							e_con_dser_b: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "b";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_h: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_g: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_f: max9295@41 {
++								compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_e: max9295@40 {
++								compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							ar0234_h@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0234";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0234";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <CAM_LANES>;
++                                        			camera-mipi-clk = <1200>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_h>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++			
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam25_cuoagx_modes.dtsi"
++                                        			ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0234_out7: endpoint {
++											vc-id = <1>;
++                                                                			port-index = <6>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in7>;
++                                                              			};
++									};
++								};
++							};
++							ar0234_g@45 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0234";
++                                        			reg = <0x45>;
++                                        			sensor_model ="ar0234";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <CAM_LANES>;
++                                        			camera-mipi-clk = <1200>;
++                                        			sio-port = "C";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0045";
++								nvidia,gmsl-ser-device = <&e_con_ser_g>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++			
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam25_cuoagx_modes.dtsi"
++                                       				ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0234_out6: endpoint {
++											vc-id = <0>;
++                                                                			port-index = <6>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in6>;
++                                                                			};
++									};
++								};
++							};
++							ar0234_f@44 {
++								status = "okay";
++								compatible = "nvidia,ar0234";
++								reg = <0x44>;
++								sensor_model ="ar0234";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;	
++								camera-mipi-clk = <1200>;
++								sio-port = "B";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0044";
++								nvidia,gmsl-ser-device = <&e_con_ser_f>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID 
++#undef TEGRA_SINTERFACE	
++#define  VC_ID "1"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam25_cuoagx_modes.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0234_out5: endpoint {
++											vc-id = <1>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in5>;
++										};
++									};
++								};
++							};
++                               			ar0234_e@43 {
++								status = "okay";
++								compatible = "nvidia,ar0234";
++								reg = <0x43>;
++								sensor_model ="ar0234";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;
++								sio-port = "A";
++								mcu_fw_name = "ar0234_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_e>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE	
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam25_cuoagx_modes.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0234_out4: endpoint {
++											vc-id = <0>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in4>;
++										};
++									};
++								};
++							};	
++						};
++						i2c@4{
++							reg = <4>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							status = "okay";
++							power_line@29{
++								status = "okay";
++								compatible = "nvidia,load_switch";
++								deser_port = "A";
++								reg = <0x29>;
++							};
++						};
++			 			i2c@5{
++				 			reg = <5>;
++				 			i2c-mux,deselect-on-exit;
++				 			#address-cells = <1>;
++				 			#size-cells = <0>;
++				 			status = "okay";
++				 			power_line@28{
++						 		status = "okay";
++						 		compatible = "nvidia,load_switch";
++						 		deser_port = "B";
++						 		reg = <0x28>;
++				 			};
++			 			};
++
++					};
++				};
++			};
++		};
++	};
++};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane.dts b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane.dts
+new file mode 100644
+index 0000000..77c1e53
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane.dts
+@@ -0,0 +1,953 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/clock/tegra234-clock.h>
++#include <dt-bindings/gpio/tegra234-gpio.h>
++
++#define PWM_MCU_BOOT_PIN	TEGRA234_MAIN_GPIO(AC, 0)
++#define PWM_MCU_RST_PIN		TEGRA234_MAIN_GPIO(AC, 1)
++
++#define CAM_LANES 4
++#define CAM_LANES_STRING "4"
++
++/ {
++	overlay-name = "Jetson Camera STURDeCAM81";
++	jetson-header-name = "Jetson AGX CSI Connector";
++	compatible = "nvidia,p3737-0000+p3701-0000", "nvidia,p3737-0000+p3701-0004", "nvidia,p3737-0000+p3701-0005";
++
++    fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			tegra-capture-vi {
++				num-channels = <8>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;	
++					status = "okay";
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_vi_in0: endpoint {
++							status = "okay";
++							vc-id = <0>;
++					 		port-index = <0>;
++					 		bus-width = <CAM_LANES>;
++					 		remote-endpoint = <&ecam_csi_out0>;
++			 			};
++					};	
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_vi_in1: endpoint {
++							status = "okay";
++							vc-id = <1>;
++							port-index = <0>;
++				 			bus-width = <CAM_LANES>;
++				 			remote-endpoint = <&ecam_csi_out1>;
++			 			};
++					};
++					port@2 {
++                               	        	reg = <2>;
++						status = "okay";
++                                        	ecam_vi_in2: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                               	 	remote-endpoint = <&ecam_csi_out2>;
++                                        	};
++                                	};
++					port@3 {
++                                        	reg = <3>;
++						status = "okay";
++                                       	 	ecam_vi_in3: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                         	   	port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out3>;
++                                        	};
++                                	};
++					port@4 {
++                                       		reg = <4>;
++						status = "okay";
++                                        	ecam_vi_in4: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out4>;
++                                        	};
++                                	};
++					port@5 {
++                               	        	reg = <5>;
++						status = "okay";
++                                       	 	ecam_vi_in5: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                       	        	port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out5>;
++                                        	};
++                                	};
++					port@6 {
++                                 	       reg = <6>;
++						status = "okay";
++                                        	ecam_vi_in6: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                                	port-index = <5>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out6>;
++                                        	};
++                                	};
++					port@7 {
++                                       		reg = <7>;
++						status = "okay";
++                                        	ecam_vi_in7: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                                	port-index = <5>;
++                                               		bus-width = <CAM_LANES>;
++                                               		remote-endpoint = <&ecam_csi_out7>;
++                                        	};
++                                	};
++				};
++			};
++
++			tegra-camera-platform {
++				compatible = "nvidia, tegra-camera-platform";
++				num_csi_lanes = <16>;
++				max_lane_speed = <2500000>;
++				min_bits_per_pixel = <16>;
++				vi_peak_byte_per_pixel = <2>;
++				vi_bw_margin_pct = <67>;
++				max_pixel_rate = <750000>;
++				isp_peak_byte_per_pixel = <5>;
++				isp_bw_margin_pct = <25>;
++				modules {
++					status = "okay";
++					module0 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "bottomleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_a@43";
++							status = "okay";
++						};
++					};
++					module1 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "bottomright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_b@44";
++							status = "okay";
++						};
++					};
++					module2 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "centerleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_c@45";
++							status = "okay";
++						};
++					};
++					module3 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "centerright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_d@46";
++							status = "okay";
++						};
++					};
++					module4 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "topleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_e@43";
++							status = "okay";
++						};
++					};
++					module5 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "topright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 31-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_f@44";
++							status = "okay";
++						};
++					};
++					module6 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "front";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 31-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_g@45";
++							status = "okay";
++						};
++					};
++					module7 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "rear";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 31-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_h@46";
++							status = "okay";
++						};
++					};
++				};
++			};
++
++			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <8>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						status = "okay";
++						channel@0 {
++							reg = <0>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in0: endpoint@0 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out0>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out0: endpoint@1 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in0>;
++									};
++								};
++							};
++						};
++                        			channel@1 {
++                                			reg = <1>;
++							status = "okay";
++                                			ports {
++                                        			#address-cells = <1>;
++                                       			 	#size-cells = <0>;
++                                       				port@0 {
++                                               		 		reg = <0>;
++									status = "okay";
++                                               			 	ecam_csi_in1: endpoint@2 {
++										status = "okay";
++                                                			        port-index = <0>;
++                                                       		 		bus-width = <CAM_LANES>;
++                                                       	 			remote-endpoint = <&ecam_ar0821_out1>;
++                                               		 		};
++                                        			};
++                                        			port@1 {
++                                        			        reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out1: endpoint@3 {
++										status = "okay";
++                                                        			remote-endpoint = <&ecam_vi_in1>;
++                                               	 			};
++                                        			};
++                               			 	};
++                       			 	};
++						channel@2 {
++                        			        reg = <2>;
++							status = "okay";
++                        			        ports {
++                                		       		#address-cells = <1>;
++                                		        	#size-cells = <0>;
++                                		        	port@0 {
++                                        			        reg = <0>;
++									status = "okay";
++                                        			        ecam_csi_in2: endpoint@4 {
++										status = "okay";
++                                                			        port-index = <2>;
++                                           		 		        bus-width = <CAM_LANES>;
++                                          				        remote-endpoint = <&ecam_ar0821_out2>;
++                                      			          	};
++                                        			};
++                                        			port@1 {
++                                        			        reg = <1>;
++									status = "okay";
++                			                                ecam_csi_out2: endpoint@5 {
++										status = "okay";
++                                        			                remote-endpoint = <&ecam_vi_in2>;
++                                        			        };
++                                       				 };
++                         			       };
++                        			};
++						channel@3 {
++							reg = <3>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in3: endpoint@6 {
++										status = "okay";
++										port-index = <2>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out3>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out3: endpoint@7 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in3>;
++									};
++								};
++							};
++						};
++						channel@4 {
++							reg = <4>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in4: endpoint@8 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out4>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out4: endpoint@9 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in4>;
++									};
++								};
++							};
++						};
++						channel@5 {
++							reg = <5>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in5: endpoint@10 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out5>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out5: endpoint@11 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in5>;
++									};
++								};
++							};
++						};
++						channel@6 {
++							reg = <6>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in6: endpoint@12 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out6>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out6: endpoint@13 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in6>;
++									};
++								};
++							};
++						};
++						channel@7 {
++							reg = <7>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in7: endpoint@14 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out7>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out7: endpoint@15 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in7>;
++									};
++								};
++							};
++						};
++					};
++				};
++
++				i2c@31e0000 {   
++     					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					skip_mux_detect = "no";
++					force_bus_start = <0x1e>;
++					//vcc-supply = <&vdd_1v8_sys>;
++					mcu_sync: mcu_pwm@42 {
++						status = "okay";
++						compatible = "nvidia,mcu_pwm";
++						reg = <0x42>;
++						avdd-reg = "vana";
++						iovdd-reg = "vif";
++						clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++						clock-names = "extperiph1", "pllp_grtba";
++						mclk = "extperiph1";
++						clock-frequency = <4000000>;
++						//vana-supply = <&p3737_avdd_cam_2v8>;
++						//vif-supply = <&p3737_vdd_1v8_sys>;	
++						reset-mcu = <&gpio PWM_MCU_RST_PIN GPIO_ACTIVE_LOW>;
++						boot-mcu = <&gpio PWM_MCU_BOOT_PIN GPIO_ACTIVE_LOW>;
++					};
++				};
++	
++				i2c@3180000 {
++					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					tca9548@70 {
++						compatible = "nxp,pca9548";
++						reg = <0x70>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						//vcc-supply = <&vdd_1v8_sys>;
++						skip_mux_detect = "no";
++						force_bus_start = <0x1e>;
++						status= "okay";
++						i2c@0 {
++							status = "okay";
++							reg = <0>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							e_con_dser_a: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2C>;
++								channel = "a";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_d: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_c: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_b: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_a: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							ar0821_d@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <576>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_d>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"
++                                        			ports {
++                                      	 	 		        #address-cells = <1>;
++                                      				        #size-cells = <0>;
++                                       				        port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out3: endpoint {
++											vc-id = <1>;
++                                                         	 	      		port-index = <2>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in3>;
++                                                                		};
++									};
++								};
++							};
++							ar0821_c@45 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x45>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <576>;
++                                        			sio-port = "C";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0045";
++								nvidia,gmsl-ser-device = <&e_con_ser_c>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"
++                                        			ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out2: endpoint {
++											vc-id = <0>;
++											port-index = <2>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in2>;
++                                                               			};
++                                                        		};
++                                                		};
++                                        		};	
++							ar0821_b@44 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x44>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;	
++								camera-mipi-clk = <576>;
++								sio-port = "B";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0044";	
++								nvidia,gmsl-ser-device = <&e_con_ser_b>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef VC_ID
++#undef TEGRA_SINTERFACE	
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_a"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"	
++								ports {
++								#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out1: endpoint {
++											vc-id = <1>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in1>;
++										};
++									};
++								};
++							};
++							ar0821_a@43 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x43>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++						 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;
++								camera-mipi-clk = <576>;
++								sio-port = "A";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_a>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#define TEGRA_SINTERFACE "serial_a"
++#define VC_ID "0"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out0: endpoint {
++											vc-id = <0>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in0>;
++										};
++									};
++								};
++							};
++						};
++						i2c@1{
++							
++            			                   	status = "okay";
++                       				   	reg = <1>;
++                      				   	i2c-mux,deselect-on-exit;
++                  			             	#address-cells = <1>;
++                               				#size-cells = <0>;
++							e_con_dser_b: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2C>;
++								channel = "b";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_h: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_g: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_f: max9295@41 {
++								compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_e: max9295@40 {
++								compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							ar0821_h@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <576>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_h>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++			
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"
++                                        			ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out7: endpoint {
++											vc-id = <1>;
++                                                                			port-index = <6>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in7>;
++                                                              			};
++									};
++								};
++							};
++							ar0821_g@45 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x45>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <576>;
++                                        			sio-port = "C";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0045";
++								nvidia,gmsl-ser-device = <&e_con_ser_g>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++			
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"
++                                       				ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out6: endpoint {
++											vc-id = <0>;
++                                                                			port-index = <6>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in6>;
++                                                                			};
++									};
++								};
++							};
++							ar0821_f@44 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x44>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;	
++								camera-mipi-clk = <576>;
++								sio-port = "B";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0044";
++								nvidia,gmsl-ser-device = <&e_con_ser_f>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID 
++#undef TEGRA_SINTERFACE	
++#define  VC_ID "1"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out5: endpoint {
++											vc-id = <1>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in5>;
++										};
++									};
++								};
++							};
++                               				ar0821_e@43 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x43>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;
++								camera-mipi-clk = <576>;
++								sio-port = "A";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_e>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE	
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam81_cuoagx_mode_eight_cam.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out4: endpoint {
++											vc-id = <0>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in4>;
++										};
++									};
++								};
++							};	
++						};
++						i2c@4{
++							reg = <4>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							status = "okay";
++							power_line@29{
++								status = "okay";
++								compatible = "nvidia,load_switch";
++								deser_port = "A";
++								reg = <0x29>;
++							};
++						};
++			 			i2c@5{
++				 			reg = <5>;
++				 			i2c-mux,deselect-on-exit;
++				 			#address-cells = <1>;
++				 			#size-cells = <0>;
++				 			status = "okay";
++				 			power_line@28{
++						 		status = "okay";
++						 		compatible = "nvidia,load_switch";
++						 		deser_port = "B";
++						 		reg = <0x28>;
++				 			};
++			 			};
++
++					};
++				};
++			};
++		};
++	};
++};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane_four_cam.dts b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane_four_cam.dts
+new file mode 100644
+index 0000000..ba230d7
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_ar0821_four_lane_four_cam.dts
+@@ -0,0 +1,545 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/clock/tegra234-clock.h>
++#include <dt-bindings/gpio/tegra234-gpio.h>
++
++#define PWM_MCU_BOOT_PIN	TEGRA234_MAIN_GPIO(AC, 0)
++#define PWM_MCU_RST_PIN		TEGRA234_MAIN_GPIO(AC, 1)
++
++#define CAM_LANES 4
++#define CAM_LANES_STRING "4"
++
++/ {
++	overlay-name = "Jetson Camera STURDeCAM81 Four CAM";
++	jetson-header-name = "Jetson AGX CSI Connector";
++	compatible = "nvidia,p3737-0000+p3701-0000", "nvidia,p3737-0000+p3701-0004", "nvidia,p3737-0000+p3701-0005";
++
++    fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			tegra-capture-vi {
++				num-channels = <4>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;	
++					status = "okay";
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_vi_in0: endpoint {
++							status = "okay";
++							vc-id = <0>;
++					 		port-index = <0>;
++					 		bus-width = <CAM_LANES>;
++					 		remote-endpoint = <&ecam_csi_out0>;
++			 			};
++					};	
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_vi_in1: endpoint {
++							status = "okay";
++							port-index = <2>;
++				 			bus-width = <CAM_LANES>;
++				 			remote-endpoint = <&ecam_csi_out1>;
++			 			};
++					};
++					port@2 {
++                               	        	reg = <2>;
++						status = "okay";
++                                        	ecam_vi_in2: endpoint {
++					   		status= "okay";
++                                               		port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                               	 	remote-endpoint = <&ecam_csi_out2>;
++                                        	};
++                                	};
++					port@3 {
++                                        	reg = <3>;
++						status = "okay";
++                                       	 	ecam_vi_in3: endpoint {
++					   		status= "okay";
++                                         	   	port-index = <5>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out3>;
++                                        	};
++                                	};
++				};
++			};
++
++			tegra-camera-platform {
++				compatible = "nvidia, tegra-camera-platform";
++				num_csi_lanes = <16>;
++				max_lane_speed = <2500000>;
++				min_bits_per_pixel = <16>;
++				vi_peak_byte_per_pixel = <2>;
++				vi_bw_margin_pct = <67>;
++				max_pixel_rate = <750000>;
++				isp_peak_byte_per_pixel = <5>;
++				isp_bw_margin_pct = <25>;
++				modules {
++					status = "okay";
++					module0 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "bottomleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_a@43";
++							status = "okay";
++						};
++					};
++					module1 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "bottomright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 30-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/ar0821_d@46";
++							status = "okay";
++						};
++					};
++					module2 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "centerleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 31-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_e@43";
++							status = "okay";
++						};
++					};
++					module3 {
++						status = "okay";
++						badge = "nilecam81_cuoagx";
++						position = "centerright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "ar0821 31-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/ar0821_h@46";
++							status = "okay";
++						};
++					};
++				};
++			};
++
++			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <4>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						status = "okay";
++						channel@0 {
++							reg = <0>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in0: endpoint@0 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out0>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out0: endpoint@1 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in0>;
++									};
++								};
++							};
++						};
++                        			channel@1 {
++                                			reg = <1>;
++							status = "okay";
++                                			ports {
++                                        			#address-cells = <1>;
++                                       			 	#size-cells = <0>;
++                                       				port@0 {
++                                               		 		reg = <0>;
++									status = "okay";
++                                               			 	ecam_csi_in1: endpoint@2 {
++										status = "okay";
++                                                			        port-index = <2>;
++                                                       		 		bus-width = <CAM_LANES>;
++                                                       	 			remote-endpoint = <&ecam_ar0821_out1>;
++                                               		 		};
++                                        			};
++                                        			port@1 {
++                                        			        reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out1: endpoint@3 {
++										status = "okay";
++                                                        			remote-endpoint = <&ecam_vi_in1>;
++                                               	 			};
++                                        			};
++                               			 	};
++                       			 	};
++						channel@2 {
++                        			        reg = <2>;
++							status = "okay";
++                        			        ports {
++                                		       		#address-cells = <1>;
++                                		        	#size-cells = <0>;
++                                		        	port@0 {
++                                        			        reg = <0>;
++									status = "okay";
++                                        			        ecam_csi_in2: endpoint@4 {
++										status = "okay";
++                                                			        port-index = <4>;
++                                           		 		        bus-width = <CAM_LANES>;
++                                          				        remote-endpoint = <&ecam_ar0821_out2>;
++                                      			          	};
++                                        			};
++                                        			port@1 {
++                                        			        reg = <1>;
++									status = "okay";
++                			                                ecam_csi_out2: endpoint@5 {
++										status = "okay";
++                                        			                remote-endpoint = <&ecam_vi_in2>;
++                                        			        };
++                                       				 };
++                         			       };
++                        			};
++						channel@3 {
++							reg = <3>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in3: endpoint@6 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_ar0821_out3>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out3: endpoint@7 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in3>;
++									};
++								};
++							};
++						};
++					};
++				};
++
++				i2c@31e0000 {   
++     					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					skip_mux_detect = "no";
++					force_bus_start = <0x1e>;
++					//vcc-supply = <&vdd_1v8_sys>;
++					mcu_sync: mcu_pwm@42 {
++						status = "okay";
++						compatible = "nvidia,mcu_pwm";
++						reg = <0x42>;
++						avdd-reg = "vana";
++						iovdd-reg = "vif";
++						clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++						clock-names = "extperiph1", "pllp_grtba";
++						mclk = "extperiph1";
++						clock-frequency = <4000000>;
++						//vana-supply = <&p3737_avdd_cam_2v8>;
++						//vif-supply = <&p3737_vdd_1v8_sys>;	
++						reset-mcu = <&gpio PWM_MCU_RST_PIN GPIO_ACTIVE_LOW>;
++						boot-mcu = <&gpio PWM_MCU_BOOT_PIN GPIO_ACTIVE_LOW>;
++					};
++				};
++	
++				i2c@3180000 {
++					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					tca9548@70 {
++						compatible = "nxp,pca9548";
++						reg = <0x70>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						//vcc-supply = <&vdd_1v8_sys>;
++						skip_mux_detect = "no";
++						force_bus_start = <0x1e>;
++						status= "okay";
++						i2c@0 {
++							status = "okay";
++							reg = <0>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							e_con_dser_a: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2C>;
++								channel = "a";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_d: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_a: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							ar0821_d@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <1200>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_d>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;	
++#undef TEGRA_SINTERFACE
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam81_cuoagx_mode_four_cam.dtsi"
++                                        			ports {
++                                      	 	 		        #address-cells = <1>;
++                                      				        #size-cells = <0>;
++                                       				        port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out1: endpoint {
++                                                         	 	      		port-index = <2>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in1>;
++                                                                		};
++									};
++								};
++							};
++							ar0821_a@43 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x43>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++						 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;
++								camera-mipi-clk = <1200>;
++								sio-port = "A";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 9-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_a>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#define TEGRA_SINTERFACE "serial_a"
++#include "sturdecam81_cuoagx_mode_four_cam.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out0: endpoint {
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in0>;
++										};
++									};
++								};
++							};
++						};
++						i2c@1{
++							
++            			                   	status = "okay";
++                       				   	reg = <1>;
++                      				   	i2c-mux,deselect-on-exit;
++                  			             	#address-cells = <1>;
++                               				#size-cells = <0>;
++							e_con_dser_b: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2C>;
++								channel = "b";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_h: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_e: max9295@40 {
++								compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02CD>;
++								//nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							ar0821_h@46 {
++                                        			status = "okay";
++                                        			compatible = "nvidia,ar0821";
++                                        			reg = <0x46>;
++                                        			sensor_model ="ar0821";
++                                        			avdd-reg = "vana";
++                                        			iovdd-reg = "vif";
++                                        			clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++                                                         			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                        			clock-names = "extperiph1", "pllp_grtba";
++                                        			mclk = "extperiph1";
++                                        			clock-frequency = <24000000>;
++                                        			//vana-supply = <&p3737_avdd_cam_2v8>;
++                                        			//vif-supply = <&p3737_vdd_1v8_sys>;
++                                        			use_sensor_mode_id = "false";
++                                        			camera_mipi_lanes = <4>;
++                                        			camera-mipi-clk = <1200>;
++                                        			sio-port = "D";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0046";
++								nvidia,gmsl-ser-device = <&e_con_ser_h>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++			
++#undef TEGRA_SINTERFACE
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam81_cuoagx_mode_four_cam.dtsi"
++                                        			ports {
++                                                			#address-cells = <1>;
++                                                			#size-cells = <0>;
++                                                			port@0 {
++                                                        			reg = <0>;
++                                                        			ecam_ar0821_out3: endpoint {
++                                                                			port-index = <6>;
++                                                                			bus-width = <CAM_LANES>;
++                                                                			remote-endpoint = <&ecam_csi_in3>;
++                                                              			};
++									};
++								};
++							};
++                               				ar0821_e@43 {
++								status = "okay";
++								compatible = "nvidia,ar0821";
++								reg = <0x43>;
++								sensor_model ="ar0821";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <4>;
++								camera-mipi-clk = <1200>;
++								sio-port = "A";
++								mcu_fw_name = "ar0821_cam_fw.bin";
++								dev_name = "ecam_yuv 10-0043";
++								nvidia,gmsl-ser-device = <&e_con_ser_e>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam81_cuoagx_mode_four_cam.dtsi"	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_ar0821_out2: endpoint {
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in2>;
++										};
++									};
++								};
++							};	
++						};
++						i2c@4{
++							reg = <4>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							status = "okay";
++							power_line@29{
++								status = "okay";
++								compatible = "nvidia,load_switch";
++								deser_port = "A";
++								reg = <0x29>;
++							};
++						};
++			 			i2c@5{
++				 			reg = <5>;
++				 			i2c-mux,deselect-on-exit;
++				 			#address-cells = <1>;
++				 			#size-cells = <0>;
++				 			status = "okay";
++				 			power_line@28{
++						 		status = "okay";
++						 		compatible = "nvidia,load_switch";
++						 		deser_port = "B";
++						 		reg = <0x28>;
++				 			};
++			 			};
++
++					};
++				};
++			};
++		};
++	};
++};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_narrow_angle.dts b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_narrow_angle.dts
+new file mode 100644
+index 0000000..297c80a
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_narrow_angle.dts
+@@ -0,0 +1,999 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/clock/tegra234-clock.h>
++#include <dt-bindings/gpio/tegra234-gpio.h>
++
++#define PWM_MCU_BOOT_PIN	TEGRA234_MAIN_GPIO(AC, 0)
++#define PWM_MCU_RST_PIN		TEGRA234_MAIN_GPIO(AC, 1)
++
++#define CAM_LANES 4
++#define CAM_LANES_STRING "4"
++
++#define MCU_FW_FILE "isx031_cam_fw_boowan_narrow.bin"
++#define SPI_BOOT_DATA_FILE "ISX031_STURDeCAM31_0.1.1.3.bin"
++
++/ {
++	overlay-name = "Jetson Camera STURDeCAM31 BOOWAN NARROW";
++	jetson-header-name = "Jetson AGX CSI Connector";
++	compatible = "nvidia,p3737-0000+p3701-0000", "nvidia,p3737-0000+p3701-0004", "nvidia,p3737-0000+p3701-0005";
++	
++	fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			tegra-capture-vi {
++				num-channels = <8>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;	
++					status = "okay";
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_vi_in0: endpoint {
++							status = "okay";
++							vc-id = <0>;
++					 		port-index = <0>;
++					 		bus-width = <CAM_LANES>;
++					 		remote-endpoint = <&ecam_csi_out0>;
++			 			};
++					};
++				
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_vi_in1: endpoint {
++							status = "okay";
++							vc-id = <1>;
++							port-index = <0>;
++				 			bus-width = <CAM_LANES>;
++				 			remote-endpoint = <&ecam_csi_out1>;
++			 			};
++					};
++				
++
++					port@2 {
++                               	        	reg = <2>;
++						status = "okay";
++                                        	ecam_vi_in2: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                               	 	remote-endpoint = <&ecam_csi_out2>;
++                                        	};
++                                	};
++                               
++					port@3 {
++                                        	reg = <3>;
++						status = "okay";
++                                       	 	ecam_vi_in3: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                         	   	port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out3>;
++                                        	};
++                                	};
++				
++					port@4 {
++                                       		reg = <4>;
++						status = "okay";
++                                        	ecam_vi_in4: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out4>;
++                                        	};
++                                	};
++				
++					port@5 {
++                               	        	reg = <5>;
++						status = "okay";
++                                       	 	ecam_vi_in5: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                       	        	port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out5>;
++                                        	};
++                                	};
++
++					port@6 {
++                                 	       reg = <6>;
++						status = "okay";
++                                        	ecam_vi_in6: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                                	port-index = <5>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out6>;
++                                        	};
++                                	};
++
++					port@7 {
++                                       		reg = <7>;
++						status = "okay";
++                                        	ecam_vi_in7: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                                	port-index = <5>;
++                                               		bus-width = <CAM_LANES>;
++                                               		remote-endpoint = <&ecam_csi_out7>;
++                                        	};
++                                	};	
++				};
++			};
++
++			tegra-camera-platform {
++				compatible = "nvidia, tegra-camera-platform";
++				num_csi_lanes = <16>;
++				max_lane_speed = <2500000>;
++				min_bits_per_pixel = <16>;
++				vi_peak_byte_per_pixel = <2>;
++				vi_bw_margin_pct = <67>;
++				max_pixel_rate = <750000>;
++				isp_peak_byte_per_pixel = <5>;
++				isp_bw_margin_pct = <25>;
++				modules {
++					status = "okay";
++					module0 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "bottomleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_a@43";
++							status = "okay";
++						};
++					};
++					module1 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "bottomright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_b@44";
++							status = "okay";
++						};
++					};
++					module2 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "centerleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_c@45";
++							status = "okay";
++						};
++					};
++					module3 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "centerright";
++						orientation = "1";
++						drivernode0 {
++					      		pcl_id = "v4l2_sensor";
++					      		devname = "isx031 30-0046";
++					      		sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_d@46";
++					      		status = "okay";
++				 		};
++					};
++
++					module4 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "topleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_e@43";
++							status = "okay";
++						};
++					};
++		
++					module5 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "topright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_f@44";
++							status = "okay";
++						};
++					};
++		
++					module6 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "front";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_g@45";
++							status = "okay";
++						};
++					};
++		
++					module7 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "rear";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_h@46";
++							status = "okay";
++						};
++					};
++			
++		
++				};
++			};
++		
++			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <8>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						status = "okay";
++						channel@0 {
++							reg = <0>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in0: endpoint@0 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out0>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out0: endpoint@1 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in0>;
++									};
++								};
++							};
++						};
++                        			channel@1 {
++                                			reg = <1>;
++							status = "okay";
++                                			ports {
++                                       				#address-cells = <1>;
++                                	 			#size-cells = <0>;
++                                       				port@0 {
++                                               				reg = <0>;
++									status = "okay";
++                                        	 			ecam_csi_in1: endpoint@2 {
++										status = "okay";
++                                                	        		port-index = <0>;
++                                                       				bus-width = <CAM_LANES>;
++                                                 				remote-endpoint = <&ecam_isx031_out1>;
++                                               	 			};
++                                        			};
++                                        			port@1 {
++                                        	        		reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out1: endpoint@3 {
++										status = "okay";
++                                                       				remote-endpoint = <&ecam_vi_in1>;
++                                               				};
++                                        			};
++                               		 		};
++                       		 		};
++						channel@2 {
++                                			reg = <2>;
++							status = "okay";
++                                			ports {
++                                        			#address-cells = <1>;
++                                        			#size-cells = <0>;
++                                        			port@0 {
++                                        	       	 		reg = <0>;
++									status = "okay";
++                                               		 		ecam_csi_in2: endpoint@4 {
++										status = "okay";
++                                                       		 		port-index = <2>;
++                                                        			bus-width = <CAM_LANES>;
++                                                        			remote-endpoint = <&ecam_isx031_out2>;
++                                                			};
++                                        			};
++                                        			port@1 {
++                                                			reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out2: endpoint@5 {
++										status = "okay";
++                                                        			remote-endpoint = <&ecam_vi_in2>;
++                                                			};
++                                        			};
++                                			};
++                        			};
++						channel@3 {
++						reg = <3>;
++						status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in3: endpoint@6 {
++										status = "okay";
++										port-index = <2>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out3>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out3: endpoint@7 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in3>;
++									};
++								};
++							};
++						};	
++						channel@4 {
++							reg = <4>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in4: endpoint@8 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out4>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out4: endpoint@9 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in4>;
++									};
++								};
++							};
++						};
++						channel@5 {
++							reg = <5>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in5: endpoint@10 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out5>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out5: endpoint@11 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in5>;
++									};
++								};
++							};
++						};
++						channel@6 {
++							reg = <6>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in6: endpoint@12 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out6>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out6: endpoint@13 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in6>;
++									};
++								};
++							};
++						};
++						channel@7 {
++							reg = <7>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in7: endpoint@14 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out7>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out7: endpoint@15 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in7>;
++									};
++								};
++							};
++						};
++					};
++				};
++				
++				i2c@31e0000 {   
++     					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					skip_mux_detect = "no";
++					force_bus_start = <0x1e>;
++					//vcc-supply = <&vdd_1v8_sys>;
++					mcu_sync: mcu_pwm@42 {
++						status = "okay";
++						compatible = "nvidia,mcu_pwm";
++						reg = <0x42>;
++						avdd-reg = "vana";
++						iovdd-reg = "vif";
++						clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++						clock-names = "extperiph1", "pllp_grtba";
++						mclk = "extperiph1";
++						clock-frequency = <4000000>;
++						//vana-supply = <&p3737_avdd_cam_2v8>;
++						//vif-supply = <&p3737_vdd_1v8_sys>;	
++						reset-mcu = <&gpio PWM_MCU_RST_PIN GPIO_ACTIVE_LOW>;
++						boot-mcu = <&gpio PWM_MCU_BOOT_PIN GPIO_ACTIVE_LOW>;
++					};
++				};
++	
++				i2c@3180000 {
++					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					tca9548@70 {
++						compatible = "nxp,pca9548";
++						reg = <0x70>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						//vcc-supply = <&vdd_1v8_sys>;
++						skip_mux_detect = "no";
++						force_bus_start = <0x1e>;
++						status= "okay";
++						i2c@0 {
++							status = "okay";
++							reg = <0>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							e_con_dser_a: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "a";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_d: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_c: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_b: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_a: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							isx031_d@46 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x46>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++								 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "D";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0046";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_d>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out3: endpoint {
++											vc-id = <1>;
++											port-index = <2>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in3>;
++										};
++									};
++								};
++							};
++							isx031_c@45 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x45>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "C";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0045";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_c>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out2: endpoint {
++											vc-id = <0>;
++											port-index = <2>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in2>;
++										};
++									};
++								};
++							};
++							isx031_b@44 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x44>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "B";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0044";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_b>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_a"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out1: endpoint {
++											vc-id = <1>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in1>;
++										};
++									};
++								};
++							};		
++							isx031_a@43 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x43>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++										<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "A";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0043";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_a>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;								
++#define TEGRA_SINTERFACE "serial_a"
++#define VC_ID "0"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out0: endpoint {
++											vc-id = <0>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in0>;
++										};
++									};
++								};
++							};
++						};
++						i2c@1{
++                               				status = "okay";
++                               				reg = <1>;
++                               				i2c-mux,deselect-on-exit;
++                               				#address-cells = <1>;
++                               				#size-cells = <0>;
++							e_con_dser_b: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "b";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_h: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_g: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_f: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_e: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							isx031_h@46 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x46>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "D";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0046";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_h>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1" 
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out7: endpoint {
++											vc-id = <1>;
++											port-index = <6>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in7>;
++										};
++									};
++								};
++							};
++							isx031_g@45 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x45>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++			       					use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "C";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0045";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_g>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE 
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out6: endpoint {
++											vc-id = <0>;
++											port-index = <6>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in6>;
++										};
++									};
++								};
++							};
++							isx031_f@44 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x44>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "B";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0044";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_f>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out5: endpoint {
++											vc-id = <1>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in5>;
++										};
++									};
++								};
++							};
++							isx031_e@43 {
++                                       				status = "okay";
++                                       				compatible = "sony,isx031";
++                                       				reg = <0x43>;
++                                       				sensor_model ="isx031";
++                                       				avdd-reg = "vana";
++                                       				iovdd-reg = "vif";
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                       				clock-names = "extperiph1", "pllp_grtba";
++                                       				mclk = "extperiph1";
++                                       				clock-frequency = <24000000>;
++                                       				use_sensor_mode_id = "false";
++                                       				camera_mipi_lanes = <CAM_LANES>;
++				       				camera-mipi-clk = <1200>;	
++                                       				sio-port = "A";
++				       				mcu_fw_name = MCU_FW_FILE;
++				       				spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0043";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_e>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam31_cuoagx_modes.dtsi"
++                                       				ports {
++                                       					#address-cells = <1>;
++                                       					#size-cells = <0>;
++                                               				port@0 {
++                                                       				reg = <0>;
++                                                       				ecam_isx031_out4: endpoint {
++							       				vc-id = <0>;
++                                                               				port-index = <4>;
++                                                               				bus-width = <CAM_LANES>;
++                                                               				remote-endpoint = <&ecam_csi_in4>;
++                                                       				};
++                                               				};
++                                       				};
++                               				};
++						};
++						i2c@4{
++							reg = <4>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							status = "okay";
++							power_line@29{
++								status = "okay";
++								compatible = "nvidia,load_switch";
++								deser_port = "A";
++								reg = <0x29>;
++							};
++						};
++			 			i2c@5{
++				 			reg = <5>;
++				 			i2c-mux,deselect-on-exit;
++				 			#address-cells = <1>;
++				 			#size-cells = <0>;
++				 			status = "okay";
++				 			power_line@28{
++						 		status = "okay";
++						 		compatible = "nvidia,load_switch";
++						 		deser_port = "B";
++						 		reg = <0x28>;
++				 			};
++			 			};
++					};
++				};
++			};
++		};
++	};
++};
++
++
+diff --git a/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_wide_angle.dts b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_wide_angle.dts
+new file mode 100644
+index 0000000..a23b4a1
+--- /dev/null
++++ b/hardware/nvidia/t23x/nv-public/overlay/tegra234-p3737-camera-overlay_ecam_isx031_wide_angle.dts
+@@ -0,0 +1,999 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/clock/tegra234-clock.h>
++#include <dt-bindings/gpio/tegra234-gpio.h>
++
++#define PWM_MCU_BOOT_PIN	TEGRA234_MAIN_GPIO(AC, 0)
++#define PWM_MCU_RST_PIN		TEGRA234_MAIN_GPIO(AC, 1)
++
++#define CAM_LANES 4
++#define CAM_LANES_STRING "4"
++
++#define MCU_FW_FILE "isx031_cam_fw_boowan_wide.bin"
++#define SPI_BOOT_DATA_FILE "ISX031_STURDeCAM31_0.1.2.1.bin"
++
++/ {
++	overlay-name = "Jetson Camera STURDeCAM31 BOOWAN WIDE";
++	jetson-header-name = "Jetson AGX CSI Connector";
++	compatible = "nvidia,p3737-0000+p3701-0000", "nvidia,p3737-0000+p3701-0004", "nvidia,p3737-0000+p3701-0005";
++	
++	fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			tegra-capture-vi {
++				num-channels = <8>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;	
++					status = "okay";
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_vi_in0: endpoint {
++							status = "okay";
++							vc-id = <0>;
++					 		port-index = <0>;
++					 		bus-width = <CAM_LANES>;
++					 		remote-endpoint = <&ecam_csi_out0>;
++			 			};
++					};
++				
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_vi_in1: endpoint {
++							status = "okay";
++							vc-id = <1>;
++							port-index = <0>;
++				 			bus-width = <CAM_LANES>;
++				 			remote-endpoint = <&ecam_csi_out1>;
++			 			};
++					};
++				
++
++					port@2 {
++                               	        	reg = <2>;
++						status = "okay";
++                                        	ecam_vi_in2: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                               	 	remote-endpoint = <&ecam_csi_out2>;
++                                        	};
++                                	};
++                               
++					port@3 {
++                                        	reg = <3>;
++						status = "okay";
++                                       	 	ecam_vi_in3: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                         	   	port-index = <2>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out3>;
++                                        	};
++                                	};
++				
++					port@4 {
++                                       		reg = <4>;
++						status = "okay";
++                                        	ecam_vi_in4: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                               		port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out4>;
++                                        	};
++                                	};
++				
++					port@5 {
++                               	        	reg = <5>;
++						status = "okay";
++                                       	 	ecam_vi_in5: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                       	        	port-index = <4>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out5>;
++                                        	};
++                                	};
++
++					port@6 {
++                                 	       reg = <6>;
++						status = "okay";
++                                        	ecam_vi_in6: endpoint {
++					   		status= "okay";
++							vc-id = <0>;
++                                                	port-index = <5>;
++                                                	bus-width = <CAM_LANES>;
++                                                	remote-endpoint = <&ecam_csi_out6>;
++                                        	};
++                                	};
++
++					port@7 {
++                                       		reg = <7>;
++						status = "okay";
++                                        	ecam_vi_in7: endpoint {
++					   		status= "okay";
++							vc-id = <1>;
++                                                	port-index = <5>;
++                                               		bus-width = <CAM_LANES>;
++                                               		remote-endpoint = <&ecam_csi_out7>;
++                                        	};
++                                	};	
++				};
++			};
++
++			tegra-camera-platform {
++				compatible = "nvidia, tegra-camera-platform";
++				num_csi_lanes = <16>;
++				max_lane_speed = <2500000>;
++				min_bits_per_pixel = <16>;
++				vi_peak_byte_per_pixel = <2>;
++				vi_bw_margin_pct = <67>;
++				max_pixel_rate = <750000>;
++				isp_peak_byte_per_pixel = <5>;
++				isp_bw_margin_pct = <25>;
++				modules {
++					status = "okay";
++					module0 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "bottomleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_a@43";
++							status = "okay";
++						};
++					};
++					module1 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "bottomright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_b@44";
++							status = "okay";
++						};
++					};
++					module2 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "centerleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 30-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_c@45";
++							status = "okay";
++						};
++					};
++					module3 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "centerright";
++						orientation = "1";
++						drivernode0 {
++					      		pcl_id = "v4l2_sensor";
++					      		devname = "isx031 30-0046";
++					      		sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@0/isx031_d@46";
++					      		status = "okay";
++				 		};
++					};
++
++					module4 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "topleft";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0043";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_e@43";
++							status = "okay";
++						};
++					};
++		
++					module5 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "topright";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0044";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_f@44";
++							status = "okay";
++						};
++					};
++		
++					module6 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "front";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0045";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_g@45";
++							status = "okay";
++						};
++					};
++		
++					module7 {
++						status = "okay";
++						badge = "sturdecam31_cuxvr";
++						position = "rear";
++						orientation = "1";
++						drivernode0 {
++							pcl_id = "v4l2_sensor";
++							devname = "isx031 31-0046";
++							sysfs-device-tree = "/sys/firmware/devicetree/base/bus@0/i2c@3180000/tca9548@70/i2c@1/isx031_h@46";
++							status = "okay";
++						};
++					};
++			
++		
++				};
++			};
++		
++			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <8>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						status = "okay";
++						channel@0 {
++							reg = <0>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in0: endpoint@0 {
++										status = "okay";
++										port-index = <0>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out0>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out0: endpoint@1 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in0>;
++									};
++								};
++							};
++						};
++                        			channel@1 {
++                                			reg = <1>;
++							status = "okay";
++                                			ports {
++                                       				#address-cells = <1>;
++                                	 			#size-cells = <0>;
++                                       				port@0 {
++                                               				reg = <0>;
++									status = "okay";
++                                        	 			ecam_csi_in1: endpoint@2 {
++										status = "okay";
++                                                	        		port-index = <0>;
++                                                       				bus-width = <CAM_LANES>;
++                                                 				remote-endpoint = <&ecam_isx031_out1>;
++                                               	 			};
++                                        			};
++                                        			port@1 {
++                                        	        		reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out1: endpoint@3 {
++										status = "okay";
++                                                       				remote-endpoint = <&ecam_vi_in1>;
++                                               				};
++                                        			};
++                               		 		};
++                       		 		};
++						channel@2 {
++                                			reg = <2>;
++							status = "okay";
++                                			ports {
++                                        			#address-cells = <1>;
++                                        			#size-cells = <0>;
++                                        			port@0 {
++                                        	       	 		reg = <0>;
++									status = "okay";
++                                               		 		ecam_csi_in2: endpoint@4 {
++										status = "okay";
++                                                       		 		port-index = <2>;
++                                                        			bus-width = <CAM_LANES>;
++                                                        			remote-endpoint = <&ecam_isx031_out2>;
++                                                			};
++                                        			};
++                                        			port@1 {
++                                                			reg = <1>;
++									status = "okay";
++                                                			ecam_csi_out2: endpoint@5 {
++										status = "okay";
++                                                        			remote-endpoint = <&ecam_vi_in2>;
++                                                			};
++                                        			};
++                                			};
++                        			};
++						channel@3 {
++						reg = <3>;
++						status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in3: endpoint@6 {
++										status = "okay";
++										port-index = <2>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out3>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out3: endpoint@7 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in3>;
++									};
++								};
++							};
++						};	
++						channel@4 {
++							reg = <4>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in4: endpoint@8 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out4>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out4: endpoint@9 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in4>;
++									};
++								};
++							};
++						};
++						channel@5 {
++							reg = <5>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in5: endpoint@10 {
++										status = "okay";
++										port-index = <4>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out5>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out5: endpoint@11 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in5>;
++									};
++								};
++							};
++						};
++						channel@6 {
++							reg = <6>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in6: endpoint@12 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out6>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out6: endpoint@13 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in6>;
++									};
++								};
++							};
++						};
++						channel@7 {
++							reg = <7>;
++							status = "okay";
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								port@0 {
++									reg = <0>;
++									status = "okay";
++									ecam_csi_in7: endpoint@14 {
++										status = "okay";
++										port-index = <6>;
++										bus-width = <CAM_LANES>;
++										remote-endpoint = <&ecam_isx031_out7>;
++									};
++								};
++								port@1 {
++									reg = <1>;
++									status = "okay";
++									ecam_csi_out7: endpoint@15 {
++										status = "okay";
++										remote-endpoint = <&ecam_vi_in7>;
++									};
++								};
++							};
++						};
++					};
++				};
++				
++				i2c@31e0000 {   
++     					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					skip_mux_detect = "no";
++					force_bus_start = <0x1e>;
++					//vcc-supply = <&vdd_1v8_sys>;
++					mcu_sync: mcu_pwm@42 {
++						status = "okay";
++						compatible = "nvidia,mcu_pwm";
++						reg = <0x42>;
++						avdd-reg = "vana";
++						iovdd-reg = "vif";
++						clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++						clock-names = "extperiph1", "pllp_grtba";
++						mclk = "extperiph1";
++						clock-frequency = <4000000>;
++						//vana-supply = <&p3737_avdd_cam_2v8>;
++						//vif-supply = <&p3737_vdd_1v8_sys>;	
++						reset-mcu = <&gpio PWM_MCU_RST_PIN GPIO_ACTIVE_LOW>;
++						boot-mcu = <&gpio PWM_MCU_BOOT_PIN GPIO_ACTIVE_LOW>;
++					};
++				};
++	
++				i2c@3180000 {
++					status = "okay";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					tca9548@70 {
++						compatible = "nxp,pca9548";
++						reg = <0x70>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						//vcc-supply = <&vdd_1v8_sys>;
++						skip_mux_detect = "no";
++						force_bus_start = <0x1e>;
++						status= "okay";
++						i2c@0 {
++							status = "okay";
++							reg = <0>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							e_con_dser_a: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "a";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_d: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_c: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_b: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							e_con_ser_a: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++							};
++							isx031_d@46 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x46>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++								 <&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "D";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0046";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_d>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out3: endpoint {
++											vc-id = <1>;
++											port-index = <2>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in3>;
++										};
++									};
++								};
++							};
++							isx031_c@45 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x45>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "C";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0045";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_c>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_c"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out2: endpoint {
++											vc-id = <0>;
++											port-index = <2>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in2>;
++										};
++									};
++								};
++							};
++							isx031_b@44 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x44>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "B";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0044";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_b>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1"
++#define TEGRA_SINTERFACE "serial_a"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out1: endpoint {
++											vc-id = <1>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in1>;
++										};
++									};
++								};
++							};		
++							isx031_a@43 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x43>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++										<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "A";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 9-0043";
++								des-chip = "D1";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_a>;
++								nvidia,gmsl-dser-device = <&e_con_dser_a>;								
++#define TEGRA_SINTERFACE "serial_a"
++#define VC_ID "0"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out0: endpoint {
++											vc-id = <0>;
++											port-index = <0>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in0>;
++										};
++									};
++								};
++							};
++						};
++						i2c@1{
++                               				status = "okay";
++                               				reg = <1>;
++                               				i2c-mux,deselect-on-exit;
++                               				#address-cells = <1>;
++                               				#size-cells = <0>;
++							e_con_dser_b: max96712@29 {
++								compatible = "nvidia,max96712";
++								reg = <0x29>;
++								csi-mode = "2x4";
++								max-src = <4>;
++								data-type = "yuv422";
++								data-rate = <0x2D>;
++								channel = "b";
++								//reset-gpios = <&tegra_main_gpio DSER_RST GPIO_ACTIVE_HIGH>;
++							};
++							e_con_ser_h: max9295@62 {
++								//compatible = "maxim,max9295";
++								reg = <0x62>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_g: max9295@60 {
++								//compatible = "maxim,max9295";
++								reg = <0x60>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_f: max9295@41 {
++								//compatible = "maxim,max9295";
++								reg = <0x41>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							e_con_ser_e: max9295@40 {
++								//compatible = "maxim,max9295";
++								reg = <0x40>;
++								def-addr = <0x40>;
++								reset_reg = <0x02CA>;
++								boot_reg = <0x02BE>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++							};
++							isx031_h@46 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x46>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "D";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0046";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_h>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "1" 
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam31_cuoagx_modes.dtsi"
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out7: endpoint {
++											vc-id = <1>;
++											port-index = <6>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in7>;
++										};
++									};
++								};
++							};
++							isx031_g@45 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x45>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++			       					use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "C";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0045";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_g>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE 
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_g"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out6: endpoint {
++											vc-id = <0>;
++											port-index = <6>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in6>;
++										};
++									};
++								};
++							};
++							isx031_f@44 {
++								status = "okay";
++								compatible = "sony,isx031";
++								reg = <0x44>;
++								sensor_model ="isx031";
++								avdd-reg = "vana";
++								iovdd-reg = "vif";
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++								clock-names = "extperiph1", "pllp_grtba";
++								mclk = "extperiph1";
++								clock-frequency = <24000000>;
++								default-trigger = "internal"; 
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								use_sensor_mode_id = "false";
++								camera_mipi_lanes = <CAM_LANES>;
++								camera-mipi-clk = <1200>;	
++								sio-port = "B";
++								mcu_fw_name = MCU_FW_FILE;
++								spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0044";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_f>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam31_cuoagx_modes.dtsi"
++	
++								ports {
++									#address-cells = <1>;
++									#size-cells = <0>;
++									port@0 {
++										reg = <0>;
++										ecam_isx031_out5: endpoint {
++											vc-id = <1>;
++											port-index = <4>;
++											bus-width = <CAM_LANES>;
++											remote-endpoint = <&ecam_csi_in5>;
++										};
++									};
++								};
++							};
++							isx031_e@43 {
++                                       				status = "okay";
++                                       				compatible = "sony,isx031";
++                                       				reg = <0x43>;
++                                       				sensor_model ="isx031";
++                                       				avdd-reg = "vana";
++                                       				iovdd-reg = "vif";
++								//vana-supply = <&p3737_avdd_cam_2v8>;
++								//vif-supply = <&p3737_vdd_1v8_sys>;
++								clocks = <&bpmp TEGRA234_CLK_EXTPERIPH1>,
++							 			<&bpmp TEGRA234_CLK_EXTPERIPH1>;
++                                       				clock-names = "extperiph1", "pllp_grtba";
++                                       				mclk = "extperiph1";
++                                       				clock-frequency = <24000000>;
++                                       				use_sensor_mode_id = "false";
++                                       				camera_mipi_lanes = <CAM_LANES>;
++				       				camera-mipi-clk = <1200>;	
++                                       				sio-port = "A";
++				       				mcu_fw_name = MCU_FW_FILE;
++				       				spi_mcu_fw_name = SPI_BOOT_DATA_FILE;
++								dev_name = "ecam_yuv 10-0043";
++								des-chip = "D2";
++								default_framerate = <30>;
++								nvidia,gmsl-ser-device = <&e_con_ser_e>;
++								nvidia,gmsl-dser-device = <&e_con_dser_b>;
++#undef VC_ID
++#undef TEGRA_SINTERFACE
++#define VC_ID "0"
++#define TEGRA_SINTERFACE "serial_e"
++#include "sturdecam31_cuoagx_modes.dtsi"
++                                       				ports {
++                                       					#address-cells = <1>;
++                                       					#size-cells = <0>;
++                                               				port@0 {
++                                                       				reg = <0>;
++                                                       				ecam_isx031_out4: endpoint {
++							       				vc-id = <0>;
++                                                               				port-index = <4>;
++                                                               				bus-width = <CAM_LANES>;
++                                                               				remote-endpoint = <&ecam_csi_in4>;
++                                                       				};
++                                               				};
++                                       				};
++                               				};
++						};
++						i2c@4{
++							reg = <4>;
++							i2c-mux,deselect-on-exit;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							status = "okay";
++							power_line@29{
++								status = "okay";
++								compatible = "nvidia,load_switch";
++								deser_port = "A";
++								reg = <0x29>;
++							};
++						};
++			 			i2c@5{
++				 			reg = <5>;
++				 			i2c-mux,deselect-on-exit;
++				 			#address-cells = <1>;
++				 			#size-cells = <0>;
++				 			status = "okay";
++				 			power_line@28{
++						 		status = "okay";
++						 		compatible = "nvidia,load_switch";
++						 		deser_port = "B";
++						 		reg = <0x28>;
++				 			};
++			 			};
++					};
++				};
++			};
++		};
++	};
++};
++
++
