@@ -411,7 +411,7 @@ application_installation ()
 		# Remove older configuration files for guvcview
 		rm -rf $HOME/.config/guvcview/
 		echo 'export PATH=$PATH:/usr/local/ecam_tk1/bin' >> $HOME/.bashrc
-		source $HOME/.bashrc
+		export PATH=$PATH:/usr/local/ecam_tk1/bin
 		popd
 		if [ -d $EXTRACTED_PATH/Application/Binaries/e-multicam/ ] ; then
 			echo "Installing e-multicam Application for non-isp cameras";
@@ -440,7 +440,7 @@ package_extraction () {
 misc_installation () {
 	echo "Updating misc files";
 	echo 'export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/nvidia/libnvjpeg.so' >> ~/.bashrc
-	source ~/.bashrc
+	export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/nvidia/libnvjpeg.so
 	if [ $ISP_PRD = "yes" ] ; then
 		if [ -e $EXTRACTED_PATH/misc/camera_overrides_$JETSON_PLATFORM.isp ] ; then
 			echo "Copy ISP settings to rootfs /var/nvidia/nvcam/settings ";

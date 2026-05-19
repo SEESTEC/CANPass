@@ -412,14 +412,16 @@ application_installation ()
 
 package_extraction () {
 
-	if [ $IS_UPDATE_BIN == "0" ]; then
+	EXTRACTED_PATH=$(echo $RELEASE_PKG_NAME | cut -d"." -f-5);
+	if [ $IS_UPDATE_BIN == "0" ] && [ -d "$EXTRACTED_PATH" ]; then
 		echo "Package is already installed so skipping extraction...";
-		EXTRACTED_PATH=$(echo $RELEASE_PKG_NAME | cut -d"." -f-5);
 		EXTRACTED_PATH=$EXTRACTED_PATH/AGX_ORIN
 		return 0;
 	fi
+	if [ $IS_UPDATE_BIN == "0" ] && [ ! -d "$EXTRACTED_PATH" ]; then
+		echo "Package marked installed but extracted dir missing — re-extracting...";
+	fi
 	if [ -e $RELEASE_PKG_NAME ] ; then
-		EXTRACTED_PATH=$(echo $RELEASE_PKG_NAME | cut -d"." -f-5);
 		if [ -d $EXTRACTED_PATH ] ; then
 			echo "Delete already extracted package and redo package extraction";
 			rm -rf $EXTRACTED_PATH
