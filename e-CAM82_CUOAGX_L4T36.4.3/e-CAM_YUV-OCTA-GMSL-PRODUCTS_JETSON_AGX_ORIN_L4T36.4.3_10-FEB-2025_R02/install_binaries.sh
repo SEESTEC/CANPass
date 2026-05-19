@@ -175,13 +175,13 @@ prerequisites ()
 		echo "Machine architecture matched";
 	fi
 
-	L4T_MAJOR_MINOR=$(echo $L4T_VERSION | cut -d'.' -f1,2)
-	JETSON_L4T_MAJOR_MINOR=$(echo $JETSON_L4T_STRING | cut -d'.' -f1,2)
-	if [ "$L4T_MAJOR_MINOR" != "$JETSON_L4T_MAJOR_MINOR" ] ; then
+	L4T_MAJOR=$(echo $L4T_VERSION | cut -d'.' -f1)
+	JETSON_L4T_MAJOR=$(echo $JETSON_L4T_STRING | cut -d'.' -f1)
+	if [ "$L4T_MAJOR" != "$JETSON_L4T_MAJOR" ] ; then
 		echo "Device L4T version $JETSON_L4T_STRING mismatched with release package L4T version $L4T_VERSION , Exiting release package installation process";
 		exit 1;
 	else
-		echo "L4T Version matched (patch-level difference allowed: $L4T_VERSION vs $JETSON_L4T_STRING)";
+		echo "L4T Version matched (minor/patch difference allowed: $L4T_VERSION vs $JETSON_L4T_STRING)";
 	fi
 
 	for i in ${PLATFORMS[@]}
