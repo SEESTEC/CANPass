@@ -14,8 +14,8 @@ log_warn()  { echo -e "${YELLOW}[AVISO]${NC} $*"; }
 log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NILECAM81_DIR="${SCRIPT_DIR}/nilecam81"
-ECAM82_DIR="${SCRIPT_DIR}/ecam82"
+NILECAM81_DIR="${SCRIPT_DIR}/NileCAM81_CUOAGX/JP6.0_L4T36.3.0/e-CAM_YUV-GMSL-PRODUCTS_JETSON_AGX_ORIN_L4T36.3.0_09-AUG-2024_R03"
+ECAM82_DIR="${SCRIPT_DIR}/e-CAM82_CUOAGX_L4T36.4.3/e-CAM_YUV-OCTA-GMSL-PRODUCTS_JETSON_AGX_ORIN_L4T36.4.3_10-FEB-2025_R02"
 
 # ── Validações ───────────────────────────────────────────────────────────────
 
