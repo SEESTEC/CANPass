@@ -213,6 +213,7 @@ update_devicetree () {
 	# TBD : Have to handle multiple DTB's scenario
 	if  [ $JETSON_PLATFORM == "jetson-orin" ] ; then
 		echo "Jetson-Orin : Taking backup of device-tree"
+		mkdir -p $HOME/Images_Backup
 		sudo cp /boot/dtb/* $HOME/Images_Backup/
 		echo "Copying device-tree to /boot/dtb folder"
 		ORIN_PLATFORM=$(cat /etc/nv_boot_control.conf | grep "TNSPEC" | cut -d" " -f2 | cut -d"-" -f3) 
@@ -332,9 +333,12 @@ update_modules () {
 	fi
 	JP_VER=$(echo $JETPACK_VER | cut -c 3-7 );
 	if [ $JP_VER == "6.0.0" ] ;then
-		sudo cp $EXTRACTED_PATH/Kernel/ecam_yuv_gmsl.ko /lib/modules/5.15.136-tegra/updates
-		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera.ko /lib/modules/5.15.136-tegra/updates/drivers/media/platform/tegra/camera
-		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera-rtcpu.ko /lib/modules/5.15.136-tegra/updates/drivers/platform/tegra/rtcpu
+		KERNEL_VER=$(uname -r)
+		mkdir -p /lib/modules/${KERNEL_VER}/updates/drivers/media/platform/tegra/camera
+		mkdir -p /lib/modules/${KERNEL_VER}/updates/drivers/platform/tegra/rtcpu
+		sudo cp $EXTRACTED_PATH/Kernel/ecam_yuv_gmsl.ko /lib/modules/${KERNEL_VER}/updates
+		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera.ko /lib/modules/${KERNEL_VER}/updates/drivers/media/platform/tegra/camera
+		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera-rtcpu.ko /lib/modules/${KERNEL_VER}/updates/drivers/platform/tegra/rtcpu
 	elif (($(echo "$JP_VER < 4.6" | bc -q ))) ;then
 		sudo tar -xpmf $EXTRACTED_PATH/Kernel/kernel_supplements.tar.bz2 -C /
 	else

@@ -350,11 +350,15 @@ update_devicetree () {
 update_modules () {
 	JP_VER=$(echo $JETPACK_VER | cut -c 3-7 )
 	if [ $JP_VER == "6.2.0" ] ;then
-		sudo cp $EXTRACTED_PATH/Kernel/max96712.ko /lib/modules/5.15.148-tegra/updates/drivers/media/i2c
-		sudo cp $EXTRACTED_PATH/Kernel/mcu_pwm.ko /lib/modules/5.15.148-tegra/updates
-		sudo cp $EXTRACTED_PATH/Kernel/ecam_gmsl_yuv_common.ko /lib/modules/5.15.148-tegra/updates
-		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera.ko /lib/modules/5.15.148-tegra/updates/drivers/media/platform/tegra/camera
-		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera-rtcpu.ko /lib/modules/5.15.148-tegra/updates/drivers/platform/tegra/rtcpu
+		KERNEL_VER=$(uname -r)
+		mkdir -p /lib/modules/${KERNEL_VER}/updates/drivers/media/i2c
+		mkdir -p /lib/modules/${KERNEL_VER}/updates/drivers/media/platform/tegra/camera
+		mkdir -p /lib/modules/${KERNEL_VER}/updates/drivers/platform/tegra/rtcpu
+		sudo cp $EXTRACTED_PATH/Kernel/max96712.ko /lib/modules/${KERNEL_VER}/updates/drivers/media/i2c
+		sudo cp $EXTRACTED_PATH/Kernel/mcu_pwm.ko /lib/modules/${KERNEL_VER}/updates
+		sudo cp $EXTRACTED_PATH/Kernel/ecam_gmsl_yuv_common.ko /lib/modules/${KERNEL_VER}/updates
+		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera.ko /lib/modules/${KERNEL_VER}/updates/drivers/media/platform/tegra/camera
+		sudo cp $EXTRACTED_PATH/Kernel/tegra-camera-rtcpu.ko /lib/modules/${KERNEL_VER}/updates/drivers/platform/tegra/rtcpu
 	elif (($(echo "$JP_VER < 4.6" | bc -q ))) ;then
 		sudo tar -xpmf $EXTRACTED_PATH/Kernel/kernel_supplements.tar.bz2 -C /
 	else
