@@ -286,7 +286,7 @@ show_camera() {
         # incapaz de aceitar novas conexões. sudo -n usa a regra NOPASSWD do install.sh.
         if sudo -n systemctl restart nvargus-daemon 2>/dev/null; then
             log_ok "Daemon nvargus reiniciado."
-            sleep 1
+            sleep 5
         fi
 
         # Loop CSI: GStreamer captura e converte (NV12→I420) via pipe para
@@ -295,6 +295,7 @@ show_camera() {
         # versões de JetPack — ffmpeg garante compatibilidade.
         _ffmpeg_loop() {
             local csi_log="/tmp/canpass_csi_${sensor_id}.log"
+            local nvargus_retries=0
             log_info "Log de erros CSI: ${csi_log}"
             while true; do
                 : > "$csi_log"  # limpa a cada tentativa para checar apenas o erro atual
@@ -312,13 +313,20 @@ show_camera() {
                     -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
                 local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
                 (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
-                # Erro fatal: daemon nvargus não encontrou a câmera — não adianta reconectar
+                # Daemon nvargus não encontrou a câmera — pode ser problema de timing;
+                # reinicia e tenta novamente antes de desistir.
                 if grep -q "No cameras available" "$csi_log" 2>/dev/null; then
+                    if (( nvargus_retries++ < 2 )); then
+                        log_warn "Daemon nvargus não encontrou a câmera — reiniciando (tentativa ${nvargus_retries}/2)..."
+                        sudo -n systemctl restart nvargus-daemon 2>/dev/null
+                        sleep 5
+                        continue
+                    fi
                     log_error "Câmera CSI inacessível pelo daemon nvargus."
-                    log_info  "Reinicie o daemon e execute canpass novamente:"
-                    log_info  "  sudo systemctl restart nvargus-daemon"
+                    log_info  "Verifique a conexão física da câmera e execute canpass novamente."
                     return 1
                 fi
+                nvargus_retries=0
                 log_warn "Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
                 sleep 2
             done
