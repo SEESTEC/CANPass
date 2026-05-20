@@ -564,9 +564,15 @@ show_camera() {
     # Aguarda o stream ficar disponível no MediaMTX antes de exibir as URLs.
     # GStreamer + nvargus levam alguns segundos para publicar o primeiro frame;
     # imprimir as URLs antes disso faz o cliente receber "stream not found".
+    # A cada iteração verifica se _ffmpeg_loop ainda está vivo: se morreu (erro
+    # de câmera) sai imediatamente sem imprimir URLs enganosas.
     log_info "Aguardando stream ficar disponível..."
     local _probe_t=0
     until ffprobe -v quiet -rtsp_transport tcp -i "$RTSP_URL" >/dev/null 2>&1; do
+        if ! kill -0 "$loop_pid" 2>/dev/null; then
+            wait "$loop_pid" 2>/dev/null
+            return 1
+        fi
         sleep 1
         (( _probe_t++ ))
         if (( _probe_t >= 30 )); then
@@ -574,6 +580,10 @@ show_camera() {
             break
         fi
     done
+    if ! kill -0 "$loop_pid" 2>/dev/null; then
+        wait "$loop_pid" 2>/dev/null
+        return 1
+    fi
 
     echo
     log_ok "Stream RTSP:   ${RTSP_URL}"
