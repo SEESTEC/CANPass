@@ -207,11 +207,7 @@ main() {
     log_info "Para usar: source ~/.bashrc && canpass"
     echo -e "${CYAN}────────────────────────────────────────${NC}"
 
-    log_info "Removendo arquivos de instalação..."
-    [[ -f "${CALLING_HOME}/main.zip" ]] && rm -f "${CALLING_HOME}/main.zip" && log_info "main.zip removido."
-    echo "$SCRIPT_DIR" > /tmp/.canpass_src_dir
-    chown "$CALLING_USER" /tmp/.canpass_src_dir
-    find "$SCRIPT_DIR" -mindepth 1 -maxdepth 1 ! -name "install.sh" -exec rm -rf {} \;
+    [[ -f "${CALLING_HOME}/main.zip" ]] && rm -f "${CALLING_HOME}/main.zip"
 }
 
 main "$@"
