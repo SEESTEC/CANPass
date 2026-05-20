@@ -561,6 +561,20 @@ show_camera() {
     }
     trap cleanup EXIT INT TERM
 
+    # Aguarda o stream ficar disponível no MediaMTX antes de exibir as URLs.
+    # GStreamer + nvargus levam alguns segundos para publicar o primeiro frame;
+    # imprimir as URLs antes disso faz o cliente receber "stream not found".
+    log_info "Aguardando stream ficar disponível..."
+    local _probe_t=0
+    until ffprobe -v quiet -rtsp_transport tcp -i "$RTSP_URL" >/dev/null 2>&1; do
+        sleep 1
+        (( _probe_t++ ))
+        if (( _probe_t >= 30 )); then
+            log_warn "Stream não confirmado após 30s — verifique o log CSI em /tmp/canpass_csi_0.log"
+            break
+        fi
+    done
+
     echo
     log_ok "Stream RTSP:   ${RTSP_URL}"
     while IFS= read -r iface_line; do
