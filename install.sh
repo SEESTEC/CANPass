@@ -115,9 +115,7 @@ install_scripts() {
             exit 1
         fi
 
-        chmod +x "$source_path"
-        $SUDO_CMD cp "$source_path" "$dest_path"
-        $SUDO_CMD chmod +x "$dest_path"
+        $SUDO_CMD install -m 755 "$source_path" "$dest_path"
         log_ok "${script} instalado em ${dest_path}."
     done
 }
