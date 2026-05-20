@@ -51,7 +51,7 @@ read -rp "Escolha [1 ou 2]: " choice
 
 install_nilecam81() {
     if [[ ! -d "${NILECAM81_DIR}" ]]; then
-        log_error "Pasta '${NILECAM81_DIR}' não encontrada. Execute copy_to_orin.sh primeiro."
+        log_error "Pasta '${NILECAM81_DIR}' não encontrada. Verifique se o repositório foi clonado corretamente (git pull)."
         exit 1
     fi
 
@@ -76,7 +76,7 @@ install_nilecam81() {
 
 install_ecam82() {
     if [[ ! -d "${ECAM82_DIR}" ]]; then
-        log_error "Pasta '${ECAM82_DIR}' não encontrada. Execute copy_to_orin.sh primeiro."
+        log_error "Pasta '${ECAM82_DIR}' não encontrada. Verifique se o repositório foi clonado corretamente (git pull)."
         exit 1
     fi
 
