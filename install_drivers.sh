@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-# Instala os drivers de câmera e-con no Jetson AGX Orin (JP 6.2.2 / L4T 36.4.5).
+# Instala os drivers de câmera e-con no Jetson AGX Orin.
 # Deve ser executado no próprio Orin, a partir da pasta ~/econ_drivers.
 # Uso: sudo bash install_drivers.sh
+#
+# Matriz de compatibilidade dos pacotes presentes neste repositório:
+#   • e-CAM82_CUOAGX  → L4T 36.4.3 / JP 6.2.0  → kernel 5.15.148-tegra  (PRONTO)
+#   • NileCAM81_CUOAGX → L4T 36.3.0 / JP 6.0.0  → kernel 5.15.136-tegra  (PENDENTE)
+#
+# IMPORTANTE: módulo de kernel (.ko) só carrega se o vermagic casar EXATAMENTE
+# com o kernel em execução (uname -r). As duas câmeras foram compiladas para
+# kernels diferentes, então NÃO existe um único flash que rode ambas hoje.
+# Recomendação atual: flashear L4T 36.4.3 / JetPack 6.2 e usar a e-CAM82.
+# A NileCAM81 só funcionará quando a e-con fornecer um build para L4T 36.4.x.
 
 set -euo pipefail
 
@@ -32,18 +42,20 @@ fi
 # ── Banner ───────────────────────────────────────────────────────────────────
 
 echo -e "${BOLD}${CYAN}"
-echo "╔═══════════════════════════════════════════════╗"
-echo "║   e-con Systems — Instalador de Drivers       ║"
-echo "║   Jetson AGX Orin  •  JP 6.2.2  •  L4T 36.4.5 ║"
-echo "╚═══════════════════════════════════════════════╝"
+echo "╔═══════════════════════════════════════════════════╗"
+echo "║   e-con Systems — Instalador de Drivers           ║"
+echo "║   Jetson AGX Orin                                 ║"
+echo "║   Flash recomendado: JP 6.2 / L4T 36.4.3          ║"
+echo "║   (kernel 5.15.148-tegra — alvo da e-CAM82)       ║"
+echo "╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
 # ── Menu principal ───────────────────────────────────────────────────────────
 
 echo "Qual driver deseja instalar?"
 echo ""
-echo "  1) NileCAM81   — L4T 36.3.0 / JP 6.0  (produto 81, 2-lane GMSL)"
-echo "  2) e-CAM82     — L4T 36.4.3 / JP 6.2  (produto 81, 4-lane GMSL)"
+echo "  1) NileCAM81 — L4T 36.3.0 / JP 6.0 (kernel 5.15.136-tegra)  ⚠ PENDENTE build 36.4.x"
+echo "  2) e-CAM82   — L4T 36.4.3 / JP 6.2 (kernel 5.15.148-tegra)  ✓ recomendado"
 echo ""
 read -rp "Escolha [1 ou 2]: " choice
 
@@ -59,9 +71,10 @@ install_nilecam81() {
     KERNEL_VER="$(uname -r)"
     if [[ "${KERNEL_VER}" != *"5.15.136"* ]]; then
         log_warn "Kernel detectado: ${KERNEL_VER}"
-        log_warn "Este pacote foi compilado para 5.15.136-tegra (JP6.0)."
-        log_warn "Os módulos .ko serão instalados no caminho do pacote, não no kernel atual."
-        log_warn "Para JP6.2.2 use o pacote L4T36.4.4 quando disponível via suporte e-con."
+        log_warn "Este pacote foi compilado para 5.15.136-tegra (L4T 36.3.0 / JP 6.0)."
+        log_warn "Os módulos .ko NÃO carregarão num kernel diferente (vermagic incompatível)."
+        log_warn "Para o flash recomendado (L4T 36.4.3 / JP 6.2) é necessário um build"
+        log_warn "da NileCAM81 para L4T 36.4.x — solicite ao suporte e-con."
         echo ""
         read -rp "Continuar mesmo assim? [s/N]: " confirm
         [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
@@ -78,6 +91,18 @@ install_ecam82() {
     if [[ ! -d "${ECAM82_DIR}" ]]; then
         log_error "Pasta '${ECAM82_DIR}' não encontrada. Verifique se o repositório foi clonado corretamente (git pull)."
         exit 1
+    fi
+
+    # Avisa se o kernel do Orin for diferente do alvo do pacote (5.15.148-tegra)
+    KERNEL_VER="$(uname -r)"
+    if [[ "${KERNEL_VER}" != *"5.15.148"* ]]; then
+        log_warn "Kernel detectado: ${KERNEL_VER}"
+        log_warn "Este pacote foi compilado para 5.15.148-tegra (L4T 36.4.3 / JP 6.2)."
+        log_warn "Os módulos .ko só carregam se o kernel casar exatamente (vermagic)."
+        log_warn "Flasheie o Orin com L4T 36.4.3 / JetPack 6.2 antes de prosseguir."
+        echo ""
+        read -rp "Continuar mesmo assim? [s/N]: " confirm
+        [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
     fi
 
     echo ""
