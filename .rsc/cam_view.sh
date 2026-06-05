@@ -553,7 +553,10 @@ show_camera() {
     # Encerra os loops ao sair (Q, Ctrl+C ou término normal).
     # Remove o IP temporário adicionado para câmera IP, se houver.
     cleanup() {
-        kill "$loop_pid" "$motion_rec_pid" 2>/dev/null
+        # Guarda com :- porque o trap EXIT pode disparar fora do escopo de
+        # show_camera (ex.: após um return antecipado), quando os locais já
+        # não existem — sem isso, `set -u` aborta com "unbound variable".
+        kill "${loop_pid:-}" "${motion_rec_pid:-}" 2>/dev/null
         if [[ -n "$_TEMP_IP_ADDR" && -n "$_TEMP_IP_IFACE" ]]; then
             sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null \
                 && log_info "IP temporário ${_TEMP_IP_ADDR} removido de ${_TEMP_IP_IFACE}."
@@ -571,6 +574,8 @@ show_camera() {
     until ffprobe -v quiet -rtsp_transport tcp -i "$RTSP_URL" >/dev/null 2>&1; do
         if ! kill -0 "$loop_pid" 2>/dev/null; then
             wait "$loop_pid" 2>/dev/null
+            trap - EXIT INT TERM
+            cleanup
             return 1
         fi
         sleep 1
@@ -582,6 +587,8 @@ show_camera() {
     done
     if ! kill -0 "$loop_pid" 2>/dev/null; then
         wait "$loop_pid" 2>/dev/null
+        trap - EXIT INT TERM
+        cleanup
         return 1
     fi
 
