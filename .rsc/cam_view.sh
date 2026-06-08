@@ -23,15 +23,37 @@ _TEMP_IP_ADDR=""   # IP temporário adicionado ao Jetson para alcançar câmera 
 _TEMP_IP_IFACE=""  # Interface onde o IP temporário foi adicionado
 
 # ─── 1. Detecção de câmeras CSI (Jetson/Tegra) ───────────────────────────────
-# Em plataformas Jetson, câmeras CSI são gerenciadas pelo Argus daemon da NVIDIA
-# via GStreamer (nvarguscamerasrc). Elas NÃO aparecem como /dev/video*, apenas
-# como /dev/media* (controlador de mídia Tegra), portanto precisam de caminho
-# de captura separado do V4L2 padrão.
+# Câmeras CSI passam pelo ISP e pelo daemon Argus da NVIDIA e só capturam via
+# GStreamer (nvarguscamerasrc) — 'ffmpeg -f v4l2' falha nelas (erro "Cannot find
+# a proper format" / core dump). Dependendo do driver, elas podem aparecer como
+# /dev/video* (caso da e-CAM82/eimx485, que expõe /dev/videoN com driver
+# 'tegra-video') OU apenas via /dev/media*. Ambos os casos exigem o caminho CSI:
+#   • /dev/videoN com driver tegra-video → csi:N  (sensor-id = N, conforme o guia
+#     GStreamer da e-con: "<n> = número do video node").
+#   • fallback por CANPASS_CSI_SENSORS quando nenhum /dev/video existe.
+
+# Verdadeiro se a plataforma tem o pipeline Argus (nvarguscamerasrc) disponível.
+_has_argus() {
+    grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return 1
+    command -v gst-launch-1.0 &>/dev/null || return 1
+    gst-inspect-1.0 nvarguscamerasrc &>/dev/null 2>&1
+}
+
+# Verdadeiro se /dev/videoN é uma câmera CSI da Tegra (ISP/Argus), não uma webcam
+# UVC: driver 'tegra-video' ou bus 'platform:...'. Decide se o nó precisa do
+# caminho nvarguscamerasrc em vez do V4L2.
+_is_tegra_csi_device() {
+    local dev="$1"
+    command -v v4l2-ctl &>/dev/null || return 1
+    local info driver bus
+    info=$(v4l2-ctl --device="$dev" --info 2>/dev/null)
+    driver=$(awk -F': ' '/Driver name/{gsub(/^[[:space:]]+/,"",$2); print $2; exit}' <<< "$info")
+    bus=$(awk -F': ' '/Bus info/{gsub(/^[[:space:]]+/,"",$2); print $2; exit}' <<< "$info")
+    [[ "$driver" == "tegra-video" || "$bus" == platform:* ]]
+}
 
 _probe_csi_cameras() {
-    grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return
-    command -v gst-launch-1.0 &>/dev/null || return
-    gst-inspect-1.0 nvarguscamerasrc &>/dev/null 2>&1 || return
+    _has_argus || return
     # Não abre sessões nvarguscamerasrc aqui — cada probe esgota o daemon e impede
     # o stream subsequente ("No cameras available"). Lista os IDs de CANPASS_CSI_SENSORS
     # (padrão: 0) sem validação; o stream vai confirmar a disponibilidade real.
@@ -189,10 +211,21 @@ detect_cameras() {
                 | grep -q "\[0\]" || continue
         fi
 
+        # Câmera CSI da Tegra (ex.: e-CAM82/eimx485): aparece como /dev/videoN mas
+        # exige o caminho Argus. Mapeia para csi:N (sensor-id = N) em vez do V4L2.
+        if _is_tegra_csi_device "$dev"; then
+            if _has_argus; then
+                cams+=("csi:${dev#/dev/video}")
+            else
+                log_warn "Câmera CSI em ${dev} detectada, mas nvarguscamerasrc/GStreamer indisponível — pulando." >&2
+            fi
+            continue
+        fi
+
         cams+=("$dev")
     done
 
-    # Sem câmeras V4L2 — tenta CSI (Jetson/Tegra)
+    # Nenhum /dev/video — tenta CSI por CANPASS_CSI_SENSORS (Jetson/Tegra)
     if [[ ${#cams[@]} -eq 0 ]]; then
         while IFS= read -r csi; do
             cams+=("$csi")
