@@ -1,10 +1,15 @@
 # CANPass
 
-> **v0.3.5** — Stream de câmeras V4L2 via RTSP/HLS com gravação por detecção de movimento, watchdog e instalação automatizada.
+> **v1.4.13** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC com gravação por detecção de movimento, watchdog, instalação automatizada e instalador de drivers de câmera e-con para NVIDIA Jetson AGX Orin.
 
 ## Descrição
 
-CANPass é um projeto C/C++ voltado para comunicação via barramento CAN *(Controller Area Network)*, com utilitários de suporte para captura, transmissão e gravação de câmeras em sistemas Linux embarcados.
+CANPass é um conjunto de utilitários em **shell script** para **Linux embarcado / NVIDIA Jetson AGX Orin**, com dois propósitos:
+
+1. **Stream e gravação de câmera** (alias `canpass`): detecta câmeras V4L2, CSI (Jetson) e IP (RTSP), sobe um servidor RTSP/HLS/WebRTC (MediaMTX em Docker) e grava em MP4 por **detecção de movimento**.
+2. **Instalação de drivers de câmera e-con** na Jetson AGX Orin (`install_drivers.sh`).
+
+> **Nota:** apesar do nome, **não há código de barramento CAN** neste repositório — o nome é histórico. Os padrões C/C++/CMake/vcpkg no `.gitignore` são herança do template inicial e não refletem o projeto.
 
 ## Instalação
 
@@ -109,7 +114,7 @@ dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4
  └─ data   └─ início  └─ fim real
 ```
 
-Exemplo: `11-05-2026_14_32_00_14_35_47.mp4`
+Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
 
 | Variável de ambiente   | Padrão | Descrição                                                      |
 |------------------------|--------|----------------------------------------------------------------|
@@ -144,14 +149,29 @@ sudo usermod -aG video $USER && newgrp video   # adiciona usuário ao grupo vide
 
 ---
 
-## Build (C/C++)
+## Drivers de câmera e-con (Jetson AGX Orin)
 
-O projeto usa **CMake** com **vcpkg** para dependências.
+A câmera deste projeto é a **e-CAM82_CUOAGX**: **MIPI CSI-2**, sensor **Sony IMX485** com ISP externo, acessada via **Argus/V4L2** (`nvarguscamerasrc` / `/dev/video*`). **Ela NÃO é GMSL.**
+
+O `install_drivers.sh` deve ser executado **no próprio Orin** (aarch64), a partir da raiz deste repositório:
 
 ```bash
-cmake -B build -S .
-cmake --build build
+sudo bash install_drivers.sh
 ```
+
+| Opção | Pacote | Alvo | Observação |
+|-------|--------|------|------------|
+| **1** ✓ | **e-CAM82 (IMX485, MIPI)** | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Driver CORRETO desta câmera** |
+| 2 ⚠ | [GMSL] e-CAM YUV OCTA (AR0821) | L4T 36.4.3 / JP 6.2.0 | **OUTRO produto** — não é a e-CAM82 |
+| 3 ⚠ | [GMSL] NileCAM81 | L4T 36.3.0 / JP 6.0.0 | **OUTRO produto** |
+
+> ⚠️ **Atenção:** instalar um driver **GMSL** (opções 2/3) na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
+
+**Requisito de flash:** o instalador da e-con confere `/etc/nv_tegra_release` e **aborta** se o L4T do flash não casar **exatamente** com o alvo do pacote. Para a e-CAM82, o Orin precisa estar em **L4T 35.2.1 / JP 5.1.0** (kernel `5.10.104-tegra`). O Orin usa **4 lanes**.
+
+Após instalar, validar a captura com o app `eCAM_argus_camera` (libargus) que acompanha o pacote.
+
+> Os pacotes de driver são grandes (centenas de MB) e versionados via **Git LFS** — é necessário `git lfs install` antes do clone para obtê-los.
 
 ---
 
@@ -159,17 +179,36 @@ cmake --build build
 
 ```
 CANPass/
-├── README.md          # documentação
-├── install.sh         # instalador (auto-remove após execução)
-└── .rsc/
-    ├── cam_view.sh    # script principal
-    ├── watchdog.sh    # supervisor de processo
-    └── docker-install.sh  # instalador do Docker
+├── README.md                  # documentação
+├── install.sh                 # instalador do stream (deps, scripts, alias, systemd)
+├── install_drivers.sh         # instalador de drivers e-con (rodar NO Orin, aarch64)
+├── doc/                       # PDFs oficiais da e-CAM82 (datasheets, guias e-con)
+├── .rsc/
+│   ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
+│   ├── watchdog.sh            # supervisor de processo (alias `canpass`)
+│   └── docker-install.sh      # instalador do Docker
+├── e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_..._R02_RC1/  # driver CORRETO (IMX485, JP5) — LFS
+├── e-CAM82_CUOAGX_L4T36.4.3/                                  # driver GMSL OCTA (OUTRO produto) — LFS
+└── NileCAM81_CUOAGX/                                          # driver GMSL NileCAM81 (OUTRO produto)
 ```
 
 ---
 
 ## Changelog
+
+### v1.4.13 — 2026-06-08
+
+- `install_drivers.sh`: a **e-CAM82 (IMX485, MIPI, L4T 35.2.1 / JP 5.1.0)** passa a ser a **opção 1 (recomendada)** — é o driver correto desta câmera. Pacotes GMSL (OCTA AR0821 / NileCAM81) reclassificados como opções 2/3 de **OUTROS produtos**, com aviso e confirmação extra. Banner e checagem de kernel ajustados; alerta de que o instalador da e-con aborta se o L4T não casar exatamente.
+- **Pacote de driver IMX485 versionado via Git LFS** — antes estava fora do versionamento, fazendo a opção 1 falhar num clone limpo.
+- `cam_view.sh`: cleanup robusto contra `unbound variable` (`loop_pid`); aborta o probe e não exibe URLs se o loop de stream morrer; aguarda o stream ficar disponível antes de exibir as URLs.
+
+### v1.4.0 — 2026-05-19
+
+- `install_drivers.sh`: adicionado instalador de drivers de câmera e-con para Jetson AGX Orin (e-CAM82, e-CAM YUV OCTA, NileCAM81), executado no próprio Orin via `git pull`. Correções de caminhos de pacote, checagem de versão L4T, criação de `Images_Backup` e caminho dinâmico do módulo do kernel.
+
+### v0.4.x — 2026-05-15
+
+- `cam_view.sh`: suporte a **câmera IP (RTSP)** com auto-detecção de subnet divergente e configuração de IP temporário; caminho RTSP da Intelbras como padrão; URLs exibidas para todas as interfaces de rede; probe da câmera IP antes de expor URLs; loop de reconexão interrompido em erros fatais de RTSP; GOP reduzido (6→2 frames) para cortar latência.
 
 ### v0.3.5 — 2026-05-12
 
