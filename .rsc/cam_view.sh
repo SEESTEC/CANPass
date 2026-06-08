@@ -64,6 +64,39 @@ _probe_csi_cameras() {
     done
 }
 
+# Maximiza os clocks do Jetson (power model, jetson_clocks e, se presente, o script
+# max-isp-vi-clks.sh da e-con) para obter o frame rate máximo nas câmeras CSI —
+# recomendado pelo guia GStreamer da e-con. Usa sudo -n (regras NOPASSWD do
+# install.sh); qualquer falha é não-fatal. Defina CANPASS_NO_CLOCK_BOOST=1 p/ pular.
+_boost_jetson_clocks() {
+    [[ "${CANPASS_NO_CLOCK_BOOST:-0}" == "1" ]] && return 0
+    _has_argus || return 0
+
+    if command -v nvpmodel &>/dev/null; then
+        if sudo -n nvpmodel -m 0 &>/dev/null; then
+            log_ok "Power model em modo máximo (nvpmodel -m 0)."
+        else
+            log_warn "nvpmodel não pôde ser ajustado (sem NOPASSWD? rode 'sudo bash install.sh') — seguindo."
+        fi
+    fi
+
+    if command -v jetson_clocks &>/dev/null; then
+        sudo -n jetson_clocks &>/dev/null \
+            && log_ok "Clocks máximos aplicados (jetson_clocks)." \
+            || log_warn "jetson_clocks não pôde ser aplicado — seguindo."
+    fi
+
+    # Script de clocks de ISP/VI da e-con, instalado no home do usuário.
+    local user_home isp_script
+    user_home=$(eval echo "~${SUDO_USER:-$USER}")
+    isp_script="${user_home}/max-isp-vi-clks.sh"
+    if [[ -x "$isp_script" ]]; then
+        sudo -n "$isp_script" &>/dev/null \
+            && log_ok "Clocks de ISP/VI maximizados (max-isp-vi-clks.sh)." \
+            || true
+    fi
+}
+
 # ─── 2. Verifica sub-rede e configura IP temporário no Jetson se necessário ───
 # Câmeras IP saem de fábrica em 192.168.1.x/24. Se nenhuma interface do Jetson
 # estiver nessa faixa, o usuário pode atribuir um IP temporário aqui para
@@ -313,6 +346,9 @@ show_camera() {
         local csi_w csi_h csi_fps
         IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
         log_info "Stream CSI: sensor-id=${sensor_id}, ${csi_w}x${csi_h} @ ${csi_fps} fps"
+
+        # Maximiza clocks (CPU/GPU/ISP/VI) para frame rate máximo (recomendado pela e-con).
+        _boost_jetson_clocks
 
         # Reinicia o nvargus-daemon para garantir estado limpo antes de abrir a sessão.
         # Sessões encerradas abruptamente (Ctrl+C, testes anteriores) deixam o daemon

@@ -129,6 +129,7 @@ Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
 | `CANPASS_REC_DIR`      | `~/canpass_rec` | Diretório de destino das gravações                    |
 | `CANPASS_CSI_RES`      | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30` |
 | `CANPASS_CSI_SENSORS`  | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1` |
+| `CANPASS_NO_CLOCK_BOOST` | _(desativado)_ | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
@@ -181,6 +182,8 @@ sudo bash install_drivers.sh --auto   # não-interativo: e-CAM82 IMX485, 4 lanes
 **Requisito de flash:** o instalador da e-con confere `/etc/nv_tegra_release` e **aborta** se o L4T do flash não casar **exatamente** com o alvo do pacote. Para a e-CAM82, o Orin precisa estar em **L4T 35.2.1 / JP 5.1.0** (kernel `5.10.104-tegra`). O Orin usa **4 lanes**.
 
 Após instalar, validar a captura com o app `eCAM_argus_camera` (libargus) que acompanha o pacote.
+
+No caminho CSI, o `cam_view.sh` **maximiza automaticamente os clocks** do Jetson (`nvpmodel -m 0`, `jetson_clocks` e, se presente, o `max-isp-vi-clks.sh` da e-con) para obter o frame rate máximo — sem senha, via regras NOPASSWD criadas pelo `install.sh`. Para desativar, exporte `CANPASS_NO_CLOCK_BOOST=1`.
 
 > Os pacotes de driver são grandes (centenas de MB) e versionados via **Git LFS** — é necessário `git lfs install` antes do clone para obtê-los.
 
