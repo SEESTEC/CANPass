@@ -30,6 +30,15 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Modo não-interativo: --auto / -y / --yes instala automaticamente a opção 1
+# (e-CAM82 IMX485) em 4 lanes, sem perguntas. Usado pelo install.sh.
+AUTO=0
+for _arg in "$@"; do
+    case "$_arg" in
+        --auto|-y|--yes) AUTO=1 ;;
+    esac
+done
+
 # e-CAM82 IMX485 (MIPI) — pacote CORRETO para a câmera deste projeto
 ECAM82_IMX485_DIR="${SCRIPT_DIR}/e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_13-MAR-2023_R02_RC1/e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_13-MAR-2023_R02"
 
@@ -63,44 +72,103 @@ echo -e "${NC}"
 
 # ── Menu principal ───────────────────────────────────────────────────────────
 
-echo "Qual driver deseja instalar?"
-echo ""
-echo "  1) e-CAM82 (IMX485, MIPI) — L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra)  ✓ recomendado"
-echo "  2) [GMSL] e-CAM YUV OCTA (AR0821) — L4T 36.4.3 / JP 6.2  ⚠ OUTRO produto, não é a e-CAM82"
-echo "  3) [GMSL] NileCAM81 — L4T 36.3.0 / JP 6.0  ⚠ OUTRO produto, pendente build 36.4.x"
-echo ""
-read -rp "Escolha [1, 2 ou 3]: " choice
+if [[ $AUTO -eq 1 ]]; then
+    choice=1
+    log_info "Modo automático: instalando opção 1 — e-CAM82 (IMX485, MIPI)."
+else
+    echo "Qual driver deseja instalar?"
+    echo ""
+    echo "  1) e-CAM82 (IMX485, MIPI) — L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra)  ✓ recomendado"
+    echo "  2) [GMSL] e-CAM YUV OCTA (AR0821) — L4T 36.4.3 / JP 6.2  ⚠ OUTRO produto, não é a e-CAM82"
+    echo "  3) [GMSL] NileCAM81 — L4T 36.3.0 / JP 6.0  ⚠ OUTRO produto, pendente build 36.4.x"
+    echo ""
+    read -rp "Escolha [1, 2 ou 3]: " choice
+fi
 
 # ── e-CAM82 IMX485 (MIPI) — pacote correto ────────────────────────────────────
 
+# Garante que o binário do driver (rastreado por Git LFS) foi baixado de fato,
+# e não é apenas o ponteiro LFS (o que acontece ao baixar o repo como .zip).
+ensure_lfs_payload() {
+    local pkg_tar
+    pkg_tar=$(find "${ECAM82_IMX485_DIR}" -maxdepth 1 -name '*.tar.gz' -print -quit 2>/dev/null || true)
+    if [[ -z "$pkg_tar" || ! -f "$pkg_tar" ]]; then
+        log_error "Pacote .tar.gz do driver não encontrado em ${ECAM82_IMX485_DIR}."
+        return 1
+    fi
+
+    local size
+    size=$(stat -c%s "$pkg_tar" 2>/dev/null || echo 0)
+    if [[ "$size" -ge 1048576 ]]; then
+        return 0   # binário real já presente
+    fi
+
+    log_warn "O pacote do driver tem apenas ${size} bytes — é um ponteiro Git LFS, não o binário."
+    log_warn "Isso ocorre ao baixar o repositório como .zip: o GitHub não inclui o conteúdo LFS."
+
+    if git -C "${SCRIPT_DIR}" rev-parse --git-dir >/dev/null 2>&1; then
+        if ! command -v git-lfs >/dev/null 2>&1; then
+            log_info "Instalando git-lfs..."
+            { apt-get update -qq && apt-get install -y git-lfs; } || log_warn "Falha ao instalar git-lfs."
+        fi
+        log_info "Baixando objetos LFS (git lfs pull)..."
+        git -C "${SCRIPT_DIR}" lfs install || true
+        git -C "${SCRIPT_DIR}" lfs pull   || log_warn "git lfs pull falhou."
+        size=$(stat -c%s "$pkg_tar" 2>/dev/null || echo 0)
+    fi
+
+    if [[ "$size" -lt 1048576 ]]; then
+        log_error "Não foi possível obter o binário completo do driver via Git LFS."
+        log_error "Clone o repositório com LFS em vez de baixar o .zip:"
+        log_error "  sudo apt install -y git git-lfs && git lfs install"
+        log_error "  git clone https://github.com/SEESTEC/CANPass.git && cd CANPass && git lfs pull"
+        return 1
+    fi
+    log_ok "Binário do driver obtido via LFS (${size} bytes)."
+    return 0
+}
+
 install_ecam82_imx485() {
     if [[ ! -d "${ECAM82_IMX485_DIR}" ]]; then
-        log_error "Pasta '${ECAM82_IMX485_DIR}' não encontrada. Verifique se o repositório foi clonado corretamente (git pull)."
+        log_error "Pasta '${ECAM82_IMX485_DIR}' não encontrada. Clone o repositório com git-lfs (git clone + git lfs pull)."
         exit 1
     fi
 
-    # Avisa se o kernel do Orin for diferente do alvo do pacote (5.10.104-tegra)
+    # Garante que o binário do driver (LFS) está presente, não um ponteiro.
+    ensure_lfs_payload || exit 1
+
+    # Confere se o kernel do Orin casa com o alvo do pacote (5.10.104-tegra)
     KERNEL_VER="$(uname -r)"
     if [[ "${KERNEL_VER}" != *"5.10.104"* ]]; then
         log_warn "Kernel detectado: ${KERNEL_VER}"
         log_warn "Este pacote foi compilado para 5.10.104-tegra (L4T 35.2.1 / JP 5.1.0)."
         log_warn "O instalador da e-con confere /etc/nv_tegra_release e ABORTA se o L4T"
         log_warn "não casar exatamente (ex.: L4T 35.6.4 será rejeitado)."
+        if [[ $AUTO -eq 1 ]]; then
+            log_error "Flash incompatível — reflasheie o Orin com L4T 35.2.1 / JP 5.1.0 e rode novamente."
+            exit 1
+        fi
         log_warn "Flasheie o Orin com L4T 35.2.1 / JetPack 5.1.0 antes de prosseguir."
         echo ""
         read -rp "Continuar mesmo assim? [s/N]: " confirm
         [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
     fi
 
-    echo ""
-    log_info "Selecione a configuração de lanes da e-CAM82 (IMX485):"
-    echo "  1) 2 lanes  — DTBO: tegra234-...camera-2lane-eimx485"
-    echo "  2) 4 lanes  — DTBO: tegra234-...camera-4lane-eimx485"
-    echo ""
-    read -rp "Lanes [1 ou 2]: " lane_variant
-    if [[ "${lane_variant}" != "1" && "${lane_variant}" != "2" ]]; then
-        log_error "Opção inválida: '${lane_variant}'."
-        exit 1
+    local lane_variant
+    if [[ $AUTO -eq 1 ]]; then
+        lane_variant=2   # 4 lanes — configuração do AGX Orin
+        log_info "Modo automático: 4 lanes (variante 2)."
+    else
+        echo ""
+        log_info "Selecione a configuração de lanes da e-CAM82 (IMX485):"
+        echo "  1) 2 lanes  — DTBO: tegra234-...camera-2lane-eimx485"
+        echo "  2) 4 lanes  — DTBO: tegra234-...camera-4lane-eimx485"
+        echo ""
+        read -rp "Lanes [1 ou 2]: " lane_variant
+        if [[ "${lane_variant}" != "1" && "${lane_variant}" != "2" ]]; then
+            log_error "Opção inválida: '${lane_variant}'."
+            exit 1
+        fi
     fi
 
     log_info "Iniciando instalação e-CAM82 IMX485 (lanes ${lane_variant})..."

@@ -27,6 +27,9 @@ BASHRC="${CALLING_HOME}/.bashrc"
 SUDO_CMD=""
 [[ $EUID -ne 0 ]] && SUDO_CMD="sudo"
 
+# Sinaliza, ao final, que o Orin precisa reiniciar para o driver entrar em vigor.
+NEED_REBOOT=0
+
 # ─── 1. Dependências ─────────────────────────────────────────────────────────
 
 install_apt_package() {
@@ -101,6 +104,39 @@ setup_jetson_sudoers() {
         $SUDO_CMD tee "$sudoers_file" > /dev/null
     $SUDO_CMD chmod 440 "$sudoers_file"
     log_ok "Permissão NOPASSWD para reiniciar nvargus-daemon configurada em ${sudoers_file}."
+}
+
+# ─── 1d. Driver de câmera e-CAM82 (apenas Jetson/Tegra) ──────────────────────
+# Instala automaticamente o driver CORRETO (IMX485) de forma não-interativa.
+# Pula se não for Jetson ou se a câmera já enumera (/dev/video0 presente).
+
+install_ecam82_driver() {
+    if ! grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null; then
+        log_info "Plataforma não-Jetson — driver de câmera CSI não se aplica."
+        return 0
+    fi
+
+    if [[ -e /dev/video0 ]]; then
+        log_ok "Câmera já enumera em /dev/video0 — driver e-CAM82 presumido instalado. Pulando."
+        return 0
+    fi
+
+    local drv_installer="${SCRIPT_DIR}/install_drivers.sh"
+    if [[ ! -f "$drv_installer" ]]; then
+        log_warn "install_drivers.sh não encontrado em ${SCRIPT_DIR} — pulando instalação do driver."
+        return 0
+    fi
+
+    log_info "Nenhuma câmera CSI ativa — instalando driver e-CAM82 (IMX485) automaticamente..."
+    if bash "$drv_installer" --auto; then
+        log_ok "Driver e-CAM82 instalado."
+        NEED_REBOOT=1
+    else
+        log_warn "Instalação automática do driver não concluída."
+        log_warn "Causas comuns: flash L4T incompatível (precisa L4T 35.2.1 / JP 5.1.0) ou"
+        log_warn "pacote de driver ausente (baixe o repo via 'git clone' + 'git lfs pull', não .zip)."
+        log_warn "Para tentar manualmente:  sudo bash ${drv_installer}"
+    fi
 }
 
 # ─── 2. Scripts ──────────────────────────────────────────────────────────────
@@ -180,32 +216,36 @@ main() {
     echo "╚══════════════════════════════════════╝"
     echo -e "${NC}"
 
-    log_step "1/4 — Instalando dependências"
+    log_step "1/5 — Instalando dependências"
     install_apt_package ffmpeg ffplay
     install_apt_package v4l-utils v4l2-ctl
     install_docker
     install_jetson_gstreamer
     setup_jetson_sudoers
 
-    log_step "2/4 — Instalando scripts em ${INSTALL_DIR}"
+    log_step "2/5 — Instalando driver de câmera (Jetson)"
+    install_ecam82_driver
+
+    log_step "3/5 — Instalando scripts em ${INSTALL_DIR}"
     install_scripts
 
-    log_step "3/4 — Configurando alias 'canpass'"
+    log_step "4/5 — Configurando alias 'canpass'"
     setup_alias
     # Carrega o alias na sessão atual sem precisar fechar o terminal
     # shellcheck disable=SC1090
     source "$BASHRC" 2>/dev/null || true
 
-    log_step "4/4 — Configurando serviço systemd"
+    log_step "5/5 — Configurando serviço systemd"
     setup_systemd_service
 
     echo
     log_ok "Instalação concluída!"
     echo -e "${CYAN}────────────────────────────────────────${NC}"
     log_info "Para usar: source ~/.bashrc && canpass"
+    if [[ $NEED_REBOOT -eq 1 ]]; then
+        log_warn "REINICIE o Orin para ativar o driver da câmera:  sudo reboot"
+    fi
     echo -e "${CYAN}────────────────────────────────────────${NC}"
-
-    [[ -f "${CALLING_HOME}/main.zip" ]] && rm -f "${CALLING_HOME}/main.zip"
 }
 
 main "$@"

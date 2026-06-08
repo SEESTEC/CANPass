@@ -15,26 +15,31 @@ CANPass é um conjunto de utilitários em **shell script** para **Linux embarcad
 
 ### Requisitos
 
-- Ubuntu 22.04 LTS (ou derivado)
+- Ubuntu 22.04 LTS / L4T (ou derivado)
 - Acesso à internet
 - Permissão `sudo`
+- Para a câmera CSI (Jetson AGX Orin): Orin flasheado em **L4T 35.2.1 / JP 5.1.0**
 
 ### Instalar
 
-Cole o comando abaixo no terminal e execute:
+Cole o comando abaixo no terminal e execute. Ele clona o repositório **com Git LFS**
+(necessário para obter o pacote do driver) e roda a instalação completa:
 
 ```bash
-sudo apt install -y unzip wget && wget -P "$HOME" https://github.com/SEESTEC/CANPass/archive/refs/heads/main.zip && unzip -o "$HOME/main.zip" -d "$HOME" && sudo chmod +x "$HOME/CANPass-main/install.sh" && sudo "$HOME/CANPass-main/install.sh"
+sudo apt-get update && sudo apt-get install -y git git-lfs && git lfs install && git clone https://github.com/SEESTEC/CANPass.git "$HOME/CANPass" && cd "$HOME/CANPass" && git lfs pull && sudo bash install.sh
 ```
 
-O instalador cuida automaticamente de:
+> ⚠️ **Não use o download `.zip` do GitHub:** ele não inclui o conteúdo Git LFS, então o
+> pacote do driver (~735 MB) viria como um ponteiro quebrado. Use `git clone` + `git lfs pull`.
 
-- Instalar `ffmpeg`, `v4l-utils` e `docker` (via `docker-install.sh` embutido)
-- Adicionar o usuário ao grupo `docker`
+A instalação é **totalmente automática** — nenhuma configuração manual é necessária. Ela cuida de:
+
+- Instalar `ffmpeg`, `v4l-utils`, `docker` (via `docker-install.sh` embutido) e, em Jetson, o GStreamer NVIDIA
+- Adicionar o usuário ao grupo `docker` e configurar o sudoers do `nvargus-daemon` (Jetson)
+- **Instalar automaticamente o driver da câmera e-CAM82 (IMX485)** em Jetson, de forma não-interativa (opção 1, 4 lanes), se a câmera ainda não estiver enumerando
 - Copiar `cam_view.sh` e `watchdog.sh` para `/usr/bin/`
 - Registrar o alias `canpass` em `~/.bashrc`
 - Criar e registrar o serviço systemd `canpass`
-- Remover o arquivo `.zip` e a pasta de instalação ao final
 
 **Após a instalação:**
 
@@ -43,6 +48,7 @@ source ~/.bashrc
 canpass
 ```
 
+> Se o driver da câmera foi instalado agora, **reinicie o Orin** (`sudo reboot`) para ele entrar em vigor.
 > Se for a primeira vez usando Docker, pode ser necessário fazer logout/login ou executar `newgrp docker` para que o grupo seja aplicado à sessão atual.
 
 ---
@@ -153,10 +159,15 @@ sudo usermod -aG video $USER && newgrp video   # adiciona usuário ao grupo vide
 
 A câmera deste projeto é a **e-CAM82_CUOAGX**: **MIPI CSI-2**, sensor **Sony IMX485** com ISP externo, acessada via **Argus/V4L2** (`nvarguscamerasrc` / `/dev/video*`). **Ela NÃO é GMSL.**
 
+> A instalação principal (`install.sh`) **já instala este driver automaticamente** em Jetson,
+> de forma não-interativa. Rode `install_drivers.sh` à mão apenas para reinstalar ou escolher
+> outro pacote.
+
 O `install_drivers.sh` deve ser executado **no próprio Orin** (aarch64), a partir da raiz deste repositório:
 
 ```bash
-sudo bash install_drivers.sh
+sudo bash install_drivers.sh          # interativo (menu de opções)
+sudo bash install_drivers.sh --auto   # não-interativo: e-CAM82 IMX485, 4 lanes
 ```
 
 | Opção | Pacote | Alvo | Observação |
