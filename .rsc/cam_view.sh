@@ -72,18 +72,24 @@ _boost_jetson_clocks() {
     [[ "${CANPASS_NO_CLOCK_BOOST:-0}" == "1" ]] && return 0
     _has_argus || return 0
 
+    # À prova de travamento: nvpmodel pode PERGUNTAR confirmação no terminal e,
+    # com stdout/stderr suprimidos, isso vira um travamento silencioso. Por isso:
+    #   • nvpmodel: auto-confirma via 'printf y' (e o pipe garante EOF se não pedir);
+    #   • jetson_clocks / script de ISP: stdin de /dev/null (não bloqueiam);
+    #   • timeout em todos como rede de segurança final — o boost é opcional e
+    #     NUNCA deve segurar o stream.
     if command -v nvpmodel &>/dev/null; then
-        if sudo -n nvpmodel -m 0 &>/dev/null; then
+        if printf 'y\n' | timeout 20 sudo -n nvpmodel -m 0 &>/dev/null; then
             log_ok "Power model em modo máximo (nvpmodel -m 0)."
         else
-            log_warn "nvpmodel não pôde ser ajustado (sem NOPASSWD? rode 'sudo bash install.sh') — seguindo."
+            log_warn "nvpmodel não aplicado (sem NOPASSWD ou exigiu confirmação) — seguindo."
         fi
     fi
 
     if command -v jetson_clocks &>/dev/null; then
-        sudo -n jetson_clocks &>/dev/null \
+        timeout 30 sudo -n jetson_clocks </dev/null &>/dev/null \
             && log_ok "Clocks máximos aplicados (jetson_clocks)." \
-            || log_warn "jetson_clocks não pôde ser aplicado — seguindo."
+            || log_warn "jetson_clocks não aplicado — seguindo."
     fi
 
     # Script de clocks de ISP/VI da e-con, instalado no home do usuário.
@@ -91,7 +97,7 @@ _boost_jetson_clocks() {
     user_home=$(eval echo "~${SUDO_USER:-$USER}")
     isp_script="${user_home}/max-isp-vi-clks.sh"
     if [[ -x "$isp_script" ]]; then
-        sudo -n "$isp_script" &>/dev/null \
+        timeout 30 sudo -n "$isp_script" </dev/null &>/dev/null \
             && log_ok "Clocks de ISP/VI maximizados (max-isp-vi-clks.sh)." \
             || true
     fi
