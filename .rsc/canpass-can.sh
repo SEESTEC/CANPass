@@ -102,9 +102,9 @@ cmd_dump() {
     ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
     log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e abrindo candump..."
     _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
-    log_ok "${ifc} UP. candump — Ctrl+C encerra. (J1939/Caterpillar = IDs de 29 bits)"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
-    candump -ta "$ifc"
+    log_ok "${ifc} UP. Ctrl+C encerra. (-tA = data+hora real; J1939/Caterpillar = IDs de 29 bits)"
+    candump -tA "$ifc"
 }
 
 # Mostra o payload também como TEXTO (ASCII). Usa o '-a' nativo do candump (hex +
@@ -116,8 +116,8 @@ cmd_ascii() {
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
     log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e decodificando payload como ASCII..."
     _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
-    log_ok "${ifc} UP. Hex + coluna ASCII ('.'=não-imprimível). Ctrl+C encerra."
-    candump -a "$ifc"
+    log_ok "${ifc} UP. Data+hora (-tA) + hex + ASCII ('.'=não-imprimível). Ctrl+C encerra."
+    candump -tA -a "$ifc"
 }
 
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
