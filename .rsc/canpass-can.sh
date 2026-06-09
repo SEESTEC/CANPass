@@ -132,10 +132,21 @@ cmd_log() {
     local out="${dir}/can_${ifc}_$(date +%Y%m%d_%H%M%S).log"
     log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e gravando log..."
     _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    # Formato: epoch (-L, replayável por canplayer) por padrão; legível (-tA, data+hora)
+    # com CANPASS_CAN_LOG_HUMAN=1 — porém o formato legível NÃO é replayável.
+    local -a dargs; local note
+    if [[ "${CANPASS_CAN_LOG_HUMAN:-0}" == "1" ]]; then
+        dargs=(-tA); note="data+hora legível (NÃO replayável por canplayer)"
+    else
+        dargs=(-L);  note="epoch, replayável:  canplayer -I ${out##*/}"
+    fi
     log_ok "Gravando em ${out}"
-    log_info "Formato candump -L (epoch + ID#DATA) — replayável: canplayer -I ${out##*/}"
+    log_info "Formato: ${note}"
     log_info "Ctrl+C encerra. (frames também aparecem aqui ao vivo)"
-    candump -L "$ifc" | tee "$out"
+    # stdbuf -oL: line-buffering — garante que cada frame chega ao arquivo na hora
+    # (e nada se perde no buffer ao dar Ctrl+C).
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+    $SB candump "${dargs[@]}" "$ifc" | tee "$out"
 }
 
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
@@ -150,8 +161,11 @@ cmd_sniff() {
     _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
     log_ok "${ifc} UP. Mostra só frames cujo byte MUDOU (vermelho). Mexa UM eixo por vez. Ctrl+C encerra."
     echo "    ID        b0 b1 b2 b3 b4 b5 b6 b7"
+    # stdbuf -oL: força line-buffering no candump — sem isso o pipe p/ o awk usa buffer
+    # de bloco (~4 KB) e os frames só apareceriam com segundos de atraso.
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
     # candump padrão: $1=iface $2=ID $3=[len] $4..=bytes
-    candump "$ifc" | awk '
+    $SB candump "$ifc" | awk '
         {
             id=$2; out=""; chg=0
             for (i=4; i<=NF; i++) {
