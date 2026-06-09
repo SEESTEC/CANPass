@@ -107,6 +107,19 @@ cmd_dump() {
     candump -ta "$ifc"
 }
 
+# Mostra o payload também como TEXTO (ASCII). Usa o '-a' nativo do candump (hex +
+# coluna ASCII, byte não-imprimível vira '.'). Útil p/ frames que carregam string
+# (VIN, IDs de software, nomes) — em dados binários de sinal vira ponto/lixo (normal).
+cmd_ascii() {
+    local br="${1:-$DEFAULT_BITRATE}" ifc
+    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
+    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e decodificando payload como ASCII..."
+    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    log_ok "${ifc} UP. Hex + coluna ASCII ('.'=não-imprimível). Ctrl+C encerra."
+    candump -a "$ifc"
+}
+
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
 # contrário do 'cansniffer' (can-utils 2020 ignora 29-bit silenciosamente). Imprime
 # uma linha só quando algum byte de um ID muda, destacando o byte em vermelho — ideal
@@ -153,6 +166,7 @@ canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface 
 
   canpass-can detect          lista CANs + driver; aponta a do CANable (ignora mttcan nativo)
   canpass-can dump  [bitrate] sobe (listen-only) + candump   ·  padrão ${DEFAULT_BITRATE} (J1939)
+  canpass-can ascii [bitrate] sobe + candump -a (hex + coluna ASCII — frames de texto)
   canpass-can sniff [bitrate] sobe + monitora bytes que MUDAM (29-bit/J1939 — achar eixo do joystick)
   canpass-can up    [bitrate] só sobe a interface
   canpass-can status          estado e contadores (diagnóstico de bitrate)
@@ -169,6 +183,7 @@ main() {
         detect)         cmd_detect "$@" ;;
         up)             cmd_up "$@" ;;
         dump)           cmd_dump "$@" ;;
+        ascii|text)     cmd_ascii "$@" ;;
         sniff)          cmd_sniff "$@" ;;
         status)         cmd_status "$@" ;;
         down)           cmd_down "$@" ;;
