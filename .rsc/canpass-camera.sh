@@ -43,18 +43,17 @@ SENSOR_ID="${CANPASS_SENSOR_ID:-0}"
 # Fonte: "Table 1: Maximum Frame Rate Supported" de cada câmera (Getting Started
 # Manual). Formato: "LARGURAxALTURA@FPS  descrição".
 #
-# ⚠️  VALORES A CONFIRMAR contra os PDFs oficiais:
-#     e-CAM82  → e-CAM82_CUOAGX_Getting_Started_Manual_Rev_1_4.pdf, Table 1
-#     NileCAM81→ NileCAM81_CUOAGX_Getting_Started_Manual_Rev_1_9.pdf (se aplicável)
-#     (não deu p/ extrair as tabelas aqui — fontes CID nos PDFs.) Ajuste as linhas
-#     abaixo conforme a tabela; é a única coisa a tocar para refletir o oficial.
+# e-CAM82 → CONFIRMADO (Getting Started Manual Rev 1.4, Table 1). Este setup usa o
+# pacote IMX485 de 4 LANES, então só as linhas 4-lane abaixo. (2-lane, p/ referência:
+# 1920x1080@62 ; 3840x2160@39/33 10/12-bit.) O FPS é o máximo em saída 10-bit; em
+# 12-bit o 4K cai p/ 50.
+# NileCAM81 → ⚠ A CONFIRMAR (NileCAM81_CUOAGX_Getting_Started_Manual_Rev_1_9.pdf) —
+# valores abaixo são estimativa; a câmera nem está instalada ainda (falta build 35.2.1).
 
 _res_options_ecam82() {
     cat <<'EOF'
-3840x2160@60  4K UHD
-1920x1080@60  Full HD
-1280x720@60   HD
-640x480@60    VGA
+1920x1080@90  Full HD (4-lane, 90 fps 10/12-bit)
+3840x2160@60  4K UHD  (4-lane, 60 fps 10-bit / 50 em 12-bit)
 EOF
 }
 
