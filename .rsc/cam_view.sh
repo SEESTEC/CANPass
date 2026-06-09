@@ -364,28 +364,54 @@ show_camera() {
             sleep 5
         fi
 
-        # Loop CSI: GStreamer captura e converte (NV12→I420) via pipe para
-        # ffmpeg, que faz encode H.264 e envia ao MediaMTX por RTSP.
-        # nvv4l2h264enc e rtspclientsink são evitados por inconsistência entre
-        # versões de JetPack — ffmpeg garante compatibilidade.
+        # Encoder CSI: prefere o H.264 por HARDWARE (NVENC, nvv4l2h264enc) do Jetson
+        # — latência e uso de CPU muito menores que o x264 por software. Em L4T 35.2.1
+        # o nvv4l2h264enc é estável. Fallback automático p/ software se o elemento não
+        # existir; force com CANPASS_CSI_ENCODER=sw|hw. Bitrate via CANPASS_CSI_BITRATE.
+        local csi_bitrate="${CANPASS_CSI_BITRATE:-8000000}"
+        local csi_encoder="${CANPASS_CSI_ENCODER:-auto}"
+        local csi_use_hw=0
+        if [[ "$csi_encoder" != "sw" ]] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null; then
+            csi_use_hw=1
+            log_info "Encoder CSI: hardware (nvv4l2h264enc, ${csi_bitrate} bps)."
+        else
+            log_info "Encoder CSI: software (libx264)."
+        fi
+
+        # Loop CSI: HW → GStreamer captura E codifica (NVENC); ffmpeg só remuxa (copy)
+        # para RTSP. SW → GStreamer entrega I420 cru e o ffmpeg codifica em x264.
         _ffmpeg_loop() {
             local csi_log="/tmp/canpass_csi_${sensor_id}.log"
             local nvargus_retries=0
             log_info "Log de erros CSI: ${csi_log}"
             while true; do
                 : > "$csi_log"  # limpa a cada tentativa para checar apenas o erro atual
-                gst-launch-1.0 -q \
-                    nvarguscamerasrc sensor-id="$sensor_id" ! \
-                    "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
-                    nvvidconv ! "video/x-raw,format=I420" ! \
-                    fdsink fd=1 2>>"$csi_log" | \
-                ffmpeg -loglevel warning \
-                    -f rawvideo -pix_fmt yuv420p \
-                    -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
-                    -fflags nobuffer -flags low_delay -analyzeduration 0 \
-                    -i pipe:0 \
-                    "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
+                if (( csi_use_hw )); then
+                    gst-launch-1.0 -q \
+                        nvarguscamerasrc sensor-id="$sensor_id" ! \
+                        "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                        nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${csi_bitrate}" \
+                            insert-sps-pps=1 iframeinterval="${csi_fps}" idrinterval="${csi_fps}" ! \
+                        h264parse ! fdsink fd=1 2>>"$csi_log" | \
+                    ffmpeg -loglevel warning \
+                        -fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32768 \
+                        -r "${csi_fps}" -f h264 -i pipe:0 \
+                        -c:v copy -muxdelay 0 -muxpreload 0 \
+                        -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
+                else
+                    gst-launch-1.0 -q \
+                        nvarguscamerasrc sensor-id="$sensor_id" ! \
+                        "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                        nvvidconv ! "video/x-raw,format=I420" ! \
+                        fdsink fd=1 2>>"$csi_log" | \
+                    ffmpeg -loglevel warning \
+                        -f rawvideo -pix_fmt yuv420p \
+                        -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
+                        -fflags nobuffer -flags low_delay -analyzeduration 0 \
+                        -i pipe:0 \
+                        "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                        -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
+                fi
                 local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
                 (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
                 # Daemon nvargus não encontrou a câmera — pode ser problema de timing;

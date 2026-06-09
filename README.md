@@ -90,6 +90,11 @@ canpass --display
 | WebRTC    | `http://<ip>:8889/stream`       | ~100 ms    | Navegador (recomendado)           |
 | HLS       | `http://<ip>:8888/stream`       | ~200 ms    | Navegador (fallback)              |
 
+> **Latência alta?** Use o endpoint **WebRTC** (`:8889`) ou **RTSP** (VLC/ffplay), não o HLS —
+> o HLS tem segundos de buffer por natureza. Em Jetson, o stream CSI usa o encoder de
+> **hardware** (NVENC) por padrão; ajuste a nitidez com `CANPASS_CSI_BITRATE` e a resolução
+> com `CANPASS_CSI_RES` (ex.: `CANPASS_CSI_RES=3840x2160@30 CANPASS_CSI_BITRATE=20000000 canpass`).
+
 ---
 
 ### `watchdog.sh` — Supervisor de processo
@@ -130,6 +135,8 @@ Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
 | `CANPASS_CSI_RES`      | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30` |
 | `CANPASS_CSI_SENSORS`  | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1` |
 | `CANPASS_NO_CLOCK_BOOST` | _(desativado)_ | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI |
+| `CANPASS_CSI_BITRATE`  | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido |
+| `CANPASS_CSI_ENCODER`  | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264) |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
