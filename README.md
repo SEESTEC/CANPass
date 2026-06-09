@@ -244,19 +244,22 @@ CANPass/
 ├── README.md                  # documentação
 ├── install.sh                 # instalador do stream (deps, scripts, alias, systemd)
 ├── install_drivers.sh         # instalador de drivers e-con (rodar NO Orin, aarch64)
-├── doc/
-│   ├── ecam82/                # PDFs da e-CAM82 (MIPI/IMX485) + README de controles
-│   │   └── README.md          #   Table 1, Flicker e parâmetros de auto-exposure
-│   └── NileCAM81/             # PDFs da NileCAM81 (GMSL) + COMPATIBILIDADE.md + TESTE_RAPIDO.md
-├── .rsc/
-│   ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
-│   ├── watchdog.sh            # supervisor de processo (alias `canpass`)
-│   ├── canpass-camera.sh      # alterna e-CAM82 ↔ NileCAM81 + preview local (nv3dsink)
-│   ├── canpass-backup.sh      # snapshot/restore da eMMC do Orin (roda no PC host)
-│   └── docker-install.sh      # instalador do Docker
-├── e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_..._R02_RC1/  # driver CORRETO (IMX485, JP5) — LFS
-├── e-CAM82_CUOAGX_L4T36.4.3/                                  # driver GMSL OCTA (OUTRO produto) — LFS
-└── NileCAM81_CUOAGX/                                          # driver GMSL NileCAM81 (OUTRO produto)
+├── doc/                       # tudo organizado por câmera (PDFs, drivers, CAD)
+│   ├── e-CAM82/               # e-CAM82_CUOAGX (MIPI/IMX485) — esta câmera
+│   │   ├── README.md          #   controles: Table 1, Flicker, auto-exposure
+│   │   ├── *.pdf              #   datasheets e guias
+│   │   ├── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/  # driver CORRETO (IMX485, JP5) — LFS
+│   │   └── e-CAM82_CUOAGX_L4T36.4.3/                          # driver GMSL OCTA (OUTRO produto) — LFS
+│   └── NileCAM81/             # NileCAM81_CUOAGX (GMSL/AR0821) — OUTRO produto
+│       ├── COMPATIBILIDADE.md · TESTE_RAPIDO.md
+│       ├── Common/ Hardware/ Software/ Software_R05_JP6/        # PDFs + CAD (STP/DXF, LFS)
+│       └── NileCAM81_CUOAGX/  # drivers: JP6.0_L4T36.3.0 (LFS) · JP5.1.2_L4T35.4.1 (fora do git)
+└── .rsc/
+    ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
+    ├── watchdog.sh            # supervisor de processo (alias `canpass`)
+    ├── canpass-camera.sh      # alterna e-CAM82 ↔ NileCAM81 + preview local (nv3dsink)
+    ├── canpass-backup.sh      # snapshot/restore da eMMC do Orin (roda no PC host)
+    └── docker-install.sh      # instalador do Docker
 ```
 
 ---

@@ -1,7 +1,6 @@
-e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_13-MAR-2023_R02_RC1/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
-e-CAM82_CUOAGX_L4T36.4.3/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
-NileCAM81_CUOAGX/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
-NileCAM81_CUOAGX/**/*.bin filter=lfs diff=lfs merge=lfs -text
-e-CAM82_CUOAGX_L4T36.4.3/**/*.bin filter=lfs diff=lfs merge=lfs -text
+# Tudo da documentação/drivers vive sob doc/<câmera>/ — Git LFS por tipo de arquivo.
+# (pacotes de driver e firmware: tar.gz/bin; CAD: stp/dxf). PDFs ficam como blob normal.
+doc/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
+doc/**/*.bin filter=lfs diff=lfs merge=lfs -text
 doc/**/*.stp filter=lfs diff=lfs merge=lfs -text
 doc/**/*.dxf filter=lfs diff=lfs merge=lfs -text
