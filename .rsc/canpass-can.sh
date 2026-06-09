@@ -107,6 +107,16 @@ cmd_dump() {
     candump -ta "$ifc"
 }
 
+cmd_sniff() {
+    local br="${1:-$DEFAULT_BITRATE}" ifc
+    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    command -v cansniffer >/dev/null || { log_error "cansniffer ausente — instale: sudo apt-get install can-utils"; return 1; }
+    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e abrindo cansniffer..."
+    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    log_ok "${ifc} UP. cansniffer (-c destaca bytes que mudam) — mexa um eixo por vez. 'q' encerra."
+    cansniffer -c "$ifc"
+}
+
 cmd_status() {
     local ifc
     ifc=$(_find_canable) || { log_error "CANable não encontrado."; return 1; }
@@ -126,8 +136,9 @@ usage() {
 canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface pelo driver
 
   canpass-can detect          lista CANs + driver; aponta a do CANable (ignora mttcan nativo)
-  canpass-can dump [bitrate]  sobe (listen-only) + candump   ·  padrão ${DEFAULT_BITRATE} (J1939)
-  canpass-can up   [bitrate]  só sobe a interface
+  canpass-can dump  [bitrate] sobe (listen-only) + candump   ·  padrão ${DEFAULT_BITRATE} (J1939)
+  canpass-can sniff [bitrate] sobe + cansniffer (destaca bytes que mudam — achar eixo do joystick)
+  canpass-can up    [bitrate] só sobe a interface
   canpass-can status          estado e contadores (diagnóstico de bitrate)
   canpass-can down            derruba a interface
 
@@ -142,6 +153,7 @@ main() {
         detect)         cmd_detect "$@" ;;
         up)             cmd_up "$@" ;;
         dump)           cmd_dump "$@" ;;
+        sniff)          cmd_sniff "$@" ;;
         status)         cmd_status "$@" ;;
         down)           cmd_down "$@" ;;
         -h|--help|help) usage ;;
