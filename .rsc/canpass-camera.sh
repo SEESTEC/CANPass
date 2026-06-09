@@ -209,7 +209,57 @@ cmd_switch() {
     fi
 }
 
+# ─── Banner informativo (Table 1 + Flicker + Auto-Exposure) ──────────────────
+# Espelha doc/ecam82/README.md — mantenha os dois sincronizados. Os valores de AE
+# vêm de 'gst-inspect-1.0 nvarguscamerasrc' e os de WDR/ganho de 'v4l2-ctl
+# --list-ctrls' na e-CAM82 (IMX485) deste projeto.
+_print_controls_banner() {
+    echo -e "${BOLD}${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "║   CANPass — Preview local e-CAM82_CUOAGX (IMX485 / Argus → nv3dsink)    ║"
+    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    cat <<EOF
+${BOLD}Table 1 — Maximum Frame Rate Supported (e-CAM82_CUOAGX, AGX Orin/Xavier)${NC}
+  Lanes    Resolução      FPS 10-bit   FPS 12-bit
+  4-lane   1920 x 1080        90           90        ← setup deste projeto
+  4-lane   3840 x 2160        60           50        ← setup deste projeto
+  2-lane   1920 x 1080        62           62
+  2-lane   3840 x 2160        39           33
+
+${BOLD}Flicker / anti-banding${NC}  (nvarguscamerasrc aeantibanding | env CANPASS_FLICKER)
+  0 = Off     1 = Auto(padrão)     2 = 50 Hz     3 = 60 Hz
+
+${BOLD}Auto-exposure & imagem${NC}  (env → propriedade nvarguscamerasrc | faixa)
+  CANPASS_FLICKER       aeantibanding         0..3            (padrão 1=Auto)
+  CANPASS_EXPOSURECOMP  exposurecompensation  -2.0 .. 2.0     (padrão 0)
+  CANPASS_EXPTIME       exposuretimerange     "min max" ns    (ex "34000 33333333")
+  CANPASS_GAINRANGE     gainrange             "min max"       (ex "1 16")
+  CANPASS_ISPGAIN       ispdigitalgainrange   "min max"       (ex "1 8")
+  CANPASS_AELOCK        aelock                true|false      (congela a exposição)
+  CANPASS_AWBLOCK       awblock               true|false
+  CANPASS_WBMODE        wbmode                0..9            (1=auto,5=daylight,9=manual)
+  CANPASS_SATURATION    saturation            0.0 .. 2.0      (padrão 1)
+  CANPASS_TNR_MODE      tnr-mode              0..2 (Off/Fast/HQ)
+  CANPASS_TNR_STRENGTH  tnr-strength          -1.0 .. 1.0
+  CANPASS_EE_MODE       ee-mode               0..2 (Off/Fast/HQ)
+  CANPASS_EE_STRENGTH   ee-strength           -1.0 .. 1.0
+  CANPASS_AEREGION      aeregion              "left top right bottom peso"
+  CANPASS_SENSOR_MODE   sensor-mode           -1..4 (-1 = melhor match)
+
+${BOLD}WDR / HDR e ganho via V4L2${NC}  (driver e-con — aplicado antes do Argus)
+  CANPASS_HDR           hdr_enable            0|1             (v4l2-ctl em /dev/video${SENSOR_ID})
+  (ref.) gain 0..300 (passo 3) · exposure 450..400000 µs · frame_rate 2.5..60 fps
+
+  Dica "explosão de luz": estreite CANPASS_EXPTIME + CANPASS_GAINRANGE, ou
+  CANPASS_AELOCK=true para travar. Detalhes: doc/ecam82/README.md
+EOF
+    echo
+}
+
 # ─── preview (local, nv3dsink) ───────────────────────────────────────────────
+# Visualização local no estilo see_cam.sh (menu de resolução → nv3dsink), com
+# banner informativo e parâmetros de AE/flicker/WDR ajustáveis por ambiente.
 cmd_preview() {
     local cam="${1:-}"
 
@@ -232,8 +282,9 @@ cmd_preview() {
         *) log_error "Câmera desconhecida: '$cam' (use ecam82 ou nilecam81)."; return 2 ;;
     esac
 
-    echo -e "${BOLD}${CYAN}Preview local — ${cam}${NC}  (sensor-id=${SENSOR_ID})"
-    echo "Resoluções suportadas (Table 1 — Maximum Frame Rate Supported):"
+    _print_controls_banner
+
+    echo -e "${BOLD}${CYAN}Resolução${NC} (Table 1) — câmera: ${cam}, sensor-id=${SENSOR_ID}"
     local i
     for i in "${!opts[@]}"; do
         echo -e "  ${GREEN}[$i]${NC} ${opts[$i]}"
@@ -259,12 +310,40 @@ cmd_preview() {
         log_warn "DISPLAY não definido — assumindo :0. Rode num terminal do desktop do Orin."
     fi
 
-    # Reinicia o daemon Argus (sessões CSI mal encerradas o deixam inválido).
     local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+
+    # WDR/HDR é controle V4L2 (driver e-con) — aplicado antes de abrir o Argus.
+    if [[ -n "${CANPASS_HDR:-}" ]] && command -v v4l2-ctl &>/dev/null; then
+        log_info "WDR/HDR: hdr_enable=${CANPASS_HDR} em /dev/video${SENSOR_ID}."
+        $sudo -n v4l2-ctl -d "/dev/video${SENSOR_ID}" -c hdr_enable="${CANPASS_HDR}" 2>/dev/null \
+            || v4l2-ctl -d "/dev/video${SENSOR_ID}" -c hdr_enable="${CANPASS_HDR}" 2>/dev/null \
+            || log_warn "Não foi possível setar hdr_enable (sem permissão ou controle ausente)."
+    fi
+
+    # Monta as propriedades do nvarguscamerasrc só com o que o usuário definiu.
+    local -a props=( sensor-id="$SENSOR_ID" )
+    [[ -n "${CANPASS_SENSOR_MODE:-}" ]]  && props+=( sensor-mode="$CANPASS_SENSOR_MODE" )
+    [[ -n "${CANPASS_FLICKER:-}" ]]      && props+=( aeantibanding="$CANPASS_FLICKER" )
+    [[ -n "${CANPASS_AELOCK:-}" ]]       && props+=( aelock="$CANPASS_AELOCK" )
+    [[ -n "${CANPASS_AWBLOCK:-}" ]]      && props+=( awblock="$CANPASS_AWBLOCK" )
+    [[ -n "${CANPASS_WBMODE:-}" ]]       && props+=( wbmode="$CANPASS_WBMODE" )
+    [[ -n "${CANPASS_EXPOSURECOMP:-}" ]] && props+=( exposurecompensation="$CANPASS_EXPOSURECOMP" )
+    [[ -n "${CANPASS_EXPTIME:-}" ]]      && props+=( exposuretimerange="$CANPASS_EXPTIME" )
+    [[ -n "${CANPASS_GAINRANGE:-}" ]]    && props+=( gainrange="$CANPASS_GAINRANGE" )
+    [[ -n "${CANPASS_ISPGAIN:-}" ]]      && props+=( ispdigitalgainrange="$CANPASS_ISPGAIN" )
+    [[ -n "${CANPASS_SATURATION:-}" ]]   && props+=( saturation="$CANPASS_SATURATION" )
+    [[ -n "${CANPASS_TNR_MODE:-}" ]]     && props+=( tnr-mode="$CANPASS_TNR_MODE" )
+    [[ -n "${CANPASS_TNR_STRENGTH:-}" ]] && props+=( tnr-strength="$CANPASS_TNR_STRENGTH" )
+    [[ -n "${CANPASS_EE_MODE:-}" ]]      && props+=( ee-mode="$CANPASS_EE_MODE" )
+    [[ -n "${CANPASS_EE_STRENGTH:-}" ]]  && props+=( ee-strength="$CANPASS_EE_STRENGTH" )
+    [[ -n "${CANPASS_AEREGION:-}" ]]     && props+=( aeregion="$CANPASS_AEREGION" )
+
+    # Reinicia o daemon Argus (sessões CSI mal encerradas o deixam inválido).
     $sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
 
+    log_info "Propriedades Argus: ${props[*]}"
     log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
-    gst-launch-1.0 nvarguscamerasrc sensor-id="$SENSOR_ID" ! \
+    gst-launch-1.0 nvarguscamerasrc "${props[@]}" ! \
         "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12" ! \
         nv3dsink sync=false
 }
@@ -278,6 +357,10 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
   canpass-camera list                        DTBs candidatos em /boot
   canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
   canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+
+O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de auto-exposure,
+e aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_AELOCK, ...).
+Referência completa: doc/ecam82/README.md
 
 As duas câmeras NÃO rodam juntas (conector J509 + DTB únicos): é alternar, um por boot.
 Detalhes: doc/NileCAM81/COMPATIBILIDADE.md
