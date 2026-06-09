@@ -62,9 +62,14 @@ Motivos técnicos (lidos nos `install_binaries.sh`):
   módulos não dão `insmod` em `5.10.104` (vermagic diferente). Afrouxar o check de versão
   **não** resolve — a ABI do kernel é o bloqueio real.
 
-As *Release Notes* mostram que a e-con já publicou builds da NileCAM81 para várias
-revisões L4T 35.x — então **existe** a possibilidade de um build para 35.2.1, mas ele
-**não está neste repositório**; teria de ser solicitado à e-con.
+**PORÉM (confirmado nas Release Notes Rev 1.8):** a NileCAM81 **tem** um build para
+**exatamente o L4T 35.2.1** do Orin atual — release **R01_RC4 (10-FEB-2023), JetPack 5.1,
+L4T R35.2.1, kernel 5.10.104** (o MESMO kernel da e-CAM82 que está rodando). Esse pacote
+**não está neste repositório** (temos 35.4.1 e 36.3.0), mas existe e pode ser solicitado à
+e-con. Com ele, dá para ter os dois drivers no flash atual **sem reflashar** — ver seção 4.
+
+Versões de NileCAM81 publicadas (Release Notes Rev 1.8): L4T 35.1.0 (JP5.0.2),
+**35.2.1 (JP5.1)**, 35.3.1 (JP5.1.1), 35.4.1 (JP5.1.2) e 36.3.0 (JP6.0).
 
 ---
 
@@ -113,6 +118,36 @@ Com o hardware em mãos, duas rotas de software:
 perderia o setup que acabou de funcionar e precisaria comprar todo o conjunto GMSL. A
 NileCAM81 só faz sentido se você precisa especificamente de **GMSL** (cabo coaxial longo,
 até 15 m, p/ posicionar a câmera longe do Orin) e tiver o hardware desserializador.
+
+---
+
+## 4. ✅ Alternar e-CAM82 ↔ NileCAM81 SEM reflash (você já tem o hardware)
+
+Como existe um L4T comum às duas = **35.2.1 (o flash atual)**, o caminho é:
+
+**Falta apenas 1 item:** o pacote da **NileCAM81 para L4T 35.2.1**. Você tem os de 35.4.1
+e 36.3.0, não o de 35.2.1. Solicite à e-con (Developer Resources / ticket de suporte):
+> NileCAM81_CUOAGX para **JetPack 5.1 / L4T R35.2.1** (kernel 5.10.104) — release **R01_RC4**
+> (10-FEB-2023) ou equivalente 35.2.1. Padrão do nome: `e-CAM_YUV-GMSL-PRODUCTS_..._L4T35.2.1_..._R01`.
+
+**Depois de ter o pacote 35.2.1, é zero reflash:**
+1. Instalar os **dois** drivers no flash 35.2.1 (e-CAM82 já está; instalar o da NileCAM81).
+   Os módulos são diferentes (`eimx485` vs `nilecam`/`max96712`) e **coexistem**; o
+   **device tree ativo** decide qual câmera é probada no boot.
+2. Manter os **dois DTBs** em `/boot` e selecionar o ativo via `/boot/extlinux/extlinux.conf`
+   (linha `FDT`), um por câmera — sem reflash.
+3. **Trocar de câmera:** desligar → trocar a base board no **J509** (HEX MIPI ↔
+   desserializador GMSL) + conectar a câmera → bootar com o DTB correspondente.
+
+> **Automação possível:** um comando `canpass-camera ecam82|nilecam81` que troca a linha
+> `FDT` do extlinux e reinicia — a montar quando o pacote 35.2.1 estiver instalado e os
+> nomes reais dos DTBs (`...camera-4lane-eimx485.dtb` × `...nilecam..._two_lane.dtb`)
+> forem conhecidos.
+
+**Alternativa (se a e-con só fornecer NileCAM81 mais novo):** reflashar **uma única vez**
+para L4T 35.4.1 (JP 5.1.2) — a NileCAM81 35.4.1 você já tem; obter a e-CAM82 para 35.4.1.
+Depois nunca mais reflasha. É inferior a ficar no 35.2.1 (exige 1 reflash + driver e-CAM82
+novo), mas funciona.
 
 ---
 
