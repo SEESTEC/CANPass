@@ -120,6 +120,24 @@ cmd_ascii() {
     candump -tA -a "$ifc"
 }
 
+# Grava a CAN em arquivo de log com timestamp EPOCH (formato candump -L: replayável
+# com canplayer). O epoch é o mesmo relógio do vídeo → permite casar imagem ↔ frame CAN
+# depois. Diretório padrão = mesmo das gravações (CANPASS_REC_DIR), p/ vídeo+CAN juntos.
+cmd_log() {
+    local br="${1:-$DEFAULT_BITRATE}" ifc
+    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
+    local dir="${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
+    mkdir -p "$dir" || { log_error "Não consegui criar ${dir}."; return 1; }
+    local out="${dir}/can_${ifc}_$(date +%Y%m%d_%H%M%S).log"
+    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e gravando log..."
+    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    log_ok "Gravando em ${out}"
+    log_info "Formato candump -L (epoch + ID#DATA) — replayável: canplayer -I ${out##*/}"
+    log_info "Ctrl+C encerra. (frames também aparecem aqui ao vivo)"
+    candump -L "$ifc" | tee "$out"
+}
+
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
 # contrário do 'cansniffer' (can-utils 2020 ignora 29-bit silenciosamente). Imprime
 # uma linha só quando algum byte de um ID muda, destacando o byte em vermelho — ideal
@@ -166,6 +184,7 @@ canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface 
 
   canpass-can detect          lista CANs + driver; aponta a do CANable (ignora mttcan nativo)
   canpass-can dump  [bitrate] sobe (listen-only) + candump   ·  padrão ${DEFAULT_BITRATE} (J1939)
+  canpass-can log   [bitrate] sobe + grava em arquivo (epoch, replayável; p/ sync c/ vídeo)
   canpass-can ascii [bitrate] sobe + candump -a (hex + coluna ASCII — frames de texto)
   canpass-can sniff [bitrate] sobe + monitora bytes que MUDAM (29-bit/J1939 — achar eixo do joystick)
   canpass-can up    [bitrate] só sobe a interface
@@ -183,6 +202,7 @@ main() {
         detect)         cmd_detect "$@" ;;
         up)             cmd_up "$@" ;;
         dump)           cmd_dump "$@" ;;
+        log|record)     cmd_log "$@" ;;
         ascii|text)     cmd_ascii "$@" ;;
         sniff)          cmd_sniff "$@" ;;
         status)         cmd_status "$@" ;;
