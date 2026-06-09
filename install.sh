@@ -183,6 +183,11 @@ install_scripts() {
     if [[ -f "$cc_src" ]]; then
         $SUDO_CMD install -m 755 "$cc_src" "${INSTALL_DIR}/canpass-camera"
         log_ok "canpass-camera instalado em ${INSTALL_DIR}/canpass-camera."
+
+        # Registra o diretório-fonte para 'canpass-camera update' (git pull + recopia).
+        $SUDO_CMD install -d /usr/local/share/canpass
+        echo "${SCRIPT_DIR}" | $SUDO_CMD tee /usr/local/share/canpass/src_dir >/dev/null
+        log_ok "Repo-fonte registrado para 'canpass-camera update': ${SCRIPT_DIR}"
     fi
 }
 

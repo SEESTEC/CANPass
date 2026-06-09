@@ -350,6 +350,60 @@ cmd_preview() {
         nv3dsink sync=false
 }
 
+# ─── update (git pull + reinstala os scripts) ────────────────────────────────
+# Acha o repo-fonte (clone git) e atualiza os comandos em /usr/bin a partir dele.
+# Ordem de descoberta: $CANPASS_SRC → registro do install (/usr/local/share/canpass/
+# src_dir) → candidatos comuns no $HOME.
+CANPASS_SRC_REGISTRY="/usr/local/share/canpass/src_dir"
+
+_find_source_repo() {
+    local src="${CANPASS_SRC:-}"
+    [[ -z "$src" && -f "$CANPASS_SRC_REGISTRY" ]] && src=$(cat "$CANPASS_SRC_REGISTRY" 2>/dev/null)
+    if [[ -z "$src" ]]; then
+        local c
+        for c in "$HOME/CANPass" "$HOME/CANpass" "$HOME/canpass" "$HOME/CANPASS"; do
+            [[ -f "$c/.rsc/canpass-camera.sh" ]] && { src="$c"; break; }
+        done
+    fi
+    [[ -n "$src" && -f "$src/.rsc/canpass-camera.sh" ]] || return 1
+    echo "$src"
+}
+
+cmd_update() {
+    local src
+    if ! src=$(_find_source_repo); then
+        log_error "Repositório-fonte não encontrado."
+        log_error "Aponte com:  CANPASS_SRC=/caminho/do/clone canpass-camera update"
+        return 1
+    fi
+    log_info "Repo-fonte: ${src}"
+
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+
+    if [[ -d "$src/.git" ]]; then
+        log_info "git pull..."
+        if ! git -C "$src" pull --ff-only; then
+            log_error "git pull falhou (mudanças locais? rede?). Resolva e tente de novo."
+            return 1
+        fi
+    else
+        log_warn "${src} não é um clone git — pulando o git pull, apenas recopiando os scripts."
+    fi
+
+    # Recopia os comandos voltados ao Orin para /usr/bin (leve; não mexe em deps/serviço).
+    local installed=0 s dest
+    for s in canpass-camera.sh cam_view.sh watchdog.sh; do
+        [[ -f "$src/.rsc/$s" ]] || continue
+        dest="/usr/bin/${s%.sh}"               # canpass-camera.sh → canpass-camera; demais mantêm .sh
+        [[ "$s" == cam_view.sh || "$s" == watchdog.sh ]] && dest="/usr/bin/$s"
+        $sudo install -m 755 "$src/.rsc/$s" "$dest" && { log_ok "Atualizado: ${dest}"; installed=1; }
+    done
+    [[ $installed -eq 1 ]] || { log_error "Nenhum script encontrado em ${src}/.rsc/."; return 1; }
+
+    log_ok "Atualização concluída."
+    log_info "Para deps/serviço/sudoers (mudanças maiores), rode: sudo bash ${src}/install.sh"
+}
+
 # ─── Uso / dispatch ──────────────────────────────────────────────────────────
 usage() {
     cat <<EOF
@@ -359,6 +413,7 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
   canpass-camera list                        DTBs candidatos em /boot
   canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
   canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+  canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
 
 O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de auto-exposure,
 e aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_AELOCK, ...).
@@ -373,11 +428,12 @@ main() {
     local cmd="${1:-status}"
     shift || true
     case "$cmd" in
-        status)        cmd_status "$@" ;;
-        list)          cmd_list "$@" ;;
-        switch)        cmd_switch "$@" ;;
-        preview)       cmd_preview "$@" ;;
-        -h|--help|help) usage ;;
+        status)            cmd_status "$@" ;;
+        list)              cmd_list "$@" ;;
+        switch)            cmd_switch "$@" ;;
+        preview)           cmd_preview "$@" ;;
+        update|--update)   cmd_update "$@" ;;
+        -h|--help|help)    usage ;;
         *) log_error "Comando desconhecido: '$cmd'"; echo; usage; return 2 ;;
     esac
 }
