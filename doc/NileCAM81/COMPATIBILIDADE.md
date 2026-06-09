@@ -17,11 +17,11 @@ A NileCAM81 **não é uma câmera MIPI** como a e-CAM82 que está funcionando. E
 **GMSL2** (SerDes sobre cabo coaxial). Pelo *Getting Started Manual Rev 1.9* e pelo
 *Datasheet Rev 1.6*, é uma **solução de 3 placas**:
 
-| Peça | Modelo | Função |
-|------|--------|--------|
-| Módulo da câmera | `e-CAM82_CUMI0821_MOD` (sensor **AR0821** 8 MP + ISP) | sensor |
-| Placa serializadora | `e-CAM22_CUMI_SER` (serializador GMSL Maxim) | serializa vídeo→coax |
-| Placa **desserializadora** | `e-CAM_CUOAGX_DESER_6H01R1` (6 conectores FAKRA) | coax→Orin |
+| Peça                       | Modelo                                                | Função               |
+|----------------------------|-------------------------------------------------------|----------------------|
+| Módulo da câmera           | `e-CAM82_CUMI0821_MOD` (sensor **AR0821** 8 MP + ISP) | sensor               |
+| Placa serializadora        | `e-CAM22_CUMI_SER` (serializador GMSL Maxim)          | serializa vídeo→coax |
+| Placa **desserializadora** | `e-CAM_CUOAGX_DESER_6H01R1` (6 conectores FAKRA)      | coax→Orin            |
 
 Cadeia física: módulo → serializador → **cabo coaxial FAKRA (3 m/15 m)** →
 desserializador → montado no **conector J509** do kit Orin + alimentação **12 V 2 A**
@@ -46,10 +46,10 @@ independe de software.**
 Mesmo com o hardware GMSL, os pacotes de driver que temos no repositório **não casam**
 com o L4T 35.2.1 do Orin:
 
-| Pacote no repo | Alvo | Kernel | Roda em 35.2.1? |
-|----------------|------|--------|-----------------|
-| `JP5.1.2_L4T35.4.1` (R02, jan/2024) | L4T **35.4.1** / JP 5.1.2 | `5.10.120-tegra` | ❌ |
-| `JP6.0_L4T36.3.0` (R03, ago/2024)   | L4T **36.3.0** / JP 6.0.0 | `5.15.x-tegra`   | ❌ |
+| Pacote no repo                      | Alvo                      | Kernel           | Roda em 35.2.1? |
+|-------------------------------------|---------------------------|------------------|-----------------|
+| `JP5.1.2_L4T35.4.1` (R02, jan/2024) | L4T **35.4.1** / JP 5.1.2 | `5.10.120-tegra` | ❌              |
+| `JP6.0_L4T36.3.0` (R03, ago/2024)   | L4T **36.3.0** / JP 6.0.0 | `5.15.x-tegra`   | ❌              |
 
 Motivos técnicos (lidos nos `install_binaries.sh`):
 
@@ -65,6 +65,29 @@ Motivos técnicos (lidos nos `install_binaries.sh`):
 As *Release Notes* mostram que a e-con já publicou builds da NileCAM81 para várias
 revisões L4T 35.x — então **existe** a possibilidade de um build para 35.2.1, mas ele
 **não está neste repositório**; teria de ser solicitado à e-con.
+
+---
+
+## 3. Rodar as DUAS câmeras ao mesmo tempo? Não (no devkit padrão)
+
+Não existe versão de JetPack que permita rodar a e-CAM82 **e** a NileCAM81
+simultaneamente no Orin devkit — e **não é** limitação de software:
+
+- **Conector físico único:** ambas usam o **mesmo conector de câmera, o J509**, do AGX
+  Orin devkit. A e-CAM82 monta a base board MIPI `e-CAM30_HEXCUXVR_BASE_BRD` nele; a
+  NileCAM81 monta a desserializadora GMSL `e-CAM_CUOAGX_DESER_6H01R1` nele. Cada base
+  board ocupa o J509 inteiro → **só cabe uma por vez** (fonte: Getting Started das duas).
+- **Device tree único por boot:** o DTB ativo descreve uma configuração de câmera; os
+  pacotes das duas se sobrescrevem.
+
+**Sem reflashar ≠ rodar as duas.** Dá para *instalar* os dois drivers no flash atual
+(35.2.1) **se** a e-con fornecer um build da NileCAM81 para 35.2.1 (o do repo é 35.4.1) —
+mas usar a outra exige **trocar a base board** + selecionar o DTB + bootar. É **alternar**,
+um por boot, não rodar juntas.
+
+**Único caminho para as duas de verdade ao mesmo tempo:** uma **carrier board customizada**
+com conectores separados (bricks CSI distintos para a MIPI e para o desserializador GMSL)
++ um **device tree combinado** — engenharia custom / pedido especial à e-con; não é o devkit.
 
 ---
 
