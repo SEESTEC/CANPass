@@ -391,11 +391,14 @@ cmd_update() {
     fi
 
     # Recopia os comandos voltados ao Orin para /usr/bin (leve; não mexe em deps/serviço).
+    # canpass-* perdem o sufixo .sh; cam_view/watchdog mantêm.
     local installed=0 s dest
-    for s in canpass-camera.sh cam_view.sh watchdog.sh; do
+    for s in canpass-camera.sh canpass-can.sh cam_view.sh watchdog.sh; do
         [[ -f "$src/.rsc/$s" ]] || continue
-        dest="/usr/bin/${s%.sh}"               # canpass-camera.sh → canpass-camera; demais mantêm .sh
-        [[ "$s" == cam_view.sh || "$s" == watchdog.sh ]] && dest="/usr/bin/$s"
+        case "$s" in
+            canpass-*.sh) dest="/usr/bin/${s%.sh}" ;;
+            *)            dest="/usr/bin/$s" ;;
+        esac
         $sudo install -m 755 "$src/.rsc/$s" "$dest" && { log_ok "Atualizado: ${dest}"; installed=1; }
     done
     [[ $installed -eq 1 ]] || { log_error "Nenhum script encontrado em ${src}/.rsc/."; return 1; }

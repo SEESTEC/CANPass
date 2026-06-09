@@ -237,6 +237,29 @@ canpass-camera switch  ecam82|nilecam81       # troca o DTB ativo + reboot
 
 ---
 
+## Leitura de CAN (adaptador USB CANable)
+
+Para ler um barramento CAN no Orin via um **CANable** (USB→CAN, driver `gs_usb`) —
+ex.: a rede **J1939** de uma máquina Caterpillar:
+
+```bash
+sudo apt-get install -y can-utils
+canpass-can detect          # acha a interface do CANable pelo driver gs_usb (ignora o mttcan nativo do Orin)
+canpass-can dump 250000     # sobe em listen-only + candump (J1939 = 250 kbit/s, IDs de 29 bits)
+```
+
+- Resolve a interface pelo **driver `gs_usb`**, não pelo nome — o Orin tem CAN nativo
+  (`mttcan`, em `can0/can1`) que confunde, e o nome do CANable muda ao reenumerar o USB.
+- **Listen-only por padrão**: não transmite, não dá ACK, não perturba a rede do veículo.
+  Para modo ativo (`cansend`), `CANPASS_CAN_ACTIVE=1`.
+- `canpass-can status` mostra estado/contadores — bitrate certo = `ERROR-ACTIVE`, erros
+  parados, RX subindo; bitrate errado = `ERROR-PASSIVE`/`bus-off`.
+
+> Os CAN nativos do Tegra (`mttcan`) exigem transceiver externo; o CANable é o caminho
+> plug-and-play. Os módulos `gs_usb`/`slcan`/`can-dev` já vêm no kernel L4T 35.2.1.
+
+---
+
 ## Estrutura do repositório
 
 ```
@@ -258,6 +281,7 @@ CANPass/
     ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
     ├── watchdog.sh            # supervisor de processo (alias `canpass`)
     ├── canpass-camera.sh      # alterna e-CAM82 ↔ NileCAM81 + preview local (nv3dsink)
+    ├── canpass-can.sh         # sniffer CAN do adaptador USB CANable (gs_usb) — J1939
     ├── canpass-backup.sh      # snapshot/restore da eMMC do Orin (roda no PC host)
     └── docker-install.sh      # instalador do Docker
 ```

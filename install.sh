@@ -178,13 +178,17 @@ install_scripts() {
         log_ok "${script} instalado em ${dest_path}."
     done
 
-    # canpass-camera: instalado SEM o sufixo .sh (comando voltado ao usuário).
-    local cc_src="${SCRIPT_DIR}/.rsc/canpass-camera.sh"
-    if [[ -f "$cc_src" ]]; then
-        $SUDO_CMD install -m 755 "$cc_src" "${INSTALL_DIR}/canpass-camera"
-        log_ok "canpass-camera instalado em ${INSTALL_DIR}/canpass-camera."
+    # Comandos canpass-*: instalados SEM o sufixo .sh (voltados ao usuário).
+    local cc src name
+    for cc in canpass-camera canpass-can; do
+        src="${SCRIPT_DIR}/.rsc/${cc}.sh"
+        [[ -f "$src" ]] || continue
+        $SUDO_CMD install -m 755 "$src" "${INSTALL_DIR}/${cc}"
+        log_ok "${cc} instalado em ${INSTALL_DIR}/${cc}."
+    done
 
-        # Registra o diretório-fonte para 'canpass-camera update' (git pull + recopia).
+    # Registra o diretório-fonte para 'canpass-camera update' (git pull + recopia).
+    if [[ -f "${SCRIPT_DIR}/.rsc/canpass-camera.sh" ]]; then
         $SUDO_CMD install -d /usr/local/share/canpass
         echo "${SCRIPT_DIR}" | $SUDO_CMD tee /usr/local/share/canpass/src_dir >/dev/null
         log_ok "Repo-fonte registrado para 'canpass-camera update': ${SCRIPT_DIR}"
