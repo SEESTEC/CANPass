@@ -177,6 +177,13 @@ install_scripts() {
         $SUDO_CMD install -m 755 "$source_path" "$dest_path"
         log_ok "${script} instalado em ${dest_path}."
     done
+
+    # canpass-camera: instalado SEM o sufixo .sh (comando voltado ao usuário).
+    local cc_src="${SCRIPT_DIR}/.rsc/canpass-camera.sh"
+    if [[ -f "$cc_src" ]]; then
+        $SUDO_CMD install -m 755 "$cc_src" "${INSTALL_DIR}/canpass-camera"
+        log_ok "canpass-camera instalado em ${INSTALL_DIR}/canpass-camera."
+    fi
 }
 
 # ─── 3. Alias ────────────────────────────────────────────────────────────────
