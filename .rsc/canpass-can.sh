@@ -107,14 +107,30 @@ cmd_dump() {
     candump -ta "$ifc"
 }
 
+# Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
+# contrário do 'cansniffer' (can-utils 2020 ignora 29-bit silenciosamente). Imprime
+# uma linha só quando algum byte de um ID muda, destacando o byte em vermelho — ideal
+# para achar qual ID/byte é cada eixo do joystick.
 cmd_sniff() {
     local br="${1:-$DEFAULT_BITRATE}" ifc
     ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
-    command -v cansniffer >/dev/null || { log_error "cansniffer ausente — instale: sudo apt-get install can-utils"; return 1; }
-    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e abrindo cansniffer..."
+    command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
+    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e monitorando bytes que mudam..."
     _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
-    log_ok "${ifc} UP. cansniffer (-c destaca bytes que mudam) — mexa um eixo por vez. 'q' encerra."
-    cansniffer -c "$ifc"
+    log_ok "${ifc} UP. Mostra só frames cujo byte MUDOU (vermelho). Mexa UM eixo por vez. Ctrl+C encerra."
+    echo "    ID        b0 b1 b2 b3 b4 b5 b6 b7"
+    # candump padrão: $1=iface $2=ID $3=[len] $4..=bytes
+    candump "$ifc" | awk '
+        {
+            id=$2; out=""; chg=0
+            for (i=4; i<=NF; i++) {
+                k = id SUBSEP (i-4)
+                if ((k in prev) && prev[k] != $i) { out = out sprintf(" \033[1;31m%s\033[0m", $i); chg=1 }
+                else                              { out = out sprintf(" %s", $i) }
+                prev[k] = $i
+            }
+            if (chg) { printf "  %-9s%s\n", id, out; fflush() }
+        }'
 }
 
 cmd_status() {
@@ -137,7 +153,7 @@ canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface 
 
   canpass-can detect          lista CANs + driver; aponta a do CANable (ignora mttcan nativo)
   canpass-can dump  [bitrate] sobe (listen-only) + candump   ·  padrão ${DEFAULT_BITRATE} (J1939)
-  canpass-can sniff [bitrate] sobe + cansniffer (destaca bytes que mudam — achar eixo do joystick)
+  canpass-can sniff [bitrate] sobe + monitora bytes que MUDAM (29-bit/J1939 — achar eixo do joystick)
   canpass-can up    [bitrate] só sobe a interface
   canpass-can status          estado e contadores (diagnóstico de bitrate)
   canpass-can down            derruba a interface
