@@ -52,14 +52,31 @@ _find_canable() {
     return 1
 }
 
+# Desliga o autosuspend de USB do adaptador (causa comum de "parou de receber"):
+# sobe a hierarquia /sys a partir da net device até achar um power/control USB e grava 'on'.
+_disable_usb_autosuspend() {
+    local ifc="$1" d sudo=""
+    [[ $EUID -ne 0 ]] && sudo="sudo"
+    d=$(readlink -f "/sys/class/net/$ifc/device" 2>/dev/null) || return 0
+    while [[ "$d" == /sys/* && "$d" != "/sys" ]]; do
+        if [[ -f "$d/power/control" ]]; then
+            echo on | $sudo tee "$d/power/control" >/dev/null 2>&1
+            return 0
+        fi
+        d=$(dirname "$d")
+    done
+}
+
 # Sobe a interface (ip link) — só os comandos, sem logs (pra ser reusável).
+# restart-ms 100: auto-recupera de bus-off. Também desliga o autosuspend do USB.
 _bring_up() {
     local ifc="$1" br="$2"
     local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
     local -a mode=(listen-only on)
     [[ "${CANPASS_CAN_ACTIVE:-0}" == "1" ]] && mode=(listen-only off)
+    _disable_usb_autosuspend "$ifc"
     $sudo ip link set "$ifc" down 2>/dev/null
-    $sudo ip link set "$ifc" type can bitrate "$br" "${mode[@]}" || return 1
+    $sudo ip link set "$ifc" type can bitrate "$br" restart-ms 100 "${mode[@]}" || return 1
     $sudo ip link set "$ifc" up || return 1
 }
 
@@ -124,14 +141,12 @@ cmd_ascii() {
 # com canplayer). O epoch é o mesmo relógio do vídeo → permite casar imagem ↔ frame CAN
 # depois. Diretório padrão = mesmo das gravações (CANPASS_REC_DIR), p/ vídeo+CAN juntos.
 cmd_log() {
-    local br="${1:-$DEFAULT_BITRATE}" ifc
-    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    local br="${1:-$DEFAULT_BITRATE}"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
     local dir="${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
     mkdir -p "$dir" || { log_error "Não consegui criar ${dir}."; return 1; }
-    local out="${dir}/can_${ifc}_$(date +%Y%m%d_%H%M%S).log"
-    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e gravando log..."
-    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    local out="${dir}/can_$(date +%Y%m%d_%H%M%S).log"
+
     # Formato: epoch (-L, replayável por canplayer) por padrão; legível (-tA, data+hora)
     # com CANPASS_CAN_LOG_HUMAN=1 — porém o formato legível NÃO é replayável.
     local -a dargs; local note
@@ -140,13 +155,27 @@ cmd_log() {
     else
         dargs=(-L);  note="epoch, replayável:  canplayer -I ${out##*/}"
     fi
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+
     log_ok "Gravando em ${out}"
     log_info "Formato: ${note}"
-    log_info "Ctrl+C encerra. (frames também aparecem aqui ao vivo)"
-    # stdbuf -oL: line-buffering — garante que cada frame chega ao arquivo na hora
-    # (e nada se perde no buffer ao dar Ctrl+C).
-    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
-    $SB candump "${dargs[@]}" "$ifc" | tee "$out"
+    log_info "AUTO-RESUME: se a interface cair/reenumerar, re-detecta e continua. Ctrl+C encerra."
+    trap 'echo; log_info "Log encerrado: '"${out}"'"; exit 0' INT TERM
+
+    # Laço supervisionado: o candump morre quando a interface some (USB drop/reenum);
+    # aqui re-detectamos a interface (pelo driver gs_usb) e retomamos, anexando ao log.
+    local ifc
+    while true; do
+        if ! ifc=$(_find_canable); then
+            log_warn "CANable ausente (replug?). Aguardando reaparecer..."
+            sleep 2; continue
+        fi
+        _bring_up "$ifc" "$br" || { log_warn "Falha ao subir ${ifc}; nova tentativa em 2s..."; sleep 2; continue; }
+        log_ok "Capturando ${ifc} @ ${br} ($(_mode_label))..."
+        $SB candump "${dargs[@]}" "$ifc" | tee -a "$out"
+        log_warn "Captura parou (interface caiu/reenumerou?). Re-detectando em 1s..."
+        sleep 1
+    done
 }
 
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
