@@ -207,6 +207,36 @@ No caminho CSI, o `cam_view.sh` **maximiza automaticamente os clocks** do Jetson
 
 ---
 
+## Controles da câmera (resolução, Flicker, WDR, auto-exposure)
+
+📄 **[`doc/ecam82/README.md`](doc/ecam82/README.md)** — referência completa: **Table 1**
+(resolução × FPS), tabela de **Flicker** (`aeantibanding`) e todos os parâmetros de
+**auto-exposure** do `nvarguscamerasrc` com faixas reais, além de **WDR/HDR** via V4L2.
+
+O preview local `canpass-camera preview` imprime essas tabelas num banner e aceita
+ajuste por ambiente (ex.: 60 Hz + WDR + ganho limitado):
+
+```bash
+CANPASS_FLICKER=3 CANPASS_HDR=1 CANPASS_GAINRANGE="1 8" canpass-camera preview
+```
+
+### `canpass-camera` — alternar câmera e preview local
+
+Comando para **alternar** entre e-CAM82 (MIPI) e NileCAM81 (GMSL) no mesmo flash —
+trocando o DTB ativo, sem reflash — e para **preview local** (`nvarguscamerasrc → nv3dsink`):
+
+```bash
+canpass-camera status                         # câmera ativa (FDT do extlinux)
+canpass-camera preview [ecam82|nilecam81]     # preview local com banner de controles
+canpass-camera switch  ecam82|nilecam81       # troca o DTB ativo + reboot
+```
+
+> As duas câmeras **não rodam juntas** (conector J509 e device tree únicos): é alternar,
+> uma por boot. Análise em [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md);
+> roteiro de teste com reflash em [`doc/NileCAM81/TESTE_RAPIDO.md`](doc/NileCAM81/TESTE_RAPIDO.md).
+
+---
+
 ## Estrutura do repositório
 
 ```
@@ -214,10 +244,15 @@ CANPass/
 ├── README.md                  # documentação
 ├── install.sh                 # instalador do stream (deps, scripts, alias, systemd)
 ├── install_drivers.sh         # instalador de drivers e-con (rodar NO Orin, aarch64)
-├── doc/                       # PDFs oficiais da e-CAM82 (datasheets, guias e-con)
+├── doc/
+│   ├── ecam82/                # PDFs da e-CAM82 (MIPI/IMX485) + README de controles
+│   │   └── README.md          #   Table 1, Flicker e parâmetros de auto-exposure
+│   └── NileCAM81/             # PDFs da NileCAM81 (GMSL) + COMPATIBILIDADE.md + TESTE_RAPIDO.md
 ├── .rsc/
 │   ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
 │   ├── watchdog.sh            # supervisor de processo (alias `canpass`)
+│   ├── canpass-camera.sh      # alterna e-CAM82 ↔ NileCAM81 + preview local (nv3dsink)
+│   ├── canpass-backup.sh      # snapshot/restore da eMMC do Orin (roda no PC host)
 │   └── docker-install.sh      # instalador do Docker
 ├── e-CAM82_CUOAGX_JETSON_XAVIER_ORIN_L4T35.2.1_..._R02_RC1/  # driver CORRETO (IMX485, JP5) — LFS
 ├── e-CAM82_CUOAGX_L4T36.4.3/                                  # driver GMSL OCTA (OUTRO produto) — LFS
