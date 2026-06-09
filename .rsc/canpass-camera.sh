@@ -28,8 +28,10 @@
 set -uo pipefail
 
 # ─── Cores / log ─────────────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+# ANSI-C quoting ($'...') guarda o byte ESC real — necessário porque o banner usa
+# heredoc (cat <<EOF) que NÃO interpreta escapes; com 'aspas simples' sairia literal.
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'; CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; NC=$'\033[0m'
 
 log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
 log_ok()    { echo -e "${GREEN}[ OK ]${NC}  $*"; }
