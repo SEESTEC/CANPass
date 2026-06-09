@@ -217,9 +217,9 @@ cmd_switch() {
 # --list-ctrls' na e-CAM82 (IMX485) deste projeto.
 _print_controls_banner() {
     echo -e "${BOLD}${CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "╔═════════════════════════════════════════════════════════════════════════╗"
     echo "║   CANPass — Preview local e-CAM82_CUOAGX (IMX485 / Argus → nv3dsink)    ║"
-    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo "╚═════════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     cat <<EOF
 ${BOLD}Table 1 — Maximum Frame Rate Supported (e-CAM82_CUOAGX, AGX Orin/Xavier)${NC}
