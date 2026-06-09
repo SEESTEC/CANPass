@@ -157,23 +157,51 @@ cmd_log() {
     fi
     local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
 
+    local stall="${CANPASS_CAN_STALL_SECS:-6}"   # s sem frame novo antes de reciclar
+
     log_ok "Gravando em ${out}"
     log_info "Formato: ${note}"
-    log_info "AUTO-RESUME: se a interface cair/reenumerar, re-detecta e continua. Ctrl+C encerra."
-    trap 'echo; log_info "Log encerrado: '"${out}"'"; exit 0' INT TERM
+    log_info "Watchdog de FLUXO: recicla a interface se ficar ${stall}s sem frame (cobre o caso"
+    log_info "'candump vivo mas RX travado'). Frames vão pro arquivo; acompanhe: tail -f ${out}"
+    log_info "Ctrl+C encerra."
 
-    # Laço supervisionado: o candump morre quando a interface some (USB drop/reenum);
-    # aqui re-detectamos a interface (pelo driver gs_usb) e retomamos, anexando ao log.
-    local ifc
+    local cdpid=""
+    _logcleanup() { [[ -n "$cdpid" ]] && kill "$cdpid" 2>/dev/null; echo; log_info "Log encerrado: ${out}"; exit 0; }
+    trap _logcleanup INT TERM
+
+    # Laço supervisionado + watchdog de fluxo: candump grava o arquivo em background;
+    # vigiamos rx_packets do /sys. Se o candump sair (interface sumiu) OU parar de receber
+    # por 'stall' s (RX travado do gs_usb / bus quieto), reciclamos: re-detecta + down/up.
+    local ifc rxfile last cur stale tick
     while true; do
         if ! ifc=$(_find_canable); then
             log_warn "CANable ausente (replug?). Aguardando reaparecer..."
             sleep 2; continue
         fi
         _bring_up "$ifc" "$br" || { log_warn "Falha ao subir ${ifc}; nova tentativa em 2s..."; sleep 2; continue; }
-        log_ok "Capturando ${ifc} @ ${br} ($(_mode_label))..."
-        $SB candump "${dargs[@]}" "$ifc" | tee -a "$out"
-        log_warn "Captura parou (interface caiu/reenumerou?). Re-detectando em 1s..."
+        rxfile="/sys/class/net/${ifc}/statistics/rx_packets"
+        $SB candump "${dargs[@]}" "$ifc" >> "$out" &
+        cdpid=$!
+        log_ok "Capturando ${ifc} @ ${br} ($(_mode_label)) → ${out##*/}"
+
+        last=$(cat "$rxfile" 2>/dev/null || echo 0); stale=0; tick=0
+        while kill -0 "$cdpid" 2>/dev/null; do
+            sleep 1
+            cur=$(cat "$rxfile" 2>/dev/null || echo "$last")
+            if [[ "$cur" == "$last" ]]; then stale=$((stale+1)); else stale=0; last="$cur"; fi
+            tick=$((tick+1))
+            (( tick % 15 == 0 )) && log_info "vivo $(date +%H:%M:%S) — ${last} frames recebidos"
+            if (( stale >= stall )); then
+                log_warn "Sem frame há ${stale}s — reciclando ${ifc} (RX travado? bus quieto?)."
+                kill "$cdpid" 2>/dev/null; cdpid=""
+                break
+            fi
+        done
+        if [[ -n "$cdpid" ]]; then
+            wait "$cdpid" 2>/dev/null
+            log_warn "candump saiu (interface caiu/reenumerou?). Re-detectando..."
+            cdpid=""
+        fi
         sleep 1
     done
 }
