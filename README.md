@@ -71,6 +71,17 @@ canpass
 canpass --display
 ```
 
+**Preview local no monitor do Orin** (apenas exibe na tela; sem rede/encode/gravação):
+
+```bash
+canpass --local
+```
+
+Para câmeras CSI (Jetson) vai direto `nvarguscamerasrc → nv3dsink` — menor latência e
+melhor qualidade possível, ideal para visualizar no monitor ligado ao Orin. Rode num
+terminal do **desktop do Orin** (precisa de sessão gráfica). Ajuste resolução/FPS com
+`CANPASS_CSI_RES` (padrão do preview local: `1920x1080@60`; ex.: `CANPASS_CSI_RES=3840x2160@60 canpass --local`).
+
 **Fluxo:**
 
 1. Verifica permissão Docker e sobe o container `mediamtx` (RTSP/HLS) se necessário.

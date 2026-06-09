@@ -724,12 +724,59 @@ show_camera() {
     cleanup
 }
 
+# ─── Preview LOCAL no monitor do Orin (--local) ──────────────────────────────
+# Mostra a câmera direto na tela do Orin, sem rede/encode/gravação — menor latência
+# possível. CSI: nvarguscamerasrc → nv3dsink (pipeline oficial da e-con). USB/IP: ffplay.
+# Resolução/FPS via CANPASS_CSI_RES (padrão local: 1920x1080@60, mais fluido).
+
+show_local() {
+    local dev="$1"
+
+    if [[ -z "${DISPLAY:-}" ]]; then
+        export DISPLAY=:0
+        log_warn "DISPLAY não definido — assumindo :0. Rode num terminal do desktop do Orin."
+    fi
+
+    _local_cleanup() {
+        if [[ -n "${_TEMP_IP_ADDR:-}" && -n "${_TEMP_IP_IFACE:-}" ]]; then
+            sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null
+        fi
+    }
+    trap _local_cleanup EXIT INT TERM
+
+    if [[ "$dev" == csi:* ]]; then
+        local sensor_id="${dev#csi:}"
+        local res="${CANPASS_CSI_RES:-1920x1080@60}"
+        local csi_w csi_h csi_fps
+        IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
+        log_info "Preview local CSI: sensor-id=${sensor_id}, ${csi_w}x${csi_h} @ ${csi_fps} fps (nv3dsink)."
+        _boost_jetson_clocks
+        sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
+        log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+        gst-launch-1.0 -q \
+            nvarguscamerasrc sensor-id="$sensor_id" ! \
+            "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+            nv3dsink sync=false
+    elif [[ "$dev" == ip:* ]]; then
+        local rtsp_in="${dev#ip:}"
+        log_info "Preview local da câmera IP (ffplay) — pressione Q para sair."
+        ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -loglevel warning "$rtsp_in"
+    else
+        log_info "Preview local da câmera USB ${dev} (ffplay) — pressione Q para sair."
+        ffplay -f v4l2 -framerate 30 -loglevel warning "$dev"
+    fi
+
+    trap - EXIT INT TERM
+    _local_cleanup
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    local display=""
+    local display="" mode="stream"
     for arg in "$@"; do
         [[ "$arg" == "--display" ]] && display="--display"
+        [[ "$arg" == "--local" ]] && mode="local"
     done
 
     echo -e "${BOLD}${CYAN}"
@@ -773,6 +820,10 @@ main() {
     done
 
     echo
+    if [[ "$mode" == "local" ]]; then
+        show_local "$selected"
+        exit 0   # preview manual: não deixa o watchdog reiniciar ao encerrar
+    fi
     show_camera "$selected" "$display"
 }
 
