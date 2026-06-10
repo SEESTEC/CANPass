@@ -203,7 +203,8 @@ install_ecam82_imx485() {
     # DTBs nomeados p/ o canpass-camera switch — antes do instalador (que reboota).
     install_named_dtbs "${ECAM82_IMX485_DIR}" "tegra234-*eimx485*.dtb"
 
-    log_info "Iniciando instalação e-CAM82 IMX485 (lanes ${lane_variant})..."
+    local lane_label="2 lanes"; [[ "${lane_variant}" == "2" ]] && lane_label="4 lanes"
+    log_info "Iniciando instalação e-CAM82 IMX485 (${lane_label})..."
     log_warn "O instalador da e-con REBOOTA o Orin automaticamente ao final."
     cd "${ECAM82_IMX485_DIR}"
     # O install_binaries.sh da e-con lê a configuração de lane via stdin
