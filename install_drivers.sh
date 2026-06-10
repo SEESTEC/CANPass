@@ -33,12 +33,16 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# BUG do instalador da e-con: ele faz 'source /root/.bashrc' rodando sob 'set -eu';
-# via sudo a PS1 vem indefinida e o guard de interatividade do bashrc
-# ('[ -z "$PS1" ] && return') explode em "PS1: unbound variable", abortando a
-# instalação no último passo (depois de kernel/DTB/módulos, antes do misc/reboot).
-# PS1 VAZIA é o antídoto perfeito: definida (sem erro do -u) e o guard retorna cedo.
-export PS1=""
+# BUG do instalador da e-con: ele faz 'source $HOME/.bashrc' rodando sob 'set -eu'
+# e o guard de interatividade do bashrc do root ('[ -z "$PS1" ] && return') explode
+# em "PS1: unbound variable", abortando no último passo (depois de kernel/DTB/
+# módulos, antes do misc/reboot). Exportar PS1 aqui NÃO resolve: o bash REMOVE a
+# PS1 do ambiente de shells não-interativos. Antídoto: o próprio /root/.bashrc
+# define PS1 (vazia se ausente) ANTES de qualquer referência — linha idempotente,
+# inócua p/ shells interativos (mantém o valor quando já definido).
+if [[ -f /root/.bashrc ]] && ! grep -q 'canpass: tolera set -u' /root/.bashrc; then
+    sed -i '1i PS1="${PS1:-}"  # canpass: tolera set -u do instalador da e-con' /root/.bashrc
+fi
 
 # Modo não-interativo: --auto / -y / --yes instala automaticamente a opção 1
 # (e-CAM82 IMX485) em 4 lanes, sem perguntas. Usado pelo install.sh.
