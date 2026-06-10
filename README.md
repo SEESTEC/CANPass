@@ -337,11 +337,40 @@ CANPASS_SENSOR_ID=1 canpass-camera preview                                      
 > **Dica "explosão de luz":** estreite `CANPASS_EXPTIME` + `CANPASS_GAINRANGE`,
 > ou use `CANPASS_AELOCK=true`. Referência completa dos controles: [`doc/e-CAM82/README.md`](doc/e-CAM82/README.md).
 
-> **A tabela acima vale para a e-CAM82 (Argus).** No `preview nilecam81` os envs são
-> mapeados para **controles V4L2** (ISP onboard): `CANPASS_FLICKER`→`powerline_frequency`
-> (0=Auto/1=50Hz/2=60Hz), `CANPASS_HDR`→`cam_mode` (0=Day HDR/1=Night HDR/2=Linear),
-> `CANPASS_EXPTIME`/`CANPASS_GAIN`/`CANPASS_WBTEMP`/`CANPASS_SATURATION`/`CANPASS_DENOISE`/
-> `CANPASS_FPS`. Tabela completa com faixas: [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
+**Variáveis de ambiente — imagem no `preview nilecam81`** (a tabela anterior vale só
+p/ a e-CAM82/Argus; na NileCAM81 cada env vira um **controle V4L2** — ISP onboard —
+e os valores **persistem no driver**, valendo também para o stream):
+
+| Variável | Controle V4L2 | Faixa / valores |
+|---|---|---|
+| `CANPASS_FLICKER` | `powerline_frequency` | `0`=Auto (padrão) · `1`=50 Hz · `2`=60 Hz |
+| `CANPASS_HDR` | `cam_mode` | `0`=Day HDR (padrão) · `1`=Night HDR · `2`=Linear |
+| `CANPASS_EXPAUTO` | `exposure_auto` | `0`=Full FOV auto · `1`=Manual · `2`=ROI auto |
+| `CANPASS_EXPTIME` | `exposure_time_absolute` | `1..10000` (implica Manual) |
+| `CANPASS_EXPOSURECOMP` | `exposure_compensation` | `8000..1000000` (padrão 33333) |
+| `CANPASS_ROI_SIZE` / `CANPASS_ROI_POS` | `roi_window_size` / `roi_exposure` | `8..64` passo 8 / `0..65535` (implicam ROI auto) |
+| `CANPASS_GAIN` | `gain` | `1..100` (padrão 1) |
+| `CANPASS_WBAUTO` / `CANPASS_WBTEMP` | `white_balance_automatic` / `_temperature` | `0\|1` / `1000..10000` K (WBTEMP implica auto=0) |
+| `CANPASS_BRIGHTNESS` | `brightness` | `-15..15` (padrão 0) |
+| `CANPASS_CONTRAST` | `contrast` | `0..10` (padrão 5) |
+| `CANPASS_SATURATION` | `saturation` | `0..60` (padrão 16) |
+| `CANPASS_GAMMA` | `gamma` | `40..500` (padrão 220) |
+| `CANPASS_SHARPNESS` | `sharpness` | `0..7` (padrão 2) |
+| `CANPASS_DENOISE` | `denoise` | `0..15` (padrão 8) |
+| `CANPASS_HFLIP` / `CANPASS_VFLIP` | `horizontal_flip` / `vertical_flip` | `0`\|`1` |
+| `CANPASS_FPS` | `frame_rate_control` | `3..60` (padrão 30) |
+| `CANPASS_FRAMESYNC` | `frame_sync` | `0`=Off · `1`=15 Hz · `2`=30 Hz · `3`=60 Hz |
+| `CANPASS_TRIGGER` | `trigger` | `0`=Interno · `1`=Externo |
+| `CANPASS_EFFECT` | `special_effect` | `0`=Normal · `1`=P&B · `2`=Gray · `3`=Negativo · `4`=Sketch |
+
+```bash
+CANPASS_FLICKER=2 CANPASS_HDR=0 canpass-camera preview nilecam81       # 60 Hz + Day HDR
+CANPASS_EXPTIME=500 CANPASS_GAIN=10 canpass-camera preview nilecam81   # exposição manual
+CANPASS_SHARPNESS=4 CANPASS_DENOISE=4 canpass-camera preview nilecam81 # mais detalhe
+```
+
+> Referência completa (lista real do driver, com regras de precedência):
+> [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
 
 > As duas câmeras **não rodam juntas** (conector J509 e device tree únicos):
 > é alternar, uma por boot. O driver da NileCAM81 para **L4T 35.2.1** está no repo

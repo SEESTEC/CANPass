@@ -282,21 +282,39 @@ _print_controls_banner_nilecam81() {
     echo "╚═════════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     cat <<EOF
-${BOLD}Formatos (two-lane, UYVY/NV16)${NC}
-  1280x720 @60 · 1920x1080 @60 · 3840x2160 @16
+${BOLD}Table 1 — Formatos confirmados no hardware (two-lane, UYVY/NV16)${NC}
+  Resolução      FPS
+  1280 x 720      60
+  1920 x 1080     60        ← padrão deste projeto
+  3840 x 2160     16
 
-${BOLD}Controles (env → controle V4L2 em /dev/video${SENSOR_ID} | faixa)${NC}
-  CANPASS_FLICKER       powerline_frequency    0=Auto 1=50Hz 2=60Hz
-  CANPASS_HDR           cam_mode               0=Day HDR  1=Night HDR  2=Linear
-  CANPASS_EXPTIME       exposure_time_absolute 1..10000 (liga exposure_auto=Manual)
-  CANPASS_EXPOSURECOMP  exposure_compensation  8000..1000000 (padrão 33333)
-  CANPASS_GAIN          gain                   1..100
-  CANPASS_WBTEMP        white_balance_temperature 1000..10000 K (desliga o WB auto)
-  CANPASS_SATURATION    saturation             0..60 (padrão 16)
-  CANPASS_DENOISE       denoise                0..15 (padrão 8)
-  CANPASS_FPS           frame_rate_control     3..60 fps
-  (mais: brightness/contrast/gamma/sharpness/flip/ROI/trigger — v4l2-ctl -d /dev/video${SENSOR_ID} -c ...)
+${BOLD}Flicker / anti-banding${NC}  (powerline_frequency | env CANPASS_FLICKER)
+  0 = Auto(padrão)     1 = 50 Hz     2 = 60 Hz
 
+${BOLD}Exposição & imagem${NC}  (env → controle V4L2 em /dev/video${SENSOR_ID} | faixa)
+  CANPASS_HDR           cam_mode                  0=Day HDR(padrão) 1=Night HDR 2=Linear
+  CANPASS_EXPAUTO       exposure_auto             0=Full FOV auto  1=Manual  2=ROI auto
+  CANPASS_EXPTIME       exposure_time_absolute    1..10000        (implica Manual)
+  CANPASS_EXPOSURECOMP  exposure_compensation     8000..1000000   (padrão 33333)
+  CANPASS_ROI_SIZE      roi_window_size           8..64 passo 8   (implica ROI auto)
+  CANPASS_ROI_POS       roi_exposure              0..65535
+  CANPASS_GAIN          gain                      1..100          (padrão 1)
+  CANPASS_WBAUTO        white_balance_automatic   0|1             (padrão 1)
+  CANPASS_WBTEMP        white_balance_temperature 1000..10000 K   (implica WB auto=0)
+  CANPASS_BRIGHTNESS    brightness                -15..15         (padrão 0)
+  CANPASS_CONTRAST      contrast                  0..10           (padrão 5)
+  CANPASS_SATURATION    saturation                0..60           (padrão 16)
+  CANPASS_GAMMA         gamma                     40..500         (padrão 220)
+  CANPASS_SHARPNESS     sharpness                 0..7            (padrão 2)
+  CANPASS_DENOISE       denoise                   0..15           (padrão 8)
+  CANPASS_HFLIP         horizontal_flip           0|1
+  CANPASS_VFLIP         vertical_flip             0|1
+  CANPASS_FPS           frame_rate_control        3..60 fps       (padrão 30)
+  CANPASS_FRAMESYNC     frame_sync                0=Off 1=15Hz 2=30Hz 3=60Hz
+  CANPASS_TRIGGER       trigger                   0=Interno 1=Externo
+  CANPASS_EFFECT        special_effect            0=Normal 1=P&B 2=Gray 3=Neg 4=Sketch
+
+  Nota: controles V4L2 PERSISTEM no driver (≠ Argus) — valem p/ o stream também.
   Lista completa c/ faixas:  v4l2-ctl -d /dev/video${SENSOR_ID} --list-ctrls-menus
   GUI da e-con:              /usr/local/ecam_tk1/bin/ecam_tk1_guvcview
   Detalhes: doc/NileCAM81/CONTROLES.md
@@ -305,19 +323,51 @@ EOF
 }
 
 # Aplica os envs CANPASS_* como controles V4L2 da NileCAM81 (antes do preview).
+# Cobertura COMPLETA da lista real do driver (v4l2-ctl --list-ctrls-menus).
+# Nota: diferente do Argus (por sessão), controles V4L2 PERSISTEM no driver.
 _apply_nilecam81_ctrls() {
     command -v v4l2-ctl &>/dev/null || { log_warn "v4l2-ctl ausente — controles não aplicados."; return 0; }
     local vdev="/dev/video${SENSOR_ID}"
     local -a sets=()
+
+    # Modo de exposição: CANPASS_EXPAUTO explícito tem prioridade; CANPASS_EXPTIME
+    # implica Manual (1); CANPASS_ROI_* implicam ROI Based Auto (2).
+    if [[ -n "${CANPASS_EXPAUTO:-}" ]]; then
+        sets+=( "exposure_auto=${CANPASS_EXPAUTO}" )
+    elif [[ -n "${CANPASS_EXPTIME:-}" ]]; then
+        sets+=( "exposure_auto=1" )
+    elif [[ -n "${CANPASS_ROI_SIZE:-}" || -n "${CANPASS_ROI_POS:-}" ]]; then
+        sets+=( "exposure_auto=2" )
+    fi
+    [[ -n "${CANPASS_EXPTIME:-}" ]]      && sets+=( "exposure_time_absolute=${CANPASS_EXPTIME}" )
+    [[ -n "${CANPASS_ROI_SIZE:-}" ]]     && sets+=( "roi_window_size=${CANPASS_ROI_SIZE}" )
+    [[ -n "${CANPASS_ROI_POS:-}" ]]      && sets+=( "roi_exposure=${CANPASS_ROI_POS}" )
+    [[ -n "${CANPASS_EXPOSURECOMP:-}" ]] && sets+=( "exposure_compensation=${CANPASS_EXPOSURECOMP}" )
+
+    # White balance: CANPASS_WBAUTO explícito ganha; CANPASS_WBTEMP implica auto=0.
+    if [[ -n "${CANPASS_WBAUTO:-}" ]]; then
+        sets+=( "white_balance_automatic=${CANPASS_WBAUTO}" )
+    elif [[ -n "${CANPASS_WBTEMP:-}" ]]; then
+        sets+=( "white_balance_automatic=0" )
+    fi
+    [[ -n "${CANPASS_WBTEMP:-}" ]]       && sets+=( "white_balance_temperature=${CANPASS_WBTEMP}" )
+
     [[ -n "${CANPASS_FLICKER:-}" ]]      && sets+=( "powerline_frequency=${CANPASS_FLICKER}" )
     [[ -n "${CANPASS_HDR:-}" ]]          && sets+=( "cam_mode=${CANPASS_HDR}" )
-    [[ -n "${CANPASS_EXPTIME:-}" ]]      && sets+=( "exposure_auto=1" "exposure_time_absolute=${CANPASS_EXPTIME}" )
-    [[ -n "${CANPASS_EXPOSURECOMP:-}" ]] && sets+=( "exposure_compensation=${CANPASS_EXPOSURECOMP}" )
     [[ -n "${CANPASS_GAIN:-}" ]]         && sets+=( "gain=${CANPASS_GAIN}" )
-    [[ -n "${CANPASS_WBTEMP:-}" ]]       && sets+=( "white_balance_automatic=0" "white_balance_temperature=${CANPASS_WBTEMP}" )
+    [[ -n "${CANPASS_BRIGHTNESS:-}" ]]   && sets+=( "brightness=${CANPASS_BRIGHTNESS}" )
+    [[ -n "${CANPASS_CONTRAST:-}" ]]     && sets+=( "contrast=${CANPASS_CONTRAST}" )
     [[ -n "${CANPASS_SATURATION:-}" ]]   && sets+=( "saturation=${CANPASS_SATURATION}" )
+    [[ -n "${CANPASS_GAMMA:-}" ]]        && sets+=( "gamma=${CANPASS_GAMMA}" )
+    [[ -n "${CANPASS_SHARPNESS:-}" ]]    && sets+=( "sharpness=${CANPASS_SHARPNESS}" )
     [[ -n "${CANPASS_DENOISE:-}" ]]      && sets+=( "denoise=${CANPASS_DENOISE}" )
+    [[ -n "${CANPASS_HFLIP:-}" ]]        && sets+=( "horizontal_flip=${CANPASS_HFLIP}" )
+    [[ -n "${CANPASS_VFLIP:-}" ]]        && sets+=( "vertical_flip=${CANPASS_VFLIP}" )
     [[ -n "${CANPASS_FPS:-}" ]]          && sets+=( "frame_rate_control=${CANPASS_FPS}" )
+    [[ -n "${CANPASS_FRAMESYNC:-}" ]]    && sets+=( "frame_sync=${CANPASS_FRAMESYNC}" )
+    [[ -n "${CANPASS_TRIGGER:-}" ]]      && sets+=( "trigger=${CANPASS_TRIGGER}" )
+    [[ -n "${CANPASS_EFFECT:-}" ]]       && sets+=( "special_effect=${CANPASS_EFFECT}" )
+
     [[ ${#sets[@]} -eq 0 ]] && return 0
     local s
     for s in "${sets[@]}"; do
@@ -515,9 +565,10 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
   canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
   canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
 
-O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de auto-exposure,
-e aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_AELOCK, ...).
-Referência completa: doc/e-CAM82/README.md
+O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de imagem, e
+aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_GAIN, ...).
+Na e-CAM82 os envs viram propriedades Argus (ref.: doc/e-CAM82/README.md); na
+NileCAM81 viram controles V4L2 do ISP onboard (ref.: doc/NileCAM81/CONTROLES.md).
 
 As duas câmeras NÃO rodam juntas (conector J509 + DTB únicos): é alternar, um por boot.
 Detalhes: doc/NileCAM81/COMPATIBILIDADE.md

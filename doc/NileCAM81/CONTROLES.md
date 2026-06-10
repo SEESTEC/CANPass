@@ -60,26 +60,49 @@ A NileCAM81 (AR0821, GMSL2) tem **ISP onboard** no módulo e entrega **YUV pront
 (Os controles `bypass_mode`/`override_enable`/`sensor_*` são da infraestrutura
 tegra-video — não mexer.)
 
-## Mapeamento de envs do `canpass-camera preview nilecam81`
+## Mapeamento de envs do `canpass-camera preview nilecam81` (cobertura completa)
 
-| Env | Controle V4L2 | Equivalente na e-CAM82 (Argus) |
-|---|---|---|
-| `CANPASS_FLICKER` | `powerline_frequency` (0/1/2) | `aeantibanding` (0..3 — escala diferente!) |
-| `CANPASS_HDR` | `cam_mode` (0=Day HDR, 1=Night HDR, 2=Linear) | `hdr_enable` (0/1) |
-| `CANPASS_EXPTIME` | `exposure_auto=1` + `exposure_time_absolute` | `exposuretimerange` |
-| `CANPASS_EXPOSURECOMP` | `exposure_compensation` (8000..1000000) | `exposurecompensation` (-2..2) |
-| `CANPASS_GAIN` | `gain` (1..100) | `gainrange` |
-| `CANPASS_WBTEMP` | `white_balance_automatic=0` + `white_balance_temperature` | `wbmode` |
-| `CANPASS_SATURATION` | `saturation` (0..60) | `saturation` (0.0..2.0 — escala diferente!) |
-| `CANPASS_DENOISE` | `denoise` (0..15) | `tnr-mode`/`tnr-strength` |
-| `CANPASS_FPS` | `frame_rate_control` (3..60) | (framerate dos caps) |
+| Env | Controle V4L2 | Faixa / valores | Equivalente na e-CAM82 (Argus) |
+|---|---|---|---|
+| `CANPASS_FLICKER` | `powerline_frequency` | `0`=Auto · `1`=50Hz · `2`=60Hz | `aeantibanding` (0..3 — escala diferente!) |
+| `CANPASS_HDR` | `cam_mode` | `0`=Day HDR · `1`=Night HDR · `2`=Linear | `hdr_enable` (0/1) |
+| `CANPASS_EXPAUTO` | `exposure_auto` | `0`=Full FOV auto · `1`=Manual · `2`=ROI auto | `aelock` (parcial) |
+| `CANPASS_EXPTIME` | `exposure_time_absolute` | `1..10000` (**implica** `exposure_auto=1`) | `exposuretimerange` |
+| `CANPASS_EXPOSURECOMP` | `exposure_compensation` | `8000..1000000` (padrão 33333) | `exposurecompensation` (-2..2) |
+| `CANPASS_ROI_SIZE` | `roi_window_size` | `8..64` passo 8 (**implica** `exposure_auto=2`) | `aeregion` |
+| `CANPASS_ROI_POS` | `roi_exposure` | `0..65535` | `aeregion` |
+| `CANPASS_GAIN` | `gain` | `1..100` (padrão 1) | `gainrange` |
+| `CANPASS_WBAUTO` | `white_balance_automatic` | `0`\|`1` (padrão 1) | `awblock` |
+| `CANPASS_WBTEMP` | `white_balance_temperature` | `1000..10000` K, passo 50 (**implica** WB auto=0) | `wbmode` |
+| `CANPASS_BRIGHTNESS` | `brightness` | `-15..15` (padrão 0) | — |
+| `CANPASS_CONTRAST` | `contrast` | `0..10` (padrão 5) | — |
+| `CANPASS_SATURATION` | `saturation` | `0..60` (padrão 16) | `saturation` (0.0..2.0 — escala diferente!) |
+| `CANPASS_GAMMA` | `gamma` | `40..500` (padrão 220) | — |
+| `CANPASS_SHARPNESS` | `sharpness` | `0..7` (padrão 2) | `ee-mode`/`ee-strength` |
+| `CANPASS_DENOISE` | `denoise` | `0..15` (padrão 8) | `tnr-mode`/`tnr-strength` |
+| `CANPASS_HFLIP` | `horizontal_flip` | `0`\|`1` | — |
+| `CANPASS_VFLIP` | `vertical_flip` | `0`\|`1` | — |
+| `CANPASS_FPS` | `frame_rate_control` | `3..60` (padrão 30) | (framerate dos caps) |
+| `CANPASS_FRAMESYNC` | `frame_sync` | `0`=Off · `1`=15Hz · `2`=30Hz · `3`=60Hz | — |
+| `CANPASS_TRIGGER` | `trigger` | `0`=Interno · `1`=Externo | — |
+| `CANPASS_EFFECT` | `special_effect` | `0`=Normal · `1`=P&B · `2`=Gray · `3`=Negativo · `4`=Sketch | — |
+
+Regras de precedência (resolvidas pelo `canpass-camera`):
+
+- `CANPASS_EXPAUTO` explícito vence; senão `CANPASS_EXPTIME` liga Manual; senão
+  `CANPASS_ROI_*` ligam ROI auto.
+- `CANPASS_WBAUTO` explícito vence; senão `CANPASS_WBTEMP` desliga o WB auto.
 
 Exemplos:
 
 ```bash
-CANPASS_FLICKER=2 CANPASS_HDR=0 canpass-camera preview nilecam81   # 60 Hz + Day HDR
+CANPASS_FLICKER=2 CANPASS_HDR=0 canpass-camera preview nilecam81      # 60 Hz + Day HDR
 CANPASS_EXPTIME=500 CANPASS_GAIN=10 canpass-camera preview nilecam81  # exposição manual
+CANPASS_ROI_SIZE=32 canpass-camera preview nilecam81                  # AE por região
 CANPASS_WBTEMP=5500 CANPASS_DENOISE=12 canpass-camera preview nilecam81
+CANPASS_HFLIP=1 CANPASS_VFLIP=1 canpass-camera preview nilecam81      # montagem invertida
+CANPASS_SHARPNESS=4 canpass-camera preview nilecam81                  # mais nitidez aparente
+CANPASS_FRAMESYNC=3 canpass-camera preview nilecam81                  # sync 60 Hz entre câmeras
 v4l2-ctl -d /dev/video0 -c cam_mode=1          # Night HDR direto, sem preview
 ```
 
