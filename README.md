@@ -138,16 +138,16 @@ dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4
 
 Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
 
-| Variável de ambiente   | Padrão | Descrição                                                      |
-|------------------------|--------|----------------------------------------------------------------|
-| `MOTION_THRESHOLD`     | `0.02` | Fração de pixels alterados que caracteriza movimento (0.0–1.0) |
-| `MOTION_COOLDOWN_SECS` | `30`   | Segundos sem movimento antes de encerrar a gravação            |
-| `CANPASS_REC_DIR`      | `~/canpass_rec` | Diretório de destino das gravações                    |
-| `CANPASS_CSI_RES`      | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30` |
-| `CANPASS_CSI_SENSORS`  | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1` |
-| `CANPASS_NO_CLOCK_BOOST` | _(desativado)_ | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI |
-| `CANPASS_CSI_BITRATE`  | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido |
-| `CANPASS_CSI_ENCODER`  | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264) |
+| Variável de ambiente     | Padrão          | Descrição                                                                      |
+|--------------------------|-----------------|--------------------------------------------------------------------------------|
+| `MOTION_THRESHOLD`       | `0.02`          | Fração de pixels alterados que caracteriza movimento (0.0–1.0)                 |
+| `MOTION_COOLDOWN_SECS`   | `30`            | Segundos sem movimento antes de encerrar a gravação                            |
+| `CANPASS_REC_DIR`        | `~/canpass_rec` | Diretório de destino das gravações                                             |
+| `CANPASS_CSI_RES`        | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30`                      |
+| `CANPASS_CSI_SENSORS`    | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1`                 |
+| `CANPASS_NO_CLOCK_BOOST` | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI |
+| `CANPASS_CSI_BITRATE`    | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido  |
+| `CANPASS_CSI_ENCODER`    | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264)      |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
@@ -189,13 +189,12 @@ sudo bash install_drivers.sh          # interativo (menu de opções)
 sudo bash install_drivers.sh --auto   # não-interativo: e-CAM82 IMX485, 4 lanes
 ```
 
-| Opção | Pacote | Alvo | Observação |
-|-------|--------|------|------------|
-| **1** ✓ | **e-CAM82 (IMX485, MIPI)** | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Driver CORRETO desta câmera** |
-| 2 ⚠ | [GMSL] e-CAM YUV OCTA (AR0821) | L4T 36.4.3 / JP 6.2.0 | **OUTRO produto** — não é a e-CAM82 |
-| 3 ⚠ | [GMSL] NileCAM81 | L4T 36.3.0 / JP 6.0.0 | **OUTRO produto** |
+| Opção   | Pacote                         | Alvo                                          | Observação                          |
+|---------|--------------------------------|-----------------------------------------------|-------------------------------------|
+| **1** ✓ | **e-CAM82 (IMX485, MIPI)**     | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Driver CORRETO desta câmera**     |
+| 2 ⚠     | [GMSL] NileCAM81               | L4T 36.3.0 / JP 6.0.0                         | **OUTRO produto**                   |
 
-> ⚠️ **Atenção:** instalar um driver **GMSL** (opções 2/3) na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
+> ⚠️ **Atenção:** instalar um driver **GMSL** (opção 2) na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
 
 **Requisito de flash:** o instalador da e-con confere `/etc/nv_tegra_release` e **aborta** se o L4T do flash não casar **exatamente** com o alvo do pacote. Para a e-CAM82, o Orin precisa estar em **L4T 35.2.1 / JP 5.1.0** (kernel `5.10.104-tegra`). O Orin usa **4 lanes**.
 
@@ -223,16 +222,82 @@ CANPASS_FLICKER=3 CANPASS_HDR=1 CANPASS_GAINRANGE="1 8" canpass-camera preview
 ### `canpass-camera` — alternar câmera e preview local
 
 Comando para **alternar** entre e-CAM82 (MIPI) e NileCAM81 (GMSL) no mesmo flash —
-trocando o DTB ativo, sem reflash — e para **preview local** (`nvarguscamerasrc → nv3dsink`):
+trocando o DTB ativo (linha `FDT` do `extlinux.conf`), sem reflash — e para
+**preview local** (`nvarguscamerasrc → nv3dsink`).
 
 ```bash
-canpass-camera status                         # câmera ativa (FDT do extlinux)
-canpass-camera preview [ecam82|nilecam81]     # preview local com banner de controles
-canpass-camera switch  ecam82|nilecam81       # troca o DTB ativo + reboot
+canpass-camera <comando> [argumento]
 ```
 
+Sem argumentos, executa `status`.
+
+| Comando | Argumento | O que faz |
+|---|---|---|
+| `status` | — | Mostra o `FDT` ativo no `extlinux.conf`, qual câmera ele representa e se `/dev/video0` está presente (câmera enumerada). |
+| `list` | — | Lista os DTBs candidatos encontrados em `/boot` para cada câmera (padrões de busca: `imx485/e-cam82/ecam82` e `nilecam/ar0821/0821/max96712`). |
+| `switch` | `ecam82` \| `nilecam81` | Troca o DTB ativo: faz **backup** do `extlinux.conf` (`.canpass.bak.<timestamp>`), edita/insere a linha `FDT`, confirma a edição (restaura o backup se falhar), imprime os **passos físicos** (trocar a base board no conector J509) e oferece reboot. Se o DTB da câmera pedida não existir em `/boot`, **aborta com instrução** — de propósito, para não deixar o Orin sem boot válido. |
+| `preview` | `[ecam82\|nilecam81]` | Preview local no monitor do Orin. Sem argumento, **infere a câmera ativa** pelo `FDT`. Imprime o banner de controles (Table 1 + Flicker + auto-exposure), abre um **menu de resolução** e roda `nvarguscamerasrc → nv3dsink`. Reinicia o `nvargus-daemon` antes (sessões mal encerradas o invalidam). Ctrl+C encerra. |
+| `update` | — | `git pull --ff-only` no repositório-fonte + recopia os scripts (`canpass-camera`, `canpass-can`, `cam_view.sh`, `watchdog.sh`) para `/usr/bin`. Acha o repo via `CANPASS_SRC`, registro do install ou `~/CANPass`. Não mexe em deps/serviço (para isso, `sudo bash install.sh`). |
+| `help` (ou `-h`, `--help`) | — | Mostra o uso. |
+
+**Resoluções oferecidas no menu do `preview`** (Table 1 — Maximum Frame Rate, 4 lanes):
+
+| Câmera | Opções |
+|---|---|
+| e-CAM82 (confirmado, Rev 1.4) | `1920x1080@90` · `3840x2160@60` (50 fps em 12-bit) |
+| NileCAM81 (⚠ estimativa, a confirmar) | `3840x2160@30` · `1920x1080@60` · `1280x720@60` |
+
+**Variáveis de ambiente — comportamento do comando:**
+
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `CANPASS_DTB_ECAM82` | _(auto-detecção em /boot)_ | Força o caminho do `.dtb` da e-CAM82 |
+| `CANPASS_DTB_NILECAM81` | _(auto-detecção em /boot)_ | Força o caminho do `.dtb` da NileCAM81 |
+| `CANPASS_SENSOR_ID` | `0` | `sensor-id` do `nvarguscamerasrc` no preview (e `/dev/video<N>` p/ WDR) |
+| `CANPASS_EXTLINUX` | `/boot/extlinux/extlinux.conf` | Caminho do extlinux.conf |
+| `CANPASS_SRC` | _(registro do install / `~/CANPass`)_ | Repositório-fonte usado pelo `update` |
+
+**Variáveis de ambiente — imagem no `preview`** (cada uma vira a propriedade
+correspondente do `nvarguscamerasrc`; só são aplicadas as que você definir):
+
+| Variável | Propriedade Argus | Faixa / valores |
+|---|---|---|
+| `CANPASS_FLICKER` | `aeantibanding` | `0`=Off · `1`=Auto (padrão) · `2`=50 Hz · `3`=60 Hz |
+| `CANPASS_EXPOSURECOMP` | `exposurecompensation` | `-2.0 .. 2.0` (padrão 0) |
+| `CANPASS_EXPTIME` | `exposuretimerange` | `"min max"` em ns (ex.: `"34000 33333333"`) |
+| `CANPASS_GAINRANGE` | `gainrange` | `"min max"` (ex.: `"1 16"`) |
+| `CANPASS_ISPGAIN` | `ispdigitalgainrange` | `"min max"` (ex.: `"1 8"`) |
+| `CANPASS_AELOCK` | `aelock` | `true`\|`false` (congela a exposição) |
+| `CANPASS_AWBLOCK` | `awblock` | `true`\|`false` |
+| `CANPASS_WBMODE` | `wbmode` | `0..9` (1=auto, 5=daylight, 9=manual) |
+| `CANPASS_SATURATION` | `saturation` | `0.0 .. 2.0` (padrão 1) |
+| `CANPASS_TNR_MODE` | `tnr-mode` | `0..2` (Off/Fast/HQ) |
+| `CANPASS_TNR_STRENGTH` | `tnr-strength` | `-1.0 .. 1.0` |
+| `CANPASS_EE_MODE` | `ee-mode` | `0..2` (Off/Fast/HQ) |
+| `CANPASS_EE_STRENGTH` | `ee-strength` | `-1.0 .. 1.0` |
+| `CANPASS_AEREGION` | `aeregion` | `"left top right bottom peso"` |
+| `CANPASS_SENSOR_MODE` | `sensor-mode` | `-1..4` (-1 = melhor match) |
+| `CANPASS_HDR` | `hdr_enable` (**V4L2**, driver e-con) | `0`\|`1` — aplicado via `v4l2-ctl` **antes** de abrir o Argus |
+
+Exemplos:
+
+```bash
+canpass-camera status                              # qual câmera está ativa?
+canpass-camera list                                # quais DTBs existem em /boot?
+canpass-camera switch nilecam81                    # trocar p/ NileCAM81 (backup + FDT + reboot)
+canpass-camera preview                             # preview da câmera ativa
+CANPASS_FLICKER=3 CANPASS_HDR=1 CANPASS_GAINRANGE="1 8" canpass-camera preview   # 60 Hz + WDR + ganho limitado
+CANPASS_AELOCK=true canpass-camera preview ecam82  # trava a exposição ("explosão de luz")
+CANPASS_SENSOR_ID=1 canpass-camera preview         # outro sensor CSI
+```
+
+> **Dica "explosão de luz":** estreite `CANPASS_EXPTIME` + `CANPASS_GAINRANGE`, ou use
+> `CANPASS_AELOCK=true`. Referência completa dos controles: [`doc/e-CAM82/README.md`](doc/e-CAM82/README.md).
+
 > As duas câmeras **não rodam juntas** (conector J509 e device tree únicos): é alternar,
-> uma por boot. Análise em [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md);
+> uma por boot — e a NileCAM81 ainda **não tem driver para L4T 35.2.1** (o `switch` aborta
+> enquanto o DTB dela não existir em `/boot`). Análise em
+> [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md);
 > roteiro de teste com reflash em [`doc/NileCAM81/TESTE_RAPIDO.md`](doc/NileCAM81/TESTE_RAPIDO.md).
 
 ---
@@ -240,23 +305,81 @@ canpass-camera switch  ecam82|nilecam81       # troca o DTB ativo + reboot
 ## Leitura de CAN (adaptador USB CANable)
 
 Para ler um barramento CAN no Orin via um **CANable** (USB→CAN, driver `gs_usb`) —
-ex.: a rede **J1939** de uma máquina Caterpillar:
+ex.: a rede **J1939** de uma máquina Caterpillar (250 kbit/s, IDs de 29 bits):
 
 ```bash
-sudo apt-get install -y can-utils
-canpass-can detect          # acha a interface do CANable pelo driver gs_usb (ignora o mttcan nativo do Orin)
-canpass-can dump 250000     # sobe em listen-only + candump (J1939 = 250 kbit/s, IDs de 29 bits)
+sudo apt-get install -y can-utils    # candump/canplayer (só na primeira vez)
+canpass-can <comando> [bitrate]
+```
+
+Sem argumentos, executa `detect`. O `[bitrate]` é opcional em todos os comandos que o
+aceitam — padrão **250000** (J1939), sobreponível por `CANPASS_CAN_BITRATE`.
+
+| Comando | Parâmetro | O que faz |
+|---|---|---|
+| `detect` | — | Lista as interfaces `can*` com seu driver e aponta qual é o CANable (`gs_usb`), ignorando os CAN nativos do Orin (`mttcan`). Confere também a presença no USB (`lsusb`). |
+| `up` | `[bitrate]` | Só sobe a interface: listen-only, `restart-ms 100` (auto-recupera de bus-off) e desliga o **autosuspend USB** do adaptador (causa clássica de "parou de receber"). |
+| `dump` | `[bitrate]` | `up` + `candump -tA` no terminal — timestamp com **data+hora real**. Ctrl+C encerra. |
+| `ascii` (ou `text`) | `[bitrate]` | `up` + `candump -tA -a`: hex + coluna **ASCII** do payload (`.` = byte não-imprimível). Útil p/ frames com texto (VIN, IDs de software); dados binários viram ponto/lixo (normal). |
+| `sniff` | `[bitrate]` | Monitora **bytes que mudam**: imprime uma linha só quando algum byte de um ID muda, com o byte alterado em **vermelho**. Funciona com IDs de 29 bits (J1939), ao contrário do `cansniffer` do can-utils. Ideal p/ mapear ID/byte de cada eixo do joystick — mexa **um** eixo por vez. |
+| `log` (ou `record`) | `[bitrate]` | `up` + grava os frames em **arquivo** `can_YYYYMMDD_HHMMSS.log` (detalhes abaixo). Ctrl+C encerra. |
+| `status` | — | `ip -details -statistics link show`: estado e contadores. Bitrate certo = `ERROR-ACTIVE`, erros parados, RX subindo; bitrate errado = `ERROR-PASSIVE`/`bus-off`. |
+| `down` | — | Derruba a interface. |
+| `help` (ou `-h`, `--help`) | — | Mostra o uso. |
+
+**`log` — gravação em arquivo (sincronizável com o vídeo):**
+
+- Destino: `CANPASS_CAN_LOGDIR` → senão `CANPASS_REC_DIR` → senão `~/canpass_rec` —
+  o **mesmo diretório das gravações de vídeo**, para manter vídeo + CAN juntos.
+- Formato padrão: `candump -L` — timestamp **epoch**, **replayável** com
+  `canplayer -I <arquivo>`. O epoch é o mesmo relógio do vídeo → permite casar
+  imagem ↔ frame CAN depois. Com `CANPASS_CAN_LOG_HUMAN=1` grava data+hora legível
+  (`-tA`), porém **não replayável**.
+- **Auto-resume**: se o candump morrer (interface caiu/reenumerou) re-detecta e retoma
+  **no mesmo arquivo**; se o CANable sumir do USB, espera reaparecer.
+- **Watchdog de fluxo**: sem frame novo por `CANPASS_CAN_STALL_SECS` s (padrão 6),
+  recicla a interface (cobre o caso "candump vivo mas RX travado" do gs_usb).
+- Acompanhe ao vivo em outro terminal: `tail -f <arquivo>`. A cada 15 s o terminal
+  mostra um "vivo HH:MM:SS — N frames recebidos".
+
+**Variáveis de ambiente:**
+
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `CANPASS_CAN_IF` | _(auto-detecção)_ | Força a interface (ex.: `can2`), pulando a busca pelo driver `gs_usb` |
+| `CANPASS_CAN_BITRATE` | `250000` | Bitrate padrão quando `[bitrate]` não é passado |
+| `CANPASS_CAN_ACTIVE` | `0` | `=1` sobe **sem** listen-only — permite transmitir (`cansend`). **Cuidado em veículo** |
+| `CANPASS_CAN_LOGDIR` | `CANPASS_REC_DIR` → `~/canpass_rec` | Diretório dos arquivos do `log` |
+| `CANPASS_CAN_LOG_HUMAN` | `0` | `=1` grava o `log` com data+hora legível (`-tA`) — **não replayável** |
+| `CANPASS_CAN_STALL_SECS` | `6` | Segundos sem frame antes de o watchdog do `log` reciclar a interface |
+
+Exemplos:
+
+```bash
+canpass-can detect                            # qual interface é o CANable?
+canpass-can dump                              # ler no terminal @ 250 kbit/s (J1939)
+canpass-can dump 500000                       # idem @ 500 kbit/s
+canpass-can ascii                             # payload também como texto
+canpass-can sniff                             # achar o ID/byte de um eixo do joystick
+canpass-can log                               # gravar em arquivo p/ sync com o vídeo
+CANPASS_CAN_LOGDIR=/data/can canpass-can log  # log em outro diretório
+CANPASS_CAN_LOG_HUMAN=1 canpass-can log       # log legível (sem replay)
+CANPASS_CAN_IF=can2 canpass-can dump          # força a interface
+CANPASS_CAN_ACTIVE=1 canpass-can up           # modo ativo (transmite!)
+canpass-can status                            # diagnóstico (bitrate certo? RX subindo?)
+canpass-can down
 ```
 
 - Resolve a interface pelo **driver `gs_usb`**, não pelo nome — o Orin tem CAN nativo
   (`mttcan`, em `can0/can1`) que confunde, e o nome do CANable muda ao reenumerar o USB.
-- **Listen-only por padrão**: não transmite, não dá ACK, não perturba a rede do veículo.
-  Para modo ativo (`cansend`), `CANPASS_CAN_ACTIVE=1`.
-- `canpass-can status` mostra estado/contadores — bitrate certo = `ERROR-ACTIVE`, erros
-  parados, RX subindo; bitrate errado = `ERROR-PASSIVE`/`bus-off`.
+- **Listen-only por padrão**: não transmite, não dá ACK, não injeta frames de erro —
+  não perturba a rede do veículo nem vai a bus-off.
+- **CANable não encontrado?** Replugue e cheque: `lsusb | grep -iE '1d50:606f|1209:2323'`
+  · `dmesg | grep -i gs_usb`.
 
 > Os CAN nativos do Tegra (`mttcan`) exigem transceiver externo; o CANable é o caminho
 > plug-and-play. Os módulos `gs_usb`/`slcan`/`can-dev` já vêm no kernel L4T 35.2.1.
+> Referência completa: [`doc/CAN/README.md`](doc/CAN/README.md).
 
 ---
 
