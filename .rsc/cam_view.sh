@@ -52,6 +52,15 @@ _is_tegra_csi_device() {
     [[ "$driver" == "tegra-video" || "$bus" == platform:* ]]
 }
 
+# Verdadeiro se a câmera CSI entrega YUV pronto (UYVY/YUYV/NV16) — ISP ONBOARD,
+# caso da NileCAM81 (AR0821). Essas câmeras NÃO passam pelo Argus ('No cameras
+# available' no nvarguscamerasrc); capturam por V4L2 direto. As RAW (e-CAM82/
+# IMX485) listam só formatos Bayer e seguem pelo Argus.
+_is_yuv_direct_device() {
+    local dev="$1"
+    v4l2-ctl --device="$dev" --list-formats 2>/dev/null | grep -qE "'(UYVY|YUYV|NV16)'"
+}
+
 _probe_csi_cameras() {
     _has_argus || return
     # Não abre sessões nvarguscamerasrc aqui — cada probe esgota o daemon e impede
@@ -250,10 +259,13 @@ detect_cameras() {
                 | grep -q "\[0\]" || continue
         fi
 
-        # Câmera CSI da Tegra (ex.: e-CAM82/eimx485): aparece como /dev/videoN mas
-        # exige o caminho Argus. Mapeia para csi:N (sensor-id = N) em vez do V4L2.
+        # Câmera CSI da Tegra: aparece como /dev/videoN, mas o caminho depende do
+        # tipo — YUV/ISP-onboard (NileCAM81) → V4L2 direto (yuv:N); RAW (e-CAM82/
+        # eimx485) → Argus (csi:N, sensor-id = N).
         if _is_tegra_csi_device "$dev"; then
-            if _has_argus; then
+            if _is_yuv_direct_device "$dev"; then
+                cams+=("yuv:${dev#/dev/video}")
+            elif _has_argus; then
                 cams+=("csi:${dev#/dev/video}")
             else
                 log_warn "Câmera CSI em ${dev} detectada, mas nvarguscamerasrc/GStreamer indisponível — pulando." >&2
@@ -303,6 +315,12 @@ camera_label() {
         local cam
         cam=$(_active_csi_camera)
         echo "${cam:-CSI Camera} — Jetson sensor-id ${dev#csi:}"
+        return
+    fi
+    if [[ "$dev" == yuv:* ]]; then
+        local cam
+        cam=$(_active_csi_camera)
+        echo "${cam:-Câmera YUV} — /dev/video${dev#yuv:} (ISP onboard, V4L2)"
         return
     fi
     if [[ "$dev" == ip:* ]]; then
@@ -415,6 +433,67 @@ _csi_stream_loop() {
         fi
         nvargus_retries=0
         log_warn "[cam${sensor_id}] Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
+        sleep 2
+    done
+}
+
+# ─── 5a-bis. Pipeline YUV/V4L2 → MediaMTX (NileCAM81 e afins) ─────────────────
+# Câmeras CSI com ISP ONBOARD (saída UYVY): captura por V4L2, sem Argus/nvargus.
+# Preferência: nvv4l2camerasrc (NVMM, zero-copy) → nvvidconv → NVENC; fallback
+# v4l2src. Caps SEM framerate — a NileCAM81 só anuncia 60 fps (720p/1080p) e
+# 16 fps (4K), então deixamos negociar (o fps de CANPASS_CSI_RES vira só o hint
+# do ffmpeg/encoder). $1 = nº do /dev/videoN · $2 = URL RTSP de saída.
+_yuv_stream_loop() {
+    local vnode="$1" out_url="$2"
+    local res="${CANPASS_CSI_RES:-1920x1080@60}"
+    local w h fps
+    IFS='x@' read -r w h fps <<< "$res"
+    local bitrate="${CANPASS_CSI_BITRATE:-8000000}"
+    local use_hw=0
+    [[ "${CANPASS_CSI_ENCODER:-auto}" != "sw" ]] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null && use_hw=1
+    local -a src
+    if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
+        src=( nvv4l2camerasrc device="/dev/video${vnode}" !
+              "video/x-raw(memory:NVMM),format=UYVY,width=${w},height=${h}" !
+              nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" )
+    else
+        src=( v4l2src device="/dev/video${vnode}" !
+              "video/x-raw,format=UYVY,width=${w},height=${h}" !
+              nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" )
+    fi
+    local -a SW_ENCODE=(
+        -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+        -g 2 -keyint_min 2 -sc_threshold 0 -flush_packets 1
+    )
+
+    local ylog="/tmp/canpass_yuv_${vnode}.log"
+    while true; do
+        : > "$ylog"
+        if (( use_hw )); then
+            gst-launch-1.0 -q "${src[@]}" ! \
+                nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
+                    insert-sps-pps=1 iframeinterval="${fps}" idrinterval="${fps}" ! \
+                h264parse ! fdsink fd=1 2>>"$ylog" | \
+            ffmpeg -loglevel warning \
+                -fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32768 \
+                -r "${fps}" -f h264 -i pipe:0 \
+                -c:v copy -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
+        else
+            gst-launch-1.0 -q "${src[@]}" ! \
+                nvvidconv ! "video/x-raw,format=I420" ! \
+                fdsink fd=1 2>>"$ylog" | \
+            ffmpeg -loglevel warning \
+                -f rawvideo -pix_fmt yuv420p \
+                -s "${w}x${h}" -r "${fps}" \
+                -fflags nobuffer -flags low_delay -analyzeduration 0 \
+                -i pipe:0 \
+                "${SW_ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
+        fi
+        local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
+        (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
+        log_warn "[cam${vnode}] Stream YUV encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${ylog})"
         sleep 2
     done
 }
@@ -534,8 +613,15 @@ show_camera() {
         -flush_packets 1
     )
 
-    # ── Inicia captura: CSI (Jetson/Argus) ou V4L2 (USB/padrão) ────────────────
-    if [[ "$dev" == csi:* ]]; then
+    # ── Inicia captura: YUV/V4L2 (ISP onboard), CSI (Argus) ou V4L2 (USB) ──────
+    if [[ "$dev" == yuv:* ]]; then
+        local vnode="${dev#yuv:}"
+        local yres="${CANPASS_CSI_RES:-1920x1080@60}"
+        log_info "Stream YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${yres} — sem Argus."
+        log_info "Log de erros: /tmp/canpass_yuv_${vnode}.log"
+        _boost_jetson_clocks
+        _ffmpeg_loop() { _yuv_stream_loop "$vnode" "$RTSP_URL"; }
+    elif [[ "$dev" == csi:* ]]; then
         local sensor_id="${dev#csi:}"
 
         # Resolução configurável via CANPASS_CSI_RES="WxH@FPS" (padrão: 1920x1080@30).
@@ -790,8 +876,9 @@ show_all_cameras() {
     _boost_jetson_clocks
 
     # Reinicia o daemon UMA vez, antes de abrir todas as sessões — jamais durante
-    # (derrubaria as sessões das câmeras vizinhas; ver CANPASS_NO_DAEMON_RESTART).
-    if sudo -n systemctl restart nvargus-daemon 2>/dev/null; then
+    # (derrubaria as sessões vizinhas; ver CANPASS_NO_DAEMON_RESTART). Só é
+    # necessário se houver câmera Argus (csi:*); as YUV/V4L2 não usam o daemon.
+    if [[ " ${cams[*]} " == *" csi:"* ]] && sudo -n systemctl restart nvargus-daemon 2>/dev/null; then
         log_ok "Daemon nvargus reiniciado."
         sleep 5
     fi
@@ -803,9 +890,13 @@ show_all_cameras() {
     local -a pids=() rec_pids=() play_pids=() sids=()
     local cam sid
     for cam in "${cams[@]}"; do
-        sid="${cam#csi:}"
+        sid="${cam#*:}"
         sids+=("$sid")
-        CANPASS_NO_DAEMON_RESTART=1 _csi_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
+        if [[ "$cam" == yuv:* ]]; then
+            _yuv_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
+        else
+            CANPASS_NO_DAEMON_RESTART=1 _csi_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
+        fi
         pids+=($!)
     done
 
@@ -899,7 +990,26 @@ show_local() {
     }
     trap _local_cleanup EXIT INT TERM
 
-    if [[ "$dev" == csi:* ]]; then
+    if [[ "$dev" == yuv:* ]]; then
+        local vnode="${dev#yuv:}"
+        local res="${CANPASS_CSI_RES:-1920x1080@60}"
+        local y_w y_h y_fps
+        IFS='x@' read -r y_w y_h y_fps <<< "$res"
+        log_info "Preview local YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${y_w}x${y_h} (nv3dsink)."
+        _boost_jetson_clocks
+        log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+        if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
+            gst-launch-1.0 -q \
+                nvv4l2camerasrc device="/dev/video${vnode}" ! \
+                "video/x-raw(memory:NVMM),format=UYVY,width=${y_w},height=${y_h}" ! \
+                nvvidconv ! nv3dsink sync=false
+        else
+            gst-launch-1.0 -q \
+                v4l2src device="/dev/video${vnode}" ! \
+                "video/x-raw,format=UYVY,width=${y_w},height=${y_h}" ! \
+                nvvidconv ! nv3dsink sync=false
+        fi
+    elif [[ "$dev" == csi:* ]]; then
         local sensor_id="${dev#csi:}"
         local res="${CANPASS_CSI_RES:-1920x1080@60}"
         local csi_w csi_h csi_fps
@@ -958,13 +1068,17 @@ show_local_all() {
     IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
 
     _boost_jetson_clocks
-    sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
+    # nvargus-daemon só importa para câmeras Argus (csi:*); YUV/V4L2 não o usa.
+    [[ " ${cams[*]} " == *" csi:"* ]] && sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
 
     log_info "Mosaico ${cols}x${rows} (janela ${win_w}x${win_h}, células ${cell_w}x${cell_h}) com ${n} câmera(s) @ ${res}."
     log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
 
-    # Pipeline: posições/tamanhos por sink do compositor + um ramo
-    # nvarguscamerasrc → nvvidconv por câmera, tudo em memória NVMM (GPU).
+    local yuv_src="v4l2src"
+    gst-inspect-1.0 nvv4l2camerasrc &>/dev/null && yuv_src="nvv4l2camerasrc"
+
+    # Pipeline: posições/tamanhos por sink do compositor + um ramo de captura por
+    # câmera (Argus p/ csi:N, V4L2 p/ yuv:N), tudo em memória NVMM (GPU).
     local -a gst=( nvcompositor name=comp )
     local i x y sid
     for i in "${!cams[@]}"; do
@@ -974,10 +1088,22 @@ show_local_all() {
     done
     gst+=( ! "video/x-raw(memory:NVMM),format=RGBA" ! nv3dsink sync=false )
     for i in "${!cams[@]}"; do
-        sid="${cams[$i]#csi:}"
-        gst+=( nvarguscamerasrc sensor-id="$sid" ! \
-               "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
-               nvvidconv ! "comp.sink_${i}" )
+        sid="${cams[$i]#*:}"
+        if [[ "${cams[$i]}" == yuv:* ]]; then
+            if [[ "$yuv_src" == "nvv4l2camerasrc" ]]; then
+                gst+=( nvv4l2camerasrc device="/dev/video${sid}" ! \
+                       "video/x-raw(memory:NVMM),format=UYVY,width=${csi_w},height=${csi_h}" ! \
+                       nvvidconv ! "comp.sink_${i}" )
+            else
+                gst+=( v4l2src device="/dev/video${sid}" ! \
+                       "video/x-raw,format=UYVY,width=${csi_w},height=${csi_h}" ! \
+                       nvvidconv ! "comp.sink_${i}" )
+            fi
+        else
+            gst+=( nvarguscamerasrc sensor-id="$sid" ! \
+                   "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                   nvvidconv ! "comp.sink_${i}" )
+        fi
     done
     gst-launch-1.0 -q "${gst[@]}"
 }
@@ -1023,15 +1149,15 @@ main() {
         echo -e "  ${GREEN}[$i]${NC} ${cameras[$i]}  —  ${label}"
     done
 
-    # ── Modo --all: todas as câmeras CSI de uma vez, sem menu ─────────────────
+    # ── Modo --all: todas as câmeras CSI/YUV de uma vez, sem menu ─────────────
     if (( all )); then
         local -a csi_cams=()
         local c
         for c in "${cameras[@]:-}"; do
-            [[ "$c" == csi:* ]] && csi_cams+=("$c")
+            [[ "$c" == csi:* || "$c" == yuv:* ]] && csi_cams+=("$c")
         done
         if [[ ${#csi_cams[@]} -eq 0 ]]; then
-            log_error "--all: nenhuma câmera CSI detectada (o modo multi é p/ CSI/GMSL)."
+            log_error "--all: nenhuma câmera CSI/YUV detectada (o modo multi é p/ CSI/GMSL)."
             exit 1
         fi
         echo

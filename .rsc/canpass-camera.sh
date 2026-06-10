@@ -51,8 +51,8 @@ SENSOR_ID="${CANPASS_SENSOR_ID:-0}"
 # pacote IMX485 de 4 LANES, então só as linhas 4-lane abaixo. (2-lane, p/ referência:
 # 1920x1080@62 ; 3840x2160@39/33 10/12-bit.) O FPS é o máximo em saída 10-bit; em
 # 12-bit o 4K cai p/ 50.
-# NileCAM81 → ⚠ A CONFIRMAR (NileCAM81_CUOAGX_Getting_Started_Manual_Rev_1_9.pdf) —
-# valores abaixo são estimativa; a câmera nem está instalada ainda (falta build 35.2.1).
+# NileCAM81 → CONFIRMADO no hardware (2026-06-10, driver R02/L4T35.2.1 two-lane):
+# v4l2-ctl --list-formats-ext = UYVY/NV16 em 1280x720@60, 1920x1080@60, 3840x2160@16.
 
 _res_options_ecam82() {
     cat <<'EOF'
@@ -63,9 +63,9 @@ EOF
 
 _res_options_nilecam81() {
     cat <<'EOF'
-3840x2160@30  4K UHD
-1920x1080@60  Full HD
-1280x720@60   HD
+1920x1080@60  Full HD (two-lane, 60 fps)
+1280x720@60   HD      (60 fps)
+3840x2160@16  4K UHD  (two-lane, 16 fps)
 EOF
 }
 
@@ -271,6 +271,64 @@ EOF
     echo
 }
 
+# ─── Banner informativo NileCAM81 (controles V4L2 — ISP onboard) ─────────────
+# Espelha doc/NileCAM81/CONTROLES.md — mantenha os dois sincronizados. Valores
+# levantados no hardware (v4l2-ctl --list-ctrls-menus, 2026-06-10). A NileCAM81
+# NÃO usa o Argus: os envs abaixo viram controles V4L2 (v4l2-ctl -c ...).
+_print_controls_banner_nilecam81() {
+    echo -e "${BOLD}${CYAN}"
+    echo "╔═════════════════════════════════════════════════════════════════════════╗"
+    echo "║  CANPass — Preview local NileCAM81_CUOAGX (AR0821 GMSL2, ISP onboard)   ║"
+    echo "╚═════════════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    cat <<EOF
+${BOLD}Formatos (two-lane, UYVY/NV16)${NC}
+  1280x720 @60 · 1920x1080 @60 · 3840x2160 @16
+
+${BOLD}Controles (env → controle V4L2 em /dev/video${SENSOR_ID} | faixa)${NC}
+  CANPASS_FLICKER       powerline_frequency    0=Auto 1=50Hz 2=60Hz
+  CANPASS_HDR           cam_mode               0=Day HDR  1=Night HDR  2=Linear
+  CANPASS_EXPTIME       exposure_time_absolute 1..10000 (liga exposure_auto=Manual)
+  CANPASS_EXPOSURECOMP  exposure_compensation  8000..1000000 (padrão 33333)
+  CANPASS_GAIN          gain                   1..100
+  CANPASS_WBTEMP        white_balance_temperature 1000..10000 K (desliga o WB auto)
+  CANPASS_SATURATION    saturation             0..60 (padrão 16)
+  CANPASS_DENOISE       denoise                0..15 (padrão 8)
+  CANPASS_FPS           frame_rate_control     3..60 fps
+  (mais: brightness/contrast/gamma/sharpness/flip/ROI/trigger — v4l2-ctl -d /dev/video${SENSOR_ID} -c ...)
+
+  Lista completa c/ faixas:  v4l2-ctl -d /dev/video${SENSOR_ID} --list-ctrls-menus
+  GUI da e-con:              /usr/local/ecam_tk1/bin/ecam_tk1_guvcview
+  Detalhes: doc/NileCAM81/CONTROLES.md
+EOF
+    echo
+}
+
+# Aplica os envs CANPASS_* como controles V4L2 da NileCAM81 (antes do preview).
+_apply_nilecam81_ctrls() {
+    command -v v4l2-ctl &>/dev/null || { log_warn "v4l2-ctl ausente — controles não aplicados."; return 0; }
+    local vdev="/dev/video${SENSOR_ID}"
+    local -a sets=()
+    [[ -n "${CANPASS_FLICKER:-}" ]]      && sets+=( "powerline_frequency=${CANPASS_FLICKER}" )
+    [[ -n "${CANPASS_HDR:-}" ]]          && sets+=( "cam_mode=${CANPASS_HDR}" )
+    [[ -n "${CANPASS_EXPTIME:-}" ]]      && sets+=( "exposure_auto=1" "exposure_time_absolute=${CANPASS_EXPTIME}" )
+    [[ -n "${CANPASS_EXPOSURECOMP:-}" ]] && sets+=( "exposure_compensation=${CANPASS_EXPOSURECOMP}" )
+    [[ -n "${CANPASS_GAIN:-}" ]]         && sets+=( "gain=${CANPASS_GAIN}" )
+    [[ -n "${CANPASS_WBTEMP:-}" ]]       && sets+=( "white_balance_automatic=0" "white_balance_temperature=${CANPASS_WBTEMP}" )
+    [[ -n "${CANPASS_SATURATION:-}" ]]   && sets+=( "saturation=${CANPASS_SATURATION}" )
+    [[ -n "${CANPASS_DENOISE:-}" ]]      && sets+=( "denoise=${CANPASS_DENOISE}" )
+    [[ -n "${CANPASS_FPS:-}" ]]          && sets+=( "frame_rate_control=${CANPASS_FPS}" )
+    [[ ${#sets[@]} -eq 0 ]] && return 0
+    local s
+    for s in "${sets[@]}"; do
+        if v4l2-ctl -d "$vdev" -c "$s" 2>/dev/null; then
+            log_ok "v4l2: ${s}"
+        else
+            log_warn "v4l2: falha ao aplicar ${s} (faixa? controle ausente?)"
+        fi
+    done
+}
+
 # ─── preview (local, nv3dsink) ───────────────────────────────────────────────
 # Visualização local no estilo see_cam.sh (menu de resolução → nv3dsink), com
 # banner informativo e parâmetros de AE/flicker/WDR ajustáveis por ambiente.
@@ -296,7 +354,11 @@ cmd_preview() {
         *) log_error "Câmera desconhecida: '$cam' (use ecam82 ou nilecam81)."; return 2 ;;
     esac
 
-    _print_controls_banner
+    if [[ "$cam" == nilecam81 ]]; then
+        _print_controls_banner_nilecam81
+    else
+        _print_controls_banner
+    fi
 
     echo -e "${BOLD}${CYAN}Resolução${NC} (Table 1) — câmera: ${cam}, sensor-id=${SENSOR_ID}"
     local i
@@ -325,6 +387,29 @@ cmd_preview() {
     fi
 
     local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+
+    # ── NileCAM81: ISP onboard → captura V4L2 direto (UYVY), SEM Argus ────────
+    # ('No cameras available' no nvarguscamerasrc é esperado p/ ela). Os envs
+    # CANPASS_* viram controles V4L2 (_apply_nilecam81_ctrls).
+    if [[ "$cam" == nilecam81 ]]; then
+        local vdev="/dev/video${SENSOR_ID}"
+        [[ -e "$vdev" ]] || { log_error "${vdev} ausente — a NileCAM81 não enumerou (12V? LINK A? dmesg | grep ar0821)."; return 1; }
+        _apply_nilecam81_ctrls
+        log_info "Pipeline V4L2 (UYVY → nvvidconv → nv3dsink) — sem Argus."
+        log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+        if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
+            gst-launch-1.0 -q \
+                nvv4l2camerasrc device="$vdev" ! \
+                "video/x-raw(memory:NVMM),format=UYVY,width=${w},height=${h}" ! \
+                nvvidconv ! nv3dsink sync=false
+        else
+            gst-launch-1.0 -q \
+                v4l2src device="$vdev" ! \
+                "video/x-raw,format=UYVY,width=${w},height=${h}" ! \
+                nvvidconv ! nv3dsink sync=false
+        fi
+        return
+    fi
 
     # WDR/HDR é controle V4L2 (driver e-con) — aplicado antes de abrir o Argus.
     if [[ -n "${CANPASS_HDR:-}" ]] && command -v v4l2-ctl &>/dev/null; then

@@ -83,6 +83,11 @@ melhor qualidade possível, ideal para visualizar no monitor ligado ao Orin. Rod
 terminal do **desktop do Orin** (precisa de sessão gráfica). Ajuste resolução/FPS com
 `CANPASS_CSI_RES` (padrão do preview local: `1920x1080@60`; ex.: `CANPASS_CSI_RES=3840x2160@60 canpass --local`).
 
+> **NileCAM81 (YUV/ISP onboard):** o `canpass` detecta sozinho que a câmera entrega
+> UYVY e a roteia por **V4L2 direto** (`nvv4l2camerasrc`), sem Argus — vale para o
+> stream, o `--local`, o `--all` e o mosaico. Controles de imagem dela:
+> [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
+
 **Multi-câmera (`--all`)** — usa **todas** as câmeras CSI detectadas de uma vez
 (caso típico: várias NileCAM81 GMSL na desserializadora), sem menu de seleção:
 
@@ -331,6 +336,12 @@ CANPASS_SENSOR_ID=1 canpass-camera preview                                      
 
 > **Dica "explosão de luz":** estreite `CANPASS_EXPTIME` + `CANPASS_GAINRANGE`,
 > ou use `CANPASS_AELOCK=true`. Referência completa dos controles: [`doc/e-CAM82/README.md`](doc/e-CAM82/README.md).
+
+> **A tabela acima vale para a e-CAM82 (Argus).** No `preview nilecam81` os envs são
+> mapeados para **controles V4L2** (ISP onboard): `CANPASS_FLICKER`→`powerline_frequency`
+> (0=Auto/1=50Hz/2=60Hz), `CANPASS_HDR`→`cam_mode` (0=Day HDR/1=Night HDR/2=Linear),
+> `CANPASS_EXPTIME`/`CANPASS_GAIN`/`CANPASS_WBTEMP`/`CANPASS_SATURATION`/`CANPASS_DENOISE`/
+> `CANPASS_FPS`. Tabela completa com faixas: [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
 
 > As duas câmeras **não rodam juntas** (conector J509 e device tree únicos):
 > é alternar, uma por boot. O driver da NileCAM81 para **L4T 35.2.1** está no repo
