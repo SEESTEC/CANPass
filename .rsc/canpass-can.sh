@@ -9,8 +9,12 @@
 #   canpass-can detect            lista interfaces CAN + driver; aponta a do CANable
 #   canpass-can up [bitrate]      sobe a interface do CANable (listen-only) — padrão 250000
 #   canpass-can dump [bitrate]    up + candump (Ctrl+C encerra). J1939/Caterpillar: IDs 29-bit
+#   canpass-can selftest [bitrate] loopback interno: prova o adaptador sem depender do bus
 #   canpass-can status            estado e contadores (erro/RX/TX) da interface
 #   canpass-can down              derruba a interface
+#
+# dump/ascii/sniff/log rodam SUPERVISIONADOS (watchdog de fluxo): re-detectam o
+# CANable se a interface cair/reenumerar e reciclam down/up se o RX travar.
 #
 # LISTEN-ONLY é o padrão: sniffing seguro de barramento de veículo — o CANable não
 # transmite, não dá ACK e não injeta frames de erro, então NÃO perturba a rede da
@@ -114,27 +118,101 @@ cmd_up() {
     log_ok "${ifc} UP @ ${br} bps · $(_mode_label)."
 }
 
+# ─── Loop supervisionado (compartilhado por dump/ascii/sniff/log) ────────────
+# Mantém um candump vivo contra os 3 modos de falha já vistos em campo:
+#   • candump morre (interface caiu/reenumerou)   → re-detecta pelo driver e religa
+#   • CANable some do USB (replug)                → aguarda reaparecer
+#   • rx_packets parado por CANPASS_CAN_STALL_SECS s (RX travado do gs_usb) → down/up
+# $1 = bitrate · $2 = destino da saída ('-' = terminal; senão arquivo/FIFO, append)
+# $3.. = args do candump (sem a interface). Não retorna — Ctrl+C/TERM encerra.
+_supervised_candump() {
+    local br="$1" out="$2"; shift 2
+    local -a dargs=("$@")
+    # stdbuf -oL: força line-buffering no candump — sem isso a escrita em pipe/
+    # arquivo usa buffer de bloco (~4 KB) e os frames apareceriam com atraso.
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+    local stall="${CANPASS_CAN_STALL_SECS:-6}"   # s sem frame novo antes de reciclar
+
+    local cdpid=""
+    _sup_cleanup() {
+        [[ -n "$cdpid" ]] && kill "$cdpid" 2>/dev/null
+        echo; [[ -f "$out" ]] && log_info "Captura encerrada: ${out}"
+        exit 0
+    }
+    trap _sup_cleanup INT TERM
+
+    # consec = reciclagens seguidas sem nenhum frame — modula o ruído dos avisos:
+    # avisa na 1ª, depois só a cada 10 (bus mudo geraria um aviso a cada ~7 s).
+    local ifc rxfile last cur stale tick consec=0 dest
+    while true; do
+        if ! ifc=$(_find_canable); then
+            log_warn "CANable ausente (replug?). Aguardando reaparecer..."
+            sleep 2; continue
+        fi
+        _bring_up "$ifc" "$br" || { log_warn "Falha ao subir ${ifc}; nova tentativa em 2s..."; sleep 2; continue; }
+        rxfile="/sys/class/net/${ifc}/statistics/rx_packets"
+        if [[ "$out" == "-" ]]; then
+            $SB candump "${dargs[@]}" "$ifc" &
+        else
+            $SB candump "${dargs[@]}" "$ifc" >> "$out" &
+        fi
+        cdpid=$!
+        if (( consec == 0 )); then
+            dest=""; [[ "$out" != "-" && ! -p "$out" ]] && dest=" → ${out##*/}"
+            log_ok "Capturando ${ifc} @ ${br} ($(_mode_label))${dest}"
+        fi
+
+        last=$(cat "$rxfile" 2>/dev/null || echo 0); stale=0; tick=0
+        while kill -0 "$cdpid" 2>/dev/null; do
+            sleep 1
+            cur=$(cat "$rxfile" 2>/dev/null || echo "$last")
+            if [[ "$cur" == "$last" ]]; then
+                stale=$((stale+1))
+            else
+                (( consec > 0 )) && log_ok "RX voltou ($(date +%H:%M:%S) — ${cur} frames)."
+                stale=0; consec=0; last="$cur"
+            fi
+            tick=$((tick+1))
+            # tique de vida só nos modos cuja saída não é o terminal (log/sniff) —
+            # no dump/ascii os próprios frames mostram que está vivo.
+            [[ "$out" != "-" ]] && (( tick % 15 == 0 )) && log_info "vivo $(date +%H:%M:%S) — ${last} frames recebidos"
+            if (( stale >= stall )); then
+                consec=$((consec+1))
+                if (( consec == 1 )); then
+                    log_warn "Sem frame há ${stale}s — reciclando ${ifc} (RX travado? bus quieto?)."
+                elif (( consec % 10 == 0 )); then
+                    log_warn "Bus segue mudo há ~$(( consec * (stall + 1) ))s — chave da máquina ligada? Fiação? (reciclando)"
+                fi
+                kill "$cdpid" 2>/dev/null; cdpid=""
+                break
+            fi
+        done
+        if [[ -n "$cdpid" ]]; then
+            wait "$cdpid" 2>/dev/null
+            log_warn "candump saiu (interface caiu/reenumerou?). Re-detectando..."
+            cdpid=""
+        fi
+        sleep 1
+    done
+}
+
 cmd_dump() {
-    local br="${1:-$DEFAULT_BITRATE}" ifc
-    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
-    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e abrindo candump..."
-    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
+    local br="${1:-$DEFAULT_BITRATE}"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
-    log_ok "${ifc} UP. Ctrl+C encerra. (-tA = data+hora real; J1939/Caterpillar = IDs de 29 bits)"
-    candump -tA "$ifc"
+    log_info "Dump no terminal @ ${br} bps ($(_mode_label)) — watchdog de fluxo ativo."
+    log_info "-tA = data+hora real · J1939/Caterpillar = IDs de 29 bits · Ctrl+C encerra."
+    _supervised_candump "$br" - -tA
 }
 
 # Mostra o payload também como TEXTO (ASCII). Usa o '-a' nativo do candump (hex +
 # coluna ASCII, byte não-imprimível vira '.'). Útil p/ frames que carregam string
 # (VIN, IDs de software, nomes) — em dados binários de sinal vira ponto/lixo (normal).
 cmd_ascii() {
-    local br="${1:-$DEFAULT_BITRATE}" ifc
-    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    local br="${1:-$DEFAULT_BITRATE}"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
-    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e decodificando payload como ASCII..."
-    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
-    log_ok "${ifc} UP. Data+hora (-tA) + hex + ASCII ('.'=não-imprimível). Ctrl+C encerra."
-    candump -tA -a "$ifc"
+    log_info "ASCII no terminal @ ${br} bps ($(_mode_label)) — watchdog de fluxo ativo."
+    log_info "Data+hora (-tA) + hex + ASCII ('.'=não-imprimível). Ctrl+C encerra."
+    _supervised_candump "$br" - -tA -a
 }
 
 # Grava a CAN em arquivo de log com timestamp EPOCH (formato candump -L: replayável
@@ -155,55 +233,13 @@ cmd_log() {
     else
         dargs=(-L);  note="epoch, replayável:  canplayer -I ${out##*/}"
     fi
-    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
-
-    local stall="${CANPASS_CAN_STALL_SECS:-6}"   # s sem frame novo antes de reciclar
-
     log_ok "Gravando em ${out}"
     log_info "Formato: ${note}"
-    log_info "Watchdog de FLUXO: recicla a interface se ficar ${stall}s sem frame (cobre o caso"
-    log_info "'candump vivo mas RX travado'). Frames vão pro arquivo; acompanhe: tail -f ${out}"
+    log_info "Watchdog de FLUXO: recicla a interface se ficar ${CANPASS_CAN_STALL_SECS:-6}s sem frame."
+    log_info "Frames vão pro arquivo; acompanhe: tail -f ${out}"
     log_info "Ctrl+C encerra."
 
-    local cdpid=""
-    _logcleanup() { [[ -n "$cdpid" ]] && kill "$cdpid" 2>/dev/null; echo; log_info "Log encerrado: ${out}"; exit 0; }
-    trap _logcleanup INT TERM
-
-    # Laço supervisionado + watchdog de fluxo: candump grava o arquivo em background;
-    # vigiamos rx_packets do /sys. Se o candump sair (interface sumiu) OU parar de receber
-    # por 'stall' s (RX travado do gs_usb / bus quieto), reciclamos: re-detecta + down/up.
-    local ifc rxfile last cur stale tick
-    while true; do
-        if ! ifc=$(_find_canable); then
-            log_warn "CANable ausente (replug?). Aguardando reaparecer..."
-            sleep 2; continue
-        fi
-        _bring_up "$ifc" "$br" || { log_warn "Falha ao subir ${ifc}; nova tentativa em 2s..."; sleep 2; continue; }
-        rxfile="/sys/class/net/${ifc}/statistics/rx_packets"
-        $SB candump "${dargs[@]}" "$ifc" >> "$out" &
-        cdpid=$!
-        log_ok "Capturando ${ifc} @ ${br} ($(_mode_label)) → ${out##*/}"
-
-        last=$(cat "$rxfile" 2>/dev/null || echo 0); stale=0; tick=0
-        while kill -0 "$cdpid" 2>/dev/null; do
-            sleep 1
-            cur=$(cat "$rxfile" 2>/dev/null || echo "$last")
-            if [[ "$cur" == "$last" ]]; then stale=$((stale+1)); else stale=0; last="$cur"; fi
-            tick=$((tick+1))
-            (( tick % 15 == 0 )) && log_info "vivo $(date +%H:%M:%S) — ${last} frames recebidos"
-            if (( stale >= stall )); then
-                log_warn "Sem frame há ${stale}s — reciclando ${ifc} (RX travado? bus quieto?)."
-                kill "$cdpid" 2>/dev/null; cdpid=""
-                break
-            fi
-        done
-        if [[ -n "$cdpid" ]]; then
-            wait "$cdpid" 2>/dev/null
-            log_warn "candump saiu (interface caiu/reenumerou?). Re-detectando..."
-            cdpid=""
-        fi
-        sleep 1
-    done
+    _supervised_candump "$br" "$out" "${dargs[@]}"
 }
 
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao
@@ -211,18 +247,21 @@ cmd_log() {
 # uma linha só quando algum byte de um ID muda, destacando o byte em vermelho — ideal
 # para achar qual ID/byte é cada eixo do joystick.
 cmd_sniff() {
-    local br="${1:-$DEFAULT_BITRATE}" ifc
-    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    local br="${1:-$DEFAULT_BITRATE}"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
-    log_info "Subindo ${ifc} @ ${br} bps ($(_mode_label)) e monitorando bytes que mudam..."
-    _bring_up "$ifc" "$br" || { log_error "Falha ao subir ${ifc} (bitrate ${br})."; return 1; }
-    log_ok "${ifc} UP. Mostra só frames cujo byte MUDOU (vermelho). Mexa UM eixo por vez. Ctrl+C encerra."
+    log_info "Monitor de bytes que MUDAM @ ${br} bps ($(_mode_label)) — watchdog de fluxo ativo."
+    log_ok "Mostra só frames cujo byte MUDOU (vermelho). Mexa UM eixo por vez. Ctrl+C encerra."
     echo "    ID        b0 b1 b2 b3 b4 b5 b6 b7"
-    # stdbuf -oL: força line-buffering no candump — sem isso o pipe p/ o awk usa buffer
-    # de bloco (~4 KB) e os frames só apareceriam com segundos de atraso.
-    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+
+    # candump → FIFO → awk: o awk fica FORA do loop supervisionado, lendo do FIFO.
+    # O fd 9 (read-write) impede o EOF quando o candump é reciclado pelo watchdog,
+    # então o estado 'prev' (último byte visto por ID) sobrevive às reciclagens.
+    local fifo
+    fifo=$(mktemp -u /tmp/canpass_sniff.XXXXXX) && mkfifo "$fifo" \
+        || { log_error "Falha ao criar FIFO em /tmp."; return 1; }
+    exec 9<>"$fifo"
     # candump padrão: $1=iface $2=ID $3=[len] $4..=bytes
-    $SB candump "$ifc" | awk '
+    awk '
         {
             id=$2; out=""; chg=0
             for (i=4; i<=NF; i++) {
@@ -232,7 +271,64 @@ cmd_sniff() {
                 prev[k] = $i
             }
             if (chg) { printf "  %-9s%s\n", id, out; fflush() }
-        }'
+        }' <"$fifo" &
+    local awkpid=$!
+    trap 'kill "$awkpid" 2>/dev/null; exec 9>&-; rm -f "$fifo"' EXIT
+
+    _supervised_candump "$br" "$fifo"
+}
+
+# ─── selftest (loopback interno) ─────────────────────────────────────────────
+# Prova o caminho controlador→driver gs_usb→USB sem depender do barramento: sobe
+# em LOOPBACK (o controlador ecoa o próprio frame), envia 1 frame e espera ele
+# voltar. PASS = adaptador OK (se o dump segue vazio no veículo, o problema é
+# fiação/transceiver/bus quieto). FAIL = adaptador travado/morto (replug, troca).
+cmd_selftest() {
+    local br="${1:-$DEFAULT_BITRATE}" ifc
+    ifc=$(_find_canable) || { log_error "CANable (gs_usb) não encontrado. Rode 'canpass-can detect'."; return 1; }
+    command -v candump >/dev/null && command -v cansend >/dev/null \
+        || { log_error "can-utils incompleto — instale: sudo apt-get install can-utils"; return 1; }
+    command -v timeout >/dev/null || { log_error "'timeout' (coreutils) ausente."; return 1; }
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+
+    log_warn "O teste usa modo LOOPBACK (não listen-only) e envia 1 frame de teste."
+    log_warn "Por segurança, DESCONECTE o adaptador do barramento do veículo antes."
+    local ans
+    read -rp "$(echo -e "${CYAN}Adaptador desconectado do veículo? [s/N]:${NC} ")" ans
+    [[ "$ans" =~ ^[sSyY]$ ]] || { log_info "Abortado."; return 1; }
+
+    log_info "Subindo ${ifc} @ ${br} bps em loopback interno..."
+    _disable_usb_autosuspend "$ifc"
+    $sudo ip link set "$ifc" down 2>/dev/null
+    $sudo ip link set "$ifc" type can bitrate "$br" restart-ms 100 loopback on listen-only off \
+        || { log_error "Falha ao configurar loopback em ${ifc}."; return 1; }
+    $sudo ip link set "$ifc" up || { log_error "Falha ao subir ${ifc}."; return 1; }
+
+    # candump espera 1 frame (timeout 3 s); cansend dispara. O eco só acontece se o
+    # adaptador realmente processar o TX — é isso que separa 'travado' de 'OK'.
+    local tmp got dpid
+    tmp=$(mktemp)
+    timeout 3 candump -n 1 "$ifc" >"$tmp" 2>/dev/null &
+    dpid=$!
+    sleep 0.5
+    cansend "$ifc" 5A5#DEADBEEF 2>/dev/null || log_warn "cansend retornou erro (TX pode ter falhado)."
+    wait "$dpid" 2>/dev/null
+    got=$(<"$tmp"); rm -f "$tmp"
+
+    $sudo ip link set "$ifc" down 2>/dev/null   # nunca deixar a iface em loopback
+
+    if [[ -n "$got" ]]; then
+        log_ok "PASS — frame ecoou: $(echo $got)"
+        log_ok "Controlador, driver gs_usb e caminho USB estão OK."
+        log_info "Se o 'dump' segue vazio no veículo: chave ligada? CAN_H/CAN_L nos pinos certos"
+        log_info "(Deutsch 9p da CAT: F/G; D/E são CAT Data Link, não CAN)? Transceiver queimado?"
+        log_info "Interface ficou DOWN — 'canpass-can dump' religa em listen-only."
+    else
+        log_error "FAIL — o frame não voltou (adaptador travado ou defeituoso)."
+        log_error "Replugue o USB (power-cycle real — down/up não reseta o firmware) e repita."
+        log_error "Persistindo, teste outro CANable."
+        return 1
+    fi
 }
 
 cmd_status() {
@@ -258,10 +354,13 @@ canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface 
   canpass-can log   [bitrate] sobe + grava em arquivo (epoch, replayável; p/ sync c/ vídeo)
   canpass-can ascii [bitrate] sobe + candump -a (hex + coluna ASCII — frames de texto)
   canpass-can sniff [bitrate] sobe + monitora bytes que MUDAM (29-bit/J1939 — achar eixo do joystick)
+  canpass-can selftest [br]   LOOPBACK interno: prova o adaptador sem depender do barramento
   canpass-can up    [bitrate] só sobe a interface
   canpass-can status          estado e contadores (diagnóstico de bitrate)
   canpass-can down            derruba a interface
 
+dump/ascii/sniff/log são SUPERVISIONADOS: re-detectam o CANable se a interface cair e
+reciclam down/up após ${CANPASS_CAN_STALL_SECS:-6}s sem frame (RX travado do gs_usb).
 Listen-only é o padrão (seguro p/ barramento de veículo). Modo ativo: CANPASS_CAN_ACTIVE=1.
 Caterpillar usa J1939 (250 kbit/s, IDs de 29 bits). Ex.:  canpass-can dump 250000
 EOF
@@ -276,6 +375,7 @@ main() {
         log|record)     cmd_log "$@" ;;
         ascii|text)     cmd_ascii "$@" ;;
         sniff)          cmd_sniff "$@" ;;
+        selftest|test)  cmd_selftest "$@" ;;
         status)         cmd_status "$@" ;;
         down)           cmd_down "$@" ;;
         -h|--help|help) usage ;;
