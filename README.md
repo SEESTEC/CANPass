@@ -1,6 +1,6 @@
 # CANPass
 
-> **v1.4.46** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC com gravação por detecção de movimento, watchdog, leitura/gravação de CAN (CANable/J1939), alternância de câmeras e-CAM82 ↔ NileCAM81 e instalador de drivers e-con para NVIDIA Jetson AGX Orin.
+> **v1.4.48** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC (single ou **multi-câmera `--all`** com mosaico local), gravação por detecção de movimento por câmera, watchdog, leitura/gravação de CAN (CANable/J1939), alternância de câmeras e-CAM82 ↔ NileCAM81 e instalador de drivers e-con para NVIDIA Jetson AGX Orin.
 
 ## Descrição
 
@@ -104,7 +104,7 @@ canpass --local --all      # MOSAICO local (grade nvcompositor → nv3dsink, sem
 
 1. Verifica permissão Docker e sobe o container `mediamtx` (RTSP/HLS) se necessário.
 2. Varre `/dev/video*` filtrando apenas dispositivos de captura real.
-3. Se houver mais de uma câmera, solicita seleção interativa.
+3. Se houver mais de uma câmera, solicita seleção interativa (com `--all`, pula o menu e usa todas as CSI).
 4. Inicia `ffmpeg` em background capturando o dispositivo e enviando H.264 ao MediaMTX.
 5. Exibe os endereços de acesso ao stream.
 6. Inicia gravação por detecção de movimento em background.
@@ -118,6 +118,9 @@ canpass --local --all      # MOSAICO local (grade nvcompositor → nv3dsink, sem
 | RTSP      | `rtsp://<ip>:8554/stream`       | ~50 ms     | VLC, ffplay, câmeras IP           |
 | WebRTC    | `http://<ip>:8889/stream`       | ~100 ms    | Navegador (recomendado)           |
 | HLS       | `http://<ip>:8888/stream`       | ~200 ms    | Navegador (fallback)              |
+
+> No modo `--all`, o path é **por câmera**: `/cam0`, `/cam1`, … no lugar de `/stream`
+> (ex.: `rtsp://<ip>:8554/cam0`, `http://<ip>:8889/cam2`).
 
 > **Latência alta?** Use o endpoint **WebRTC** (`:8889`) ou **RTSP** (VLC/ffplay), não o HLS —
 > o HLS tem segundos de buffer por natureza. Em Jetson, o stream CSI usa o encoder de
