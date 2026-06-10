@@ -88,7 +88,7 @@ A lista real de controles desta câmera/driver:
 v4l2-ctl -d /dev/video0 --list-ctrls-menus
 gst-inspect-1.0 nvarguscamerasrc
 ```
-(Tabela completa de parâmetros e faixas: `doc/ecam82/README.md`.)
+(Tabela completa de parâmetros e faixas: `doc/e-CAM82/README.md`.)
 
 ---
 

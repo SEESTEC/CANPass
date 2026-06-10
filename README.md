@@ -1,15 +1,16 @@
 # CANPass
 
-> **v1.4.13** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC com gravação por detecção de movimento, watchdog, instalação automatizada e instalador de drivers de câmera e-con para NVIDIA Jetson AGX Orin.
+> **v1.4.46** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC com gravação por detecção de movimento, watchdog, leitura/gravação de CAN (CANable/J1939), alternância de câmeras e-CAM82 ↔ NileCAM81 e instalador de drivers e-con para NVIDIA Jetson AGX Orin.
 
 ## Descrição
 
-CANPass é um conjunto de utilitários em **shell script** para **Linux embarcado / NVIDIA Jetson AGX Orin**, com dois propósitos:
+CANPass é um conjunto de utilitários em **shell script** para **Linux embarcado / NVIDIA Jetson AGX Orin**, com três propósitos:
 
 1. **Stream e gravação de câmera** (alias `canpass`): detecta câmeras V4L2, CSI (Jetson) e IP (RTSP), sobe um servidor RTSP/HLS/WebRTC (MediaMTX em Docker) e grava em MP4 por **detecção de movimento**.
-2. **Instalação de drivers de câmera e-con** na Jetson AGX Orin (`install_drivers.sh`).
+2. **Instalação de drivers de câmera e-con** na Jetson AGX Orin (`install_drivers.sh`) — e-CAM82 (principal) e NileCAM81 (alternativa), alternáveis com `canpass-camera switch`.
+3. **Leitura e gravação de CAN** (`canpass-can`): sniffing/log do barramento J1939 (Caterpillar) via adaptador USB CANable, sincronizável com o vídeo por timestamp epoch.
 
-> **Nota:** apesar do nome, **não há código de barramento CAN** neste repositório — o nome é histórico. Os padrões C/C++/CMake/vcpkg no `.gitignore` são herança do template inicial e não refletem o projeto.
+> **Nota:** os padrões C/C++/CMake/vcpkg no `.gitignore` são herança do template inicial e não refletem o projeto.
 
 ## Instalação
 
@@ -34,10 +35,10 @@ sudo apt-get update && sudo apt-get install -y git git-lfs && git lfs install &&
 
 A instalação é **totalmente automática** — nenhuma configuração manual é necessária. Ela cuida de:
 
-- Instalar `ffmpeg`, `v4l-utils`, `docker` (via `docker-install.sh` embutido) e, em Jetson, o GStreamer NVIDIA
+- Instalar `ffmpeg`, `v4l-utils`, `can-utils`, `docker` (via `docker-install.sh` embutido) e, em Jetson, o GStreamer NVIDIA
 - Adicionar o usuário ao grupo `docker` e configurar o sudoers do `nvargus-daemon` (Jetson)
 - **Instalar automaticamente o driver da câmera e-CAM82 (IMX485)** em Jetson, de forma não-interativa (opção 1, 4 lanes), se a câmera ainda não estiver enumerando
-- Copiar `cam_view.sh` e `watchdog.sh` para `/usr/bin/`
+- Copiar `cam_view.sh` e `watchdog.sh` para `/usr/bin/` e instalar os comandos `canpass-camera` e `canpass-can`
 - Registrar o alias `canpass` em `~/.bashrc`
 - Criar e registrar o serviço systemd `canpass`
 
@@ -222,7 +223,7 @@ No caminho CSI, o `cam_view.sh` **maximiza automaticamente os clocks** do Jetson
 
 ## Controles da câmera (resolução, Flicker, WDR, auto-exposure)
 
-📄 **[`doc/ecam82/README.md`](doc/ecam82/README.md)** — referência completa: **Table 1**
+📄 **[`doc/e-CAM82/README.md`](doc/e-CAM82/README.md)** — referência completa: **Table 1**
 (resolução × FPS), tabela de **Flicker** (`aeantibanding`) e todos os parâmetros de
 **auto-exposure** do `nvarguscamerasrc` com faixas reais, além de **WDR/HDR** via V4L2.
 

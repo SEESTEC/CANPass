@@ -214,7 +214,7 @@ cmd_switch() {
 }
 
 # ─── Banner informativo (Table 1 + Flicker + Auto-Exposure) ──────────────────
-# Espelha doc/ecam82/README.md — mantenha os dois sincronizados. Os valores de AE
+# Espelha doc/e-CAM82/README.md — mantenha os dois sincronizados. Os valores de AE
 # vêm de 'gst-inspect-1.0 nvarguscamerasrc' e os de WDR/ganho de 'v4l2-ctl
 # --list-ctrls' na e-CAM82 (IMX485) deste projeto.
 _print_controls_banner() {
@@ -256,7 +256,7 @@ ${BOLD}WDR / HDR e ganho via V4L2${NC}  (driver e-con — aplicado antes do Argu
   (ref.) gain 0..300 (passo 3) · exposure 450..400000 µs · frame_rate 2.5..60 fps
 
   Dica "explosão de luz": estreite CANPASS_EXPTIME + CANPASS_GAINRANGE, ou
-  CANPASS_AELOCK=true para travar. Detalhes: doc/ecam82/README.md
+  CANPASS_AELOCK=true para travar. Detalhes: doc/e-CAM82/README.md
 EOF
     echo
 }
@@ -422,7 +422,7 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
 
 O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de auto-exposure,
 e aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_AELOCK, ...).
-Referência completa: doc/ecam82/README.md
+Referência completa: doc/e-CAM82/README.md
 
 As duas câmeras NÃO rodam juntas (conector J509 + DTB únicos): é alternar, um por boot.
 Detalhes: doc/NileCAM81/COMPATIBILIDADE.md
