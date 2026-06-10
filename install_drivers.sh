@@ -33,6 +33,13 @@ log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# BUG do instalador da e-con: ele faz 'source /root/.bashrc' rodando sob 'set -eu';
+# via sudo a PS1 vem indefinida e o guard de interatividade do bashrc
+# ('[ -z "$PS1" ] && return') explode em "PS1: unbound variable", abortando a
+# instalação no último passo (depois de kernel/DTB/módulos, antes do misc/reboot).
+# PS1 VAZIA é o antídoto perfeito: definida (sem erro do -u) e o guard retorna cedo.
+export PS1=""
+
 # Modo não-interativo: --auto / -y / --yes instala automaticamente a opção 1
 # (e-CAM82 IMX485) em 4 lanes, sem perguntas. Usado pelo install.sh.
 AUTO=0

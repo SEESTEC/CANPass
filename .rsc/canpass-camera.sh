@@ -193,6 +193,16 @@ cmd_switch() {
         return 1
     fi
 
+    # Os instaladores da e-con SOBRESCREVEM /etc/modules só com o módulo da própria
+    # câmera (e-CAM82 → e_con_cam; NileCAM81 → ar0821). Para alternar nos dois
+    # sentidos, garante o autoload dos módulos das DUAS — módulo sem hardware
+    # presente apenas falha o probe, sem efeito colateral.
+    local m
+    for m in e_con_cam ar0821 nvhost_vi; do
+        grep -qx "$m" /etc/modules 2>/dev/null || echo "$m" | $sudo tee -a /etc/modules >/dev/null
+    done
+    log_ok "/etc/modules cobre as duas câmeras (e_con_cam + ar0821)."
+
     echo
     log_warn "PASSOS FÍSICOS antes de reiniciar:"
     log_warn "  1) Desligue o Orin."
