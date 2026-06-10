@@ -345,6 +345,176 @@ camera_label() {
 #   -sync video          sincroniza pelo relógio de vídeo
 #   SDL_RENDER_VSYNC=1   sincroniza com o refresh do monitor (evita tearing)
 
+# ─── 5a. Pipeline CSI → MediaMTX (compartilhado single/--all) ─────────────────
+# Captura via nvarguscamerasrc e publica H.264 no MediaMTX, com reconexão.
+# $1 = sensor-id · $2 = URL RTSP de saída. Respeita CANPASS_CSI_RES/BITRATE/ENCODER.
+# CANPASS_NO_DAEMON_RESTART=1 (modo --all): no retry de "No cameras available" NÃO
+# reinicia o nvargus-daemon — isso derrubaria as sessões das outras câmeras.
+_csi_stream_loop() {
+    local sensor_id="$1" out_url="$2"
+    local res="${CANPASS_CSI_RES:-1920x1080@30}"
+    local csi_w csi_h csi_fps
+    IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
+    local csi_bitrate="${CANPASS_CSI_BITRATE:-8000000}"
+    local csi_use_hw=0
+    [[ "${CANPASS_CSI_ENCODER:-auto}" != "sw" ]] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null && csi_use_hw=1
+    # Mesmos parâmetros de baixa latência do ENCODE de show_camera (x264 software).
+    local -a SW_ENCODE=(
+        -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+        -g 2 -keyint_min 2 -sc_threshold 0 -flush_packets 1
+    )
+
+    local csi_log="/tmp/canpass_csi_${sensor_id}.log"
+    local nvargus_retries=0
+    while true; do
+        : > "$csi_log"  # limpa a cada tentativa para checar apenas o erro atual
+        if (( csi_use_hw )); then
+            gst-launch-1.0 -q \
+                nvarguscamerasrc sensor-id="$sensor_id" ! \
+                "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${csi_bitrate}" \
+                    insert-sps-pps=1 iframeinterval="${csi_fps}" idrinterval="${csi_fps}" ! \
+                h264parse ! fdsink fd=1 2>>"$csi_log" | \
+            ffmpeg -loglevel warning \
+                -fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32768 \
+                -r "${csi_fps}" -f h264 -i pipe:0 \
+                -c:v copy -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$csi_log"
+        else
+            gst-launch-1.0 -q \
+                nvarguscamerasrc sensor-id="$sensor_id" ! \
+                "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+                nvvidconv ! "video/x-raw,format=I420" ! \
+                fdsink fd=1 2>>"$csi_log" | \
+            ffmpeg -loglevel warning \
+                -f rawvideo -pix_fmt yuv420p \
+                -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
+                -fflags nobuffer -flags low_delay -analyzeduration 0 \
+                -i pipe:0 \
+                "${SW_ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$csi_log"
+        fi
+        local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
+        (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
+        # Daemon nvargus não encontrou a câmera — pode ser problema de timing;
+        # tenta de novo antes de desistir (reiniciando o daemon só no modo single).
+        if grep -q "No cameras available" "$csi_log" 2>/dev/null; then
+            if (( nvargus_retries++ < 2 )); then
+                if [[ "${CANPASS_NO_DAEMON_RESTART:-0}" == "1" ]]; then
+                    log_warn "[cam${sensor_id}] nvargus sem a câmera — nova tentativa em 5s (${nvargus_retries}/2)..."
+                else
+                    log_warn "Daemon nvargus não encontrou a câmera — reiniciando (tentativa ${nvargus_retries}/2)..."
+                    sudo -n systemctl restart nvargus-daemon 2>/dev/null
+                fi
+                sleep 5
+                continue
+            fi
+            log_error "[cam${sensor_id}] Câmera CSI inacessível pelo daemon nvargus."
+            log_info  "Verifique a conexão física da câmera e execute canpass novamente."
+            return 1
+        fi
+        nvargus_retries=0
+        log_warn "[cam${sensor_id}] Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
+        sleep 2
+    done
+}
+
+# ─── 5b. Gravação por detecção de movimento (compartilhada single/--all) ──────
+# Lê o RTSP indicado, emite scene-scores (filtro select) e controla um ffmpeg
+# recorder (-c copy → MP4). $1 = URL RTSP · $2 = prefixo de arquivo/log
+# ("" no modo single — nomes inalterados; "camN_" no --all). Chame com '&'.
+_motion_loop() {
+    local src_url="$1" prefix="${2:-}"
+    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    mkdir -p "$rec_dir"
+    local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
+
+    local motion_active=0
+    local last_motion_epoch=0
+    local recorder_pid=""
+    local recording_start_ts=""
+    local recording_tmp_file=""
+
+    _ml_start_recording() {
+        recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
+        recording_tmp_file="${rec_dir}/.rec_${prefix}${recording_start_ts}.mp4"
+        ffmpeg -loglevel error \
+            -fflags nobuffer \
+            -analyzeduration 0 \
+            -probesize 32768 \
+            -rtsp_transport tcp \
+            -i "$src_url" \
+            -c copy \
+            "$recording_tmp_file" 2>/dev/null &
+        recorder_pid=$!
+        log_info "${tag}Movimento detectado — gravando: ${recording_start_ts}"
+    }
+
+    _ml_stop_recording() {
+        [[ -z "$recorder_pid" ]] && return
+        kill "$recorder_pid" 2>/dev/null
+        wait "$recorder_pid" 2>/dev/null
+        local recording_end_ts
+        recording_end_ts=$(date +"%H-%M-%S")
+        local final_filename="${rec_dir}/${prefix}${recording_start_ts}_${recording_end_ts}.mp4"
+        [[ -f "$recording_tmp_file" ]] && mv "$recording_tmp_file" "$final_filename"
+        log_info "${tag}Sem movimento — arquivo salvo: $(basename "$final_filename")"
+        recorder_pid=""
+        recording_start_ts=""
+        recording_tmp_file=""
+    }
+
+    sleep 5  # aguarda o stream estabilizar no MediaMTX (IP cameras precisam de mais tempo)
+
+    # Loop externo: reinicia o detector se ele cair (ex: stream não estava
+    # pronto no MediaMTX quando o detector conectou). É encerrado pelo SIGTERM
+    # do cleanup do chamador.
+    while true; do
+        motion_active=0
+        last_motion_epoch=0
+
+        # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento.
+        # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo.
+        while true; do
+            local line="" read_status
+            IFS= read -r -t "${MOTION_COOLDOWN_SECS}" line
+            read_status=$?
+            local now
+            now=$(date +%s)
+
+            if (( read_status == 0 )); then
+                if [[ "$line" =~ lavfi\.scene_score=([0-9.eE+\-]+) ]]; then
+                    local scene_score="${BASH_REMATCH[1]}"
+                    if awk "BEGIN{exit !($scene_score > ${MOTION_THRESHOLD})}"; then
+                        last_motion_epoch=$now
+                        if [[ $motion_active -eq 0 ]]; then
+                            motion_active=1
+                            _ml_start_recording
+                        fi
+                    fi
+                fi
+            elif (( read_status == 1 )); then
+                break  # EOF — detector encerrado, sai do loop interno
+            fi
+            if [[ $motion_active -eq 1 ]] && (( now - last_motion_epoch >= MOTION_COOLDOWN_SECS )); then
+                motion_active=0
+                _ml_stop_recording
+            fi
+
+        done < <(
+            ffmpeg -loglevel info \
+                -rtsp_transport tcp \
+                -i "$src_url" \
+                -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:key=lavfi.scene_score" \
+                -f null /dev/null 2>&1 | grep --line-buffered "lavfi.scene_score"
+        )
+
+        # EOF: encerra gravação em curso e aguarda antes de reiniciar o detector
+        [[ $motion_active -eq 1 ]] && _ml_stop_recording
+        sleep 5
+    done
+}
+
 show_camera() {
     local dev="$1"
     local display="${2:-}"
@@ -391,70 +561,15 @@ show_camera() {
         # — latência e uso de CPU muito menores que o x264 por software. Em L4T 35.2.1
         # o nvv4l2h264enc é estável. Fallback automático p/ software se o elemento não
         # existir; force com CANPASS_CSI_ENCODER=sw|hw. Bitrate via CANPASS_CSI_BITRATE.
-        local csi_bitrate="${CANPASS_CSI_BITRATE:-8000000}"
-        local csi_encoder="${CANPASS_CSI_ENCODER:-auto}"
-        local csi_use_hw=0
-        if [[ "$csi_encoder" != "sw" ]] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null; then
-            csi_use_hw=1
-            log_info "Encoder CSI: hardware (nvv4l2h264enc, ${csi_bitrate} bps)."
+        if [[ "${CANPASS_CSI_ENCODER:-auto}" != "sw" ]] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null; then
+            log_info "Encoder CSI: hardware (nvv4l2h264enc, ${CANPASS_CSI_BITRATE:-8000000} bps)."
         else
             log_info "Encoder CSI: software (libx264)."
         fi
+        log_info "Log de erros CSI: /tmp/canpass_csi_${sensor_id}.log"
 
-        # Loop CSI: HW → GStreamer captura E codifica (NVENC); ffmpeg só remuxa (copy)
-        # para RTSP. SW → GStreamer entrega I420 cru e o ffmpeg codifica em x264.
-        _ffmpeg_loop() {
-            local csi_log="/tmp/canpass_csi_${sensor_id}.log"
-            local nvargus_retries=0
-            log_info "Log de erros CSI: ${csi_log}"
-            while true; do
-                : > "$csi_log"  # limpa a cada tentativa para checar apenas o erro atual
-                if (( csi_use_hw )); then
-                    gst-launch-1.0 -q \
-                        nvarguscamerasrc sensor-id="$sensor_id" ! \
-                        "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
-                        nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${csi_bitrate}" \
-                            insert-sps-pps=1 iframeinterval="${csi_fps}" idrinterval="${csi_fps}" ! \
-                        h264parse ! fdsink fd=1 2>>"$csi_log" | \
-                    ffmpeg -loglevel warning \
-                        -fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32768 \
-                        -r "${csi_fps}" -f h264 -i pipe:0 \
-                        -c:v copy -muxdelay 0 -muxpreload 0 \
-                        -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
-                else
-                    gst-launch-1.0 -q \
-                        nvarguscamerasrc sensor-id="$sensor_id" ! \
-                        "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
-                        nvvidconv ! "video/x-raw,format=I420" ! \
-                        fdsink fd=1 2>>"$csi_log" | \
-                    ffmpeg -loglevel warning \
-                        -f rawvideo -pix_fmt yuv420p \
-                        -s "${csi_w}x${csi_h}" -r "${csi_fps}" \
-                        -fflags nobuffer -flags low_delay -analyzeduration 0 \
-                        -i pipe:0 \
-                        "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                        -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>>"$csi_log"
-                fi
-                local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
-                (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
-                # Daemon nvargus não encontrou a câmera — pode ser problema de timing;
-                # reinicia e tenta novamente antes de desistir.
-                if grep -q "No cameras available" "$csi_log" 2>/dev/null; then
-                    if (( nvargus_retries++ < 2 )); then
-                        log_warn "Daemon nvargus não encontrou a câmera — reiniciando (tentativa ${nvargus_retries}/2)..."
-                        sudo -n systemctl restart nvargus-daemon 2>/dev/null
-                        sleep 5
-                        continue
-                    fi
-                    log_error "Câmera CSI inacessível pelo daemon nvargus."
-                    log_info  "Verifique a conexão física da câmera e execute canpass novamente."
-                    return 1
-                fi
-                nvargus_retries=0
-                log_warn "Stream CSI encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${csi_log})"
-                sleep 2
-            done
-        }
+        # Pipeline + loop de reconexão compartilhados com o modo --all (seção 5a).
+        _ffmpeg_loop() { _csi_stream_loop "$sensor_id" "$RTSP_URL"; }
     elif [[ "$dev" == ip:* ]]; then
         # ── IP (RTSP): lê diretamente do stream da câmera ─────────────────────
         local rtsp_in="${dev#ip:}"
@@ -584,94 +699,9 @@ show_camera() {
     local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     mkdir -p "$rec_dir"
 
-    _motion_recording_loop() {
-        local motion_active=0
-        local last_motion_epoch=0
-        local recorder_pid=""
-        local recording_start_ts=""
-        local recording_tmp_file=""
-
-        _start_recording() {
-            recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
-            recording_tmp_file="${rec_dir}/.rec_${recording_start_ts}.mp4"
-            ffmpeg -loglevel error \
-                -fflags nobuffer \
-                -analyzeduration 0 \
-                -probesize 32768 \
-                -rtsp_transport tcp \
-                -i "$RTSP_URL" \
-                -c copy \
-                "$recording_tmp_file" 2>/dev/null &
-            recorder_pid=$!
-            log_info "Movimento detectado — gravando: ${recording_start_ts}"
-        }
-
-        _stop_recording() {
-            [[ -z "$recorder_pid" ]] && return
-            kill "$recorder_pid" 2>/dev/null
-            wait "$recorder_pid" 2>/dev/null
-            local recording_end_ts
-            recording_end_ts=$(date +"%H-%M-%S")
-            local final_filename="${rec_dir}/${recording_start_ts}_${recording_end_ts}.mp4"
-            [[ -f "$recording_tmp_file" ]] && mv "$recording_tmp_file" "$final_filename"
-            log_info "Sem movimento — arquivo salvo: $(basename "$final_filename")"
-            recorder_pid=""
-            recording_start_ts=""
-            recording_tmp_file=""
-        }
-
-        sleep 5  # aguarda o stream estabilizar no MediaMTX (IP cameras precisam de mais tempo)
-
-        # Loop externo: reinicia o detector se ele cair (ex: stream não estava
-        # pronto no MediaMTX quando o detector conectou). É encerrado pelo SIGTERM
-        # enviado pelo cleanup() ao matar motion_rec_pid.
-        while true; do
-            motion_active=0
-            last_motion_epoch=0
-
-            # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento.
-            # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo.
-            while true; do
-                local line="" read_status
-                IFS= read -r -t "${MOTION_COOLDOWN_SECS}" line
-                read_status=$?
-                local now
-                now=$(date +%s)
-
-                if (( read_status == 0 )); then
-                    if [[ "$line" =~ lavfi\.scene_score=([0-9.eE+\-]+) ]]; then
-                        local scene_score="${BASH_REMATCH[1]}"
-                        if awk "BEGIN{exit !($scene_score > ${MOTION_THRESHOLD})}"; then
-                            last_motion_epoch=$now
-                            if [[ $motion_active -eq 0 ]]; then
-                                motion_active=1
-                                _start_recording
-                            fi
-                        fi
-                    fi
-                elif (( read_status == 1 )); then
-                    break  # EOF — detector encerrado, sai do loop interno
-                fi
-                if [[ $motion_active -eq 1 ]] && (( now - last_motion_epoch >= MOTION_COOLDOWN_SECS )); then
-                    motion_active=0
-                    _stop_recording
-                fi
-
-            done < <(
-                ffmpeg -loglevel info \
-                    -rtsp_transport tcp \
-                    -i "$RTSP_URL" \
-                    -vf "select=gt(scene\,${MOTION_THRESHOLD}),metadata=print:key=lavfi.scene_score" \
-                    -f null /dev/null 2>&1 | grep --line-buffered "lavfi.scene_score"
-            )
-
-            # EOF: encerra gravação em curso e aguarda antes de reiniciar o detector
-            [[ $motion_active -eq 1 ]] && _stop_recording
-            sleep 5
-        done
-    }
-
-    _motion_recording_loop &
+    # Detector + recorder compartilhados com o modo --all (seção 5b); prefixo
+    # vazio mantém os nomes de arquivo do modo single inalterados.
+    _motion_loop "$RTSP_URL" "" &
     local motion_rec_pid=$!
 
     # Encerra os loops ao sair (Q, Ctrl+C ou término normal).
@@ -747,6 +777,108 @@ show_camera() {
     cleanup
 }
 
+# ─── 6. Modo MULTI-CÂMERA (--all): um stream por câmera CSI ──────────────────
+# Publica cada câmera num path próprio do MediaMTX:
+#   RTSP rtsp://<ip>:8554/camN · WebRTC http://<ip>:8889/camN · HLS :8888/camN
+# + gravação por movimento POR CÂMERA (arquivos camN_<início>_<fim>.mp4).
+# Com --display, abre uma janela ffplay por stream.
+show_all_cameras() {
+    local display="$1"; shift
+    local -a cams=("$@")
+
+    ensure_mediamtx
+    _boost_jetson_clocks
+
+    # Reinicia o daemon UMA vez, antes de abrir todas as sessões — jamais durante
+    # (derrubaria as sessões das câmeras vizinhas; ver CANPASS_NO_DAEMON_RESTART).
+    if sudo -n systemctl restart nvargus-daemon 2>/dev/null; then
+        log_ok "Daemon nvargus reiniciado."
+        sleep 5
+    fi
+
+    local res="${CANPASS_CSI_RES:-1920x1080@30}"
+    log_info "Modo multi-câmera: ${#cams[@]} stream(s) @ ${res} cada."
+    log_info "(ajuste com CANPASS_CSI_RES — 4 streams em 4K estouram o NVENC; 1080p é o equilíbrio)"
+
+    local -a pids=() rec_pids=() play_pids=() sids=()
+    local cam sid
+    for cam in "${cams[@]}"; do
+        sid="${cam#csi:}"
+        sids+=("$sid")
+        CANPASS_NO_DAEMON_RESTART=1 _csi_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
+        pids+=($!)
+    done
+
+    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    for sid in "${sids[@]}"; do
+        _motion_loop "rtsp://localhost:8554/cam${sid}" "cam${sid}_" &
+        rec_pids+=($!)
+    done
+
+    _all_cleanup() {
+        local p
+        for p in "${play_pids[@]:-}" "${rec_pids[@]:-}" "${pids[@]:-}"; do
+            [[ -n "$p" ]] && { pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; }
+        done
+    }
+    trap _all_cleanup EXIT INT TERM
+
+    # Aguarda cada stream publicar no MediaMTX antes de imprimir as URLs
+    # (até 30 s por câmera; as seguintes confirmam rápido, o daemon já está quente).
+    log_info "Aguardando streams ficarem disponíveis..."
+    local ok=0 t
+    for sid in "${sids[@]}"; do
+        t=0
+        until ffprobe -v quiet -rtsp_transport tcp -i "rtsp://localhost:8554/cam${sid}" >/dev/null 2>&1; do
+            sleep 1
+            t=$((t+1))
+            (( t >= 30 )) && break
+        done
+        if ffprobe -v quiet -rtsp_transport tcp -i "rtsp://localhost:8554/cam${sid}" >/dev/null 2>&1; then
+            ok=$((ok+1))
+            log_ok "cam${sid} publicando."
+        else
+            log_warn "cam${sid} não confirmou em 30s — veja /tmp/canpass_csi_${sid}.log"
+        fi
+    done
+    if (( ok == 0 )); then
+        log_error "Nenhum stream subiu. Encerrando."
+        trap - EXIT INT TERM
+        _all_cleanup
+        return 1
+    fi
+
+    echo
+    while IFS= read -r iface_line; do
+        local iface iface_ip
+        iface=$(awk '{print $1}' <<< "$iface_line")
+        iface_ip=$(awk '{print $2}' <<< "$iface_line" | cut -d/ -f1)
+        log_ok "[${iface}] por câmera N:  rtsp://${iface_ip}:8554/camN  ·  http://${iface_ip}:8889/camN (WebRTC)  ·  http://${iface_ip}:8888/camN (HLS)"
+        for sid in "${sids[@]}"; do
+            log_ok "  cam${sid}:  http://${iface_ip}:8889/cam${sid}"
+        done
+    done < <(ip -4 -o addr show | awk '$2 != "lo" {print $2, $4}')
+    log_ok "Gravando em: ${rec_dir} — camN_<início>_<fim>.mp4 por câmera (threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
+
+    if [[ "$display" == "--display" ]]; then
+        log_info "Abrindo uma janela ffplay por stream — Ctrl+C aqui encerra tudo."
+        for sid in "${sids[@]}"; do
+            SDL_RENDER_VSYNC=1 ffplay \
+                -probesize 32 -analyzeduration 0 \
+                -fflags nobuffer+discardcorrupt -flags low_delay -avioflags direct \
+                -sync video -loglevel warning \
+                -window_title "CANPass cam${sid}" \
+                "rtsp://localhost:8554/cam${sid}" &>/dev/null &
+            play_pids+=($!)
+        done
+    fi
+
+    log_info "Streams ativos em background. Pressione Ctrl+C para encerrar."
+    wait "${pids[@]}"
+    trap - EXIT INT TERM
+    _all_cleanup
+}
+
 # ─── Preview LOCAL no monitor do Orin (--local) ──────────────────────────────
 # Mostra a câmera direto na tela do Orin, sem rede/encode/gravação — menor latência
 # possível. CSI: nvarguscamerasrc → nv3dsink (pipeline oficial da e-con). USB/IP: ffplay.
@@ -793,13 +925,71 @@ show_local() {
     _local_cleanup
 }
 
+# ─── Preview LOCAL multi-câmera (--local --all): mosaico numa janela ─────────
+# nvcompositor compõe as N câmeras numa grade (na GPU, sem encode) → nv3dsink.
+# Cada célula é escalada pelo compositor; captura na resolução CANPASS_CSI_RES.
+# Tamanho da janela: CANPASS_MOSAIC_W x CANPASS_MOSAIC_H (padrão 1920x1080).
+show_local_all() {
+    local -a cams=("$@")
+    local n=${#cams[@]}
+
+    if [[ -z "${DISPLAY:-}" ]]; then
+        export DISPLAY=:0
+        log_warn "DISPLAY não definido — assumindo :0. Rode num terminal do desktop do Orin."
+    fi
+    if ! gst-inspect-1.0 nvcompositor &>/dev/null; then
+        log_error "Elemento 'nvcompositor' indisponível — o mosaico requer o GStreamer NVIDIA completo."
+        log_info  "Alternativas: 'canpass --local' (uma câmera por vez) ou o app e-multicam da e-con."
+        return 1
+    fi
+
+    # Grade: 1→1x1 · 2→2x1 · 3-4→2x2 · 5-6→3x2
+    local cols rows
+    if   (( n <= 1 )); then cols=1; rows=1
+    elif (( n == 2 )); then cols=2; rows=1
+    elif (( n <= 4 )); then cols=2; rows=2
+    else                    cols=3; rows=2
+    fi
+    local win_w="${CANPASS_MOSAIC_W:-1920}" win_h="${CANPASS_MOSAIC_H:-1080}"
+    local cell_w=$(( win_w / cols )) cell_h=$(( win_h / rows ))
+
+    local res="${CANPASS_CSI_RES:-1920x1080@30}"
+    local csi_w csi_h csi_fps
+    IFS='x@' read -r csi_w csi_h csi_fps <<< "$res"
+
+    _boost_jetson_clocks
+    sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
+
+    log_info "Mosaico ${cols}x${rows} (janela ${win_w}x${win_h}, células ${cell_w}x${cell_h}) com ${n} câmera(s) @ ${res}."
+    log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+
+    # Pipeline: posições/tamanhos por sink do compositor + um ramo
+    # nvarguscamerasrc → nvvidconv por câmera, tudo em memória NVMM (GPU).
+    local -a gst=( nvcompositor name=comp )
+    local i x y sid
+    for i in "${!cams[@]}"; do
+        x=$(( (i % cols) * cell_w ))
+        y=$(( (i / cols) * cell_h ))
+        gst+=( "sink_${i}::xpos=${x}" "sink_${i}::ypos=${y}" "sink_${i}::width=${cell_w}" "sink_${i}::height=${cell_h}" )
+    done
+    gst+=( ! "video/x-raw(memory:NVMM),format=RGBA" ! nv3dsink sync=false )
+    for i in "${!cams[@]}"; do
+        sid="${cams[$i]#csi:}"
+        gst+=( nvarguscamerasrc sensor-id="$sid" ! \
+               "video/x-raw(memory:NVMM),width=${csi_w},height=${csi_h},framerate=${csi_fps}/1,format=NV12" ! \
+               nvvidconv ! "comp.sink_${i}" )
+    done
+    gst-launch-1.0 -q "${gst[@]}"
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    local display="" mode="stream"
+    local display="" mode="stream" all=0
     for arg in "$@"; do
         [[ "$arg" == "--display" ]] && display="--display"
         [[ "$arg" == "--local" ]] && mode="local"
+        [[ "$arg" == "--all" ]] && all=1
     done
 
     echo -e "${BOLD}${CYAN}"
@@ -832,6 +1022,28 @@ main() {
         label=$(camera_label "${cameras[$i]}")
         echo -e "  ${GREEN}[$i]${NC} ${cameras[$i]}  —  ${label}"
     done
+
+    # ── Modo --all: todas as câmeras CSI de uma vez, sem menu ─────────────────
+    if (( all )); then
+        local -a csi_cams=()
+        local c
+        for c in "${cameras[@]:-}"; do
+            [[ "$c" == csi:* ]] && csi_cams+=("$c")
+        done
+        if [[ ${#csi_cams[@]} -eq 0 ]]; then
+            log_error "--all: nenhuma câmera CSI detectada (o modo multi é p/ CSI/GMSL)."
+            exit 1
+        fi
+        echo
+        log_ok "--all: usando ${#csi_cams[@]} câmera(s) CSI: ${csi_cams[*]}"
+        echo
+        if [[ "$mode" == "local" ]]; then
+            show_local_all "${csi_cams[@]}"
+            exit 0   # preview manual: não deixa o watchdog reiniciar ao encerrar
+        fi
+        show_all_cameras "$display" "${csi_cams[@]}"
+        return
+    fi
 
     local ip_idx=${#cameras[@]}
     echo -e "  ${GREEN}[${ip_idx}]${NC}  + Câmera IP (RTSP)"

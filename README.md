@@ -83,6 +83,23 @@ melhor qualidade possível, ideal para visualizar no monitor ligado ao Orin. Rod
 terminal do **desktop do Orin** (precisa de sessão gráfica). Ajuste resolução/FPS com
 `CANPASS_CSI_RES` (padrão do preview local: `1920x1080@60`; ex.: `CANPASS_CSI_RES=3840x2160@60 canpass --local`).
 
+**Multi-câmera (`--all`)** — usa **todas** as câmeras CSI detectadas de uma vez
+(caso típico: várias NileCAM81 GMSL na desserializadora), sem menu de seleção:
+
+```bash
+canpass --all              # um stream por câmera: /cam0, /cam1, ... + gravação por câmera
+canpass --all --display    # idem + uma janela ffplay por stream
+canpass --local --all      # MOSAICO local (grade nvcompositor → nv3dsink, sem rede/encode)
+```
+
+- Cada câmera publica num **path próprio** do MediaMTX: `rtsp://<ip>:8554/camN`,
+  WebRTC `http://<ip>:8889/camN`, HLS `http://<ip>:8888/camN` (N = sensor-id).
+- A **gravação por movimento roda por câmera**, em arquivos `camN_<início>_<fim>.mp4`.
+- O mosaico local monta a grade na GPU (1→1x1, 2→2x1, 3-4→2x2, 5-6→3x2); tamanho da
+  janela via `CANPASS_MOSAIC_W`/`CANPASS_MOSAIC_H` (padrão 1920x1080).
+- **Resolução por stream**: `CANPASS_CSI_RES` vale para todas. O NVENC do Orin codifica
+  4×1080p30 com folga; **4×4K não** — em multi-câmera fique no 1080p (padrão).
+
 **Fluxo:**
 
 1. Verifica permissão Docker e sobe o container `mediamtx` (RTSP/HLS) se necessário.
@@ -137,7 +154,8 @@ dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4
  └─ data   └─ início  └─ fim real
 ```
 
-Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
+Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`. No modo `--all`, cada câmera grava o
+seu arquivo com prefixo `camN_` (ex.: `cam2_11-05-2026_14-32-00_14-35-47.mp4`).
 
 | Variável de ambiente     | Padrão          | Descrição                                                                      |
 |--------------------------|-----------------|--------------------------------------------------------------------------------|
@@ -149,6 +167,8 @@ Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`
 | `CANPASS_NO_CLOCK_BOOST` | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI |
 | `CANPASS_CSI_BITRATE`    | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido  |
 | `CANPASS_CSI_ENCODER`    | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264)      |
+| `CANPASS_MOSAIC_W`       | `1920`          | Largura da janela do mosaico (`canpass --local --all`)                         |
+| `CANPASS_MOSAIC_H`       | `1080`          | Altura da janela do mosaico (`canpass --local --all`)                          |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
