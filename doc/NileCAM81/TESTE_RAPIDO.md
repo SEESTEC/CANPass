@@ -1,5 +1,11 @@
 # Teste rápido da NileCAM81 (reflash + driver) — e volta para a e-CAM82
 
+> ✅ **OBSOLETO (2026-06-10): este roteiro não é mais necessário.** O build da
+> NileCAM81 para **L4T 35.2.1** chegou da e-con e está no repo
+> (`NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1/`) — instale com
+> `sudo bash install_drivers.sh` (opção 2) **sem reflash** e alterne com
+> `canpass-camera switch`. Mantido apenas como registro do Plano B.
+
 Roteiro de bancada para **avaliar a NileCAM81** sem esperar o build 35.2.1 da e-con,
 e depois **voltar** ao setup e-CAM82 funcionando (Plano B, reprodutível pelo repo).
 

@@ -276,10 +276,33 @@ detect_cameras() {
 
 # ─── 4. Nome amigável da câmera ───────────────────────────────────────────────
 
+# Identifica QUAL câmera do projeto está ativa neste boot (e-CAM82 ↔ NileCAM81 —
+# elas dividem o conector J509 e o device tree, então é sempre UMA por boot).
+# Fontes, na ordem: módulo de kernel carregado (eimx485/ar0821 — reflete o que
+# realmente probou) → linha FDT do extlinux (DTB fixado pelo canpass-camera switch).
+# Sai vazio se indeterminado (ex.: não-Jetson).
+_active_csi_camera() {
+    if lsmod 2>/dev/null | grep -q '^eimx485'; then
+        echo "e-CAM82_CUOAGX (IMX485, MIPI)"; return
+    fi
+    if lsmod 2>/dev/null | grep -Eq '^ar0821|^max96712'; then
+        echo "NileCAM81_CUOAGX (GMSL/AR0821)"; return
+    fi
+    local fdt
+    fdt=$(grep -m1 -E '^[[:space:]]*FDT[[:space:]]' /boot/extlinux/extlinux.conf 2>/dev/null \
+          | awk '{print tolower($2)}')
+    case "$fdt" in
+        *imx485*|*ecam82*|*e-cam82*)       echo "e-CAM82_CUOAGX (IMX485, MIPI)" ;;
+        *nilecam*|*ar0821*|*0821*|*96712*) echo "NileCAM81_CUOAGX (GMSL/AR0821)" ;;
+    esac
+}
+
 camera_label() {
     local dev="$1"
     if [[ "$dev" == csi:* ]]; then
-        echo "CSI Camera — Jetson sensor-id ${dev#csi:}"
+        local cam
+        cam=$(_active_csi_camera)
+        echo "${cam:-CSI Camera} — Jetson sensor-id ${dev#csi:}"
         return
     fi
     if [[ "$dev" == ip:* ]]; then
@@ -788,8 +811,18 @@ main() {
     log_info "Procurando câmeras em /dev/video*..."
     mapfile -t cameras < <(detect_cameras)
 
+    # Em Jetson, anuncia qual das câmeras do projeto está ativa neste boot —
+    # a entrada csi:N do menu abaixo corresponde a ela (J509 = uma por boot).
+    local active_cam
+    active_cam=$(_active_csi_camera)
+    if [[ -n "$active_cam" ]]; then
+        log_info "Câmera do projeto ativa neste boot: ${BOLD}${active_cam}${NC}"
+        log_info "(para alternar e-CAM82 ↔ NileCAM81:  canpass-camera switch)"
+    fi
+
     if [[ ${#cameras[@]} -eq 0 ]]; then
         log_warn "Nenhuma câmera local encontrada."
+        [[ -n "$active_cam" ]] && log_warn "A ${active_cam%% *} está ativa no boot mas não enumerou — cabo/base board? 'canpass-camera status' ajuda."
     else
         log_ok "${#cameras[@]} câmera(s) local(is) detectada(s):"
     fi

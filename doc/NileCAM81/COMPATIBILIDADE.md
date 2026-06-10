@@ -1,5 +1,16 @@
 # NileCAM81_CUOAGX — análise de compatibilidade com o Orin atual
 
+> ✅ **ATUALIZAÇÃO (2026-06-10): o bloqueio de SOFTWARE foi RESOLVIDO.** O build da
+> NileCAM81 para **L4T 35.2.1 / JP 5.1.0** (R02, kernel 5.10.104 — o MESMO flash da
+> e-CAM82) chegou da e-con e está no repositório em
+> `doc/NileCAM81/NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1/` (md5 conferido).
+> Instalação: `sudo bash install_drivers.sh` → **opção 2**; alternância por boot:
+> `canpass-camera switch ecam82|nilecam81`. O reflash para 35.4.1/36.3.0 (rota B e o
+> roteiro do TESTE_RAPIDO.md) ficou **obsoleto** para este fim.
+> ⚠️ O bloqueio de **HARDWARE** continua: a NileCAM81 só conecta com o kit GMSL
+> (desserializadora `e-CAM_CUOAGX_DESER_6H01R1` no J509 + serializador + coax FAKRA + 12 V).
+> A análise original segue abaixo como registro.
+
 > **Pergunta:** com o JetPack instalado hoje no Orin (L4T **35.2.1** / JP **5.1.0**,
 > kernel `5.10.104-tegra`), dá para usar também a **NileCAM81_CUOAGX**?
 >

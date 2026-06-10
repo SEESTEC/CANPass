@@ -258,6 +258,7 @@ main() {
     log_step "1/5 — Instalando dependências"
     install_apt_package ffmpeg ffplay
     install_apt_package v4l-utils v4l2-ctl
+    install_apt_package can-utils candump   # canpass-can (CANable/J1939)
     install_docker
     install_jetson_gstreamer
     setup_jetson_sudoers

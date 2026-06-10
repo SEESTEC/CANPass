@@ -8,10 +8,12 @@
 # CONTEXTO (ver doc/NileCAM81/COMPATIBILIDADE.md):
 #   As duas câmeras usam o MESMO conector físico J509 e UM device tree por boot —
 #   logo NÃO rodam juntas; o que dá é ALTERNAR uma por boot. Isso exige ter os dois
-#   drivers instalados no flash 35.2.1. Hoje a e-CAM82 (eimx485) está instalada; a
-#   NileCAM81 p/ 35.2.1 ainda PRECISA ser obtida da e-con (temos só 35.4.1/36.3.0).
-#   Enquanto o DTB da NileCAM81 não estiver em /boot, 'switch nilecam81' aborta com
-#   instrução — de propósito (não deixa o Orin sem boot válido).
+#   drivers instalados no flash 35.2.1. O build da NileCAM81 p/ L4T 35.2.1 (R02)
+#   CHEGOU da e-con (2026-06-10) e está no repo em
+#   doc/NileCAM81/NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1 — instala-se com
+#   'sudo bash install_drivers.sh' (opção 2). Enquanto o DTB da NileCAM81 não
+#   estiver em /boot, 'switch nilecam81' aborta com instrução — de propósito
+#   (não deixa o Orin sem boot válido).
 #
 # Uso:
 #   canpass-camera status                 # mostra a câmera ativa (FDT atual)
@@ -92,9 +94,9 @@ _resolve_dtb() {
 
     log_error "Nenhum DTB de '${cam}' encontrado em /boot (padrões: ${pats[*]})."
     if [[ "$cam" == nilecam81 ]]; then
-        log_error "A NileCAM81 ainda não tem driver instalado p/ L4T 35.2.1."
-        log_error "Obtenha o pacote da e-con (build 35.2.1 / JP5.1.0) e instale antes de alternar."
-        log_error "Veja doc/NileCAM81/COMPATIBILIDADE.md (seção 4)."
+        log_error "O driver da NileCAM81 p/ L4T 35.2.1 está no repositório, mas não foi instalado."
+        log_error "Instale com:  sudo bash install_drivers.sh   (opção 2 — NileCAM81 GMSL)"
+        log_error "Detalhes: doc/NileCAM81/COMPATIBILIDADE.md."
     fi
     return 1
 }

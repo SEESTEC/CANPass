@@ -1,0 +1,2064 @@
+diff --git a/hardware/nvidia/platform/t19x/galen/kernel-dts/Makefile b/hardware/nvidia/platform/t19x/galen/kernel-dts/Makefile
+index 69111b6..4136257 100644
+--- a/hardware/nvidia/platform/t19x/galen/kernel-dts/Makefile
++++ b/hardware/nvidia/platform/t19x/galen/kernel-dts/Makefile
+@@ -21,6 +21,7 @@ dtb-$(BUILD_19x_ENABLE) += tegra194-p2888-0001-e3366-1199.dtb
+ dtb-$(BUILD_19x_ENABLE) += tegra194-p2888-0006-e3366-1199.dtb
+ dtb-$(BUILD_19x_ENABLE) += tegra194-p2888-as-0006-p2822-0000.dtb
+ dtb-$(BUILD_19x_ENABLE) += tegra194-p2888-as-p3668-p2822-0000.dtb
++dtb-$(BUILD_19x_ENABLE) += tegra194-p2888-0001-p2822-0000-nilecam81_two_lane.dtb
+ dtbo-$(BUILD_19x_ENABLE) += tegra194-p2888-0001-p2822-0000-overlay.dtbo
+ dtbo-$(BUILD_19x_ENABLE) += tegra194-p2888-0001-p2822-0000-hdr40.dtbo
+ dtbo-$(BUILD_19x_ENABLE) += tegra194-p2888-0001-p2822-0000-adafruit-sph0645lm4h.dtbo
+diff --git a/hardware/nvidia/platform/t19x/galen/kernel-dts/common/nilecam81_cuxvr_mode.dtsi b/hardware/nvidia/platform/t19x/galen/kernel-dts/common/nilecam81_cuxvr_mode.dtsi
+new file mode 100644
+index 0000000..184dd10
+--- /dev/null
++++ b/hardware/nvidia/platform/t19x/galen/kernel-dts/common/nilecam81_cuxvr_mode.dtsi
+@@ -0,0 +1,97 @@
++					mode0 {		// MODE_1280X720
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1280";
++						active_h = "720";
++						readout_orientation = "90";
++						pix_clk_hz = "160000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1280";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode1 {		// MODE_1920X1080
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1920";
++						active_h = "1080";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "160000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1920";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode2 {		// MODE_3840X2160
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "3840";
++						active_h = "2160";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "160000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "3840";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "16";
++						min_exp_time = "16";
++						max_exp_time = "660000";
++					};
++
++
+diff --git a/hardware/nvidia/platform/t19x/galen/kernel-dts/common/tegra194-p2822-nilecam81_two_lane.dtsi b/hardware/nvidia/platform/t19x/galen/kernel-dts/common/tegra194-p2822-nilecam81_two_lane.dtsi
+new file mode 100644
+index 0000000..fff871e
+--- /dev/null
++++ b/hardware/nvidia/platform/t19x/galen/kernel-dts/common/tegra194-p2822-nilecam81_two_lane.dtsi
+@@ -0,0 +1,716 @@
++/* Econ device tree for AR0821 support */
++#include "dt-bindings/clock/tegra194-clock.h"
++#define PWM_CALIB_GPIO	TEGRA194_MAIN_GPIO(H, 6)
++#define TRIGGER_SEL	TEGRA194_MAIN_GPIO(H, 3)
++#define RST_IO_EXP 	TEGRA194_MAIN_GPIO(T, 6)
++
++#define CAM_LANES 2
++#define CAM_LANES_STRING "2"
++
++/* Enable Six overlays in Jetson Xavier */
++&head0 {
++	win-mask = <0x3f>;
++};
++
++/ {
++	gpio@2200000 {
++		camera-control-output-high {
++                        status = "okay";
++                        gpio-hog;
++                        gpios = <RST_IO_EXP 0>;
++                        output-high;
++                        label = "rst-io-expender";
++                };
++		camera-control-output-low {
++                        status = "okay";
++			gpio-hog;
++			gpios = <TRIGGER_SEL 0>;
++			output-low;
++			label = "trigger_sel";
++		};
++	};
++     
++    // all cameras are disabled by default 
++     capture_vi_base: tegra-capture-vi  {
++			num-channels = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++				port@0 {
++					reg = <0>;
++					status = "okay";
++					ecam_vi_in0: endpoint {
++						status = "okay";
++						port-index = <0>;
++						bus-width = <CAM_LANES>;
++						remote-endpoint = <&ecam_csi_out0>;
++					};
++				};
++				port@1 {
++                                        reg = <1>;
++					status = "okay";
++                                        ecam_vi_in1: endpoint {
++						status = "okay";
++                                                port-index = <1>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out1>;
++                                        };
++                                };
++                                port@2 {
++                                        reg = <2>;
++					status = "okay";
++                                        ecam_vi_in2: endpoint {
++						status = "okay";
++                                                port-index = <2>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out2>;
++                                        };
++                                };
++				port@3 {
++                                        reg = <3>;
++					status = "okay";
++                                        ecam_vi_in3: endpoint {
++						status = "okay";
++                                                port-index = <3>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out3>;
++                                        };
++                                };
++				port@4 {
++                                        reg = <4>;
++					status = "okay";
++                                        ecam_vi_in4: endpoint {
++						status = "okay";
++                                                port-index = <4>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out4>;
++                                        };
++                                };
++				port@5 {
++                                        reg = <5>;
++					status = "okay";
++                                        ecam_vi_in5: endpoint {
++						status = "okay";
++                                                port-index = <5>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out5>;
++                                        };
++                                };
++			};
++		};
++
++	host1x@13e00000 {
++
++		nvcsi@15a00000 {
++			num-channels = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++	    		channel@0 {
++				reg = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_csi_in0: endpoint@0 {
++							status = "okay";
++							port-index = <0>;
++							bus-width = <CAM_LANES>;
++							remote-endpoint = <&ecam_ar0821_out0>;
++						};
++					};
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_csi_out0: endpoint@1 {
++							status = "okay";
++							remote-endpoint = <&ecam_vi_in0>;
++						};
++					};
++				};
++			};
++                        channel@1 {
++                                reg = <1>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in1: endpoint@2 {
++							status = "okay";
++                                                        port-index = <1>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out1>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out1: endpoint@3 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in1>;
++                                                };
++                                        };
++                                };
++                        };
++                        channel@2 {
++                                reg = <2>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in2: endpoint@4 {
++							status = "okay";
++                                                        port-index = <2>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out2>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out2: endpoint@5 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in2>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@3 {
++                                reg = <3>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in3: endpoint@6 {
++							status = "okay";
++                                                        port-index = <3>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out3>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out3: endpoint@7 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in3>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@4 {
++                                reg = <4>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in4: endpoint@8 {
++							status = "okay";
++                                                        port-index = <4>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out4>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out4: endpoint@9 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in4>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@5 {
++				reg = <5>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_csi_in5: endpoint@10 {
++							status = "okay";
++							port-index = <6>;
++							bus-width = <CAM_LANES>;
++							remote-endpoint = <&ecam_ar0821_out5>;
++						};
++					};
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_csi_out5: endpoint@11 {
++							status = "okay";
++							remote-endpoint = <&ecam_vi_in5>;
++						};
++					};
++				};
++			};
++		};
++	};
++	fixed-regulators {
++			p2822_vdd_1v8_cvb: regulator@102 {
++					regulator-always-on;
++			};
++	};
++              i2c@c250000 {   
++     		status = "okay";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		tca6424_22_a: tca6424@22 {
++			    compatible = "ti,tca6424";
++			    gpio-controller;
++			    #gpio-cells = <2>;
++			    reg = <0x22>;
++			    vcc-supply = <&p2822_vdd_1v8_cvb>;
++			    reset-gpios = <&tegra_main_gpio RST_IO_EXP GPIO_ACTIVE_HIGH>;
++			    trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++			    status = "okay";
++			    tca6424_22_outlow {
++				    /*
++				     * GPIO-0  : RST_CAM1
++				     * GPIO-1  : RST_CAM2
++				     * GPIO-2  : RST_CAM3
++				     * GPIO-3  : RST_CAM4
++				     * GPIO-4  : RST_CAM5
++				     * GPIO-5  : RST_CAM6
++				     * GPIO-7  : PWDN_CAM2
++				     * GPIO-8  : PWDN_CAM3
++				     * GPIO-9  : PWDN_CAM4
++				     * GPIO-10 : PWDN_CAM5
++				     * GPIO-11 : PWDN_CAM6
++				     */
++	
++				    gpio-hog;
++				    gpios = <0 0 1 0 2 0 6 0 7 0 8 0 9 0 10 0 11 0 12 0 13 0 14 0 15 0 19 0 20 0 21 0 22 0 23 0>;
++				    output-low;
++				    label = "tca6424_22_outlow_0",
++					  "tca6424_22_outlow_1",
++					  "tca6424_22_outlow_2",
++					  "tca6424_22_outlow_3",
++					  "tca6424_22_outlow_4",
++					  "tca6424_22_outlow_5",
++					  "tca6424_22_outlow_7",
++					  "tca6424_22_outlow_8",
++					  "tca6424_22_outlow_9",
++					  "tca6424_22_outlow_10",
++					  "tca6424_22_outlow_11",
++					  "tca6424_22_outlow_12",
++					  "tca6424_22_outlow_13";
++			    };
++		    tca6424_22_outhigh {
++			 gpio-hog;
++			 gpios = < 3 0 4 0 5 0 16 0 17 0 18 0>;
++			 output-high;
++			 label = "tca6424_22_outhigh_3",
++			 	 "tca6424_22_outhigh_4",
++			 	 "tca6424_22_outhigh_5",
++			         "tca6424_22_outhigh_16",
++			         "tca6424_22_outhigh_17",
++			         "tca6424_22_outhigh_18";
++		    };
++		    tca6424_22_input {
++			    status = "disabled";
++		    };
++	    };
++
++ 	};
++	/* i2c-2 - 3180000 for e-con camera */
++	i2c@3180000 {
++		status = "okay";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		tca9548@70 {
++			status = "okay";	
++			compatible = "nxp,pca9548";
++			reg = <0x70>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			vcc-supply = <&p2822_vdd_1v8_cvb>;
++			skip_mux_detect;
++			force_bus_start = <0x1e>;
++			i2c@0 {
++				reg = <0>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_a@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 0 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 3 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal"; 
++					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;
++					camera-mipi-clk = <1152>;
++					sio-port = "A";
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";
++#define TEGRA_SINTERFACE "serial_a"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out0: endpoint {
++								port-index = <0>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in0>;
++								};
++							};
++						};
++					};
++			ar0821_b@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 0 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 3 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal"; 
++					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_b"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out1: endpoint {
++								port-index = <1>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in1>;
++								};
++							};
++						};
++					};
++				};
++			i2c@1 {
++				reg = <1>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_c@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 1 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 4 GPIO_ACTIVE_HIGH>; 
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;
++					camera-mipi-clk = <1152>;
++					sio-port = "A";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_c"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out2: endpoint {
++								port-index = <2>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in2>;
++								};
++							};
++						};
++				};
++			ar0821_d@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 1 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 4 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_d"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out3: endpoint {
++								port-index = <3>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in3>;
++								};
++							};
++						};
++					};
++				};
++			i2c@2 {
++				reg = <2>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_e@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 2 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 5 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++ 					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "A";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_e"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out4: endpoint {
++								port-index = <4>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in4>;
++								};
++							};
++						};
++					};
++				ar0821_f@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA194_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA194_CLK_PLLP_OUT0>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22_a 2 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22_a 5 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					vana-supply = <&p2822_avdd_cam_2v8>;
++					vif-supply = <&p2822_vdd_1v8_cvb>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2045B80>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_f"
++#include "nilecam81_cuxvr_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out5: endpoint {
++								port-index = <5>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in5>;
++								};
++							};
++						};
++					};
++				};
++			};
++		};
++
++	 tcp: tegra-camera-platform {
++
++		compatible = "nvidia, tegra-camera-platform";
++		num_csi_lanes = <16>;
++		max_lane_speed = <2500000>;
++		min_bits_per_pixel = <16>;
++		vi_peak_byte_per_pixel = <2>;
++		vi_bw_margin_pct = <67>;
++		max_pixel_rate = <750000>;
++		isp_peak_byte_per_pixel = <5>;
++		isp_bw_margin_pct = <25>;
++
++		modules {
++			module0 {
++				badge = "nilecam81_cuoagx";
++				position = "bottomleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 30-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@0/ar0821_a@43";
++					status = "okay";
++				};
++			};
++			module1 {
++				badge = "nilecam81_cuoagx";
++				position = "bottomright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 30-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@0/ar0821_b@44";
++					status = "okay";
++				};
++			};
++			module2 {
++				badge = "nilecam81_cuoagx";
++				position = "centerleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 31-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@1/ar0821_c@43";
++					status = "okay";
++				};
++			};
++			module3 {
++				badge = "nilecam81_cuoagx";
++				position = "centerright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 31-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@1/ar0821_d@44";
++					status = "okay";
++				};
++			};
++			module4 {
++				badge = "nilecam81_cuoagx";
++				position = "topleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 32-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@2/ar0821_e@43";
++					status = "okay";
++				};
++			};
++			module5 {
++				badge = "nilecam81_cuoagx";
++				position = "topright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 32-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@2/ar0821_f@44";
++					status = "okay";
++				};
++			};
++		};
++	};
++};
++
++
++
+diff --git a/hardware/nvidia/platform/t19x/galen/kernel-dts/tegra194-p2888-0001-p2822-0000-nilecam81_two_lane.dts b/hardware/nvidia/platform/t19x/galen/kernel-dts/tegra194-p2888-0001-p2822-0000-nilecam81_two_lane.dts
+new file mode 100644
+index 0000000..1f22c1e
+--- /dev/null
++++ b/hardware/nvidia/platform/t19x/galen/kernel-dts/tegra194-p2888-0001-p2822-0000-nilecam81_two_lane.dts
+@@ -0,0 +1,174 @@
++/*
++ * tegra194-p2888-0001-p2822-0000-nilecam20_two_lane.dts : DTS file for Jetson AGX Xavier
++ * to enable e-con systems ar0230 camera modules.
++ *
++ * Copyright (c) 2016, NVIDIA CORPORATION.  All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; version 2 of the License.
++ *
++ * This program is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++ * more details.
++ *
++ */
++
++#include "tegra194-p2888-0001-p2822-0000.dts"
++#include "common/tegra194-p2822-nilecam81_two_lane.dtsi"
++
++/ {
++	nvidia,dtsfilename = __FILE__;
++	capture_vi_base: tegra-capture-vi {
++		ports {
++			vi_port0: port@0 {
++				status = "okay";
++				ecam_vi_in0: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port1: port@1 {
++				status = "okay";
++				ecam_vi_in1: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port2: port@2 {
++				status = "okay";
++				ecam_vi_in2: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port3: port@3 {
++				status = "okay";
++				ecam_vi_in3: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port4: port@4 {
++				status = "okay";
++				ecam_vi_in4: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port5: port@5 {
++				status = "okay";
++				ecam_vi_in5: endpoint {
++					status = "okay";
++				};
++			};
++		};
++	};
++
++	host1x@13e00000 {
++		csi_base: nvcsi@15a00000 {
++/* TODO Need to check this*/
++//			num-tpg-channels = <36>;
++			csi_chan0: channel@0 {
++				status = "okay";
++				ports {
++					csi_chan0_port0: port@0 {
++						status = "okay";
++						ecam_csi_in0: endpoint@0 {
++							status = "okay";
++						};
++					};
++					csi_chan0_port1: port@1 {
++						status = "okay";
++						ecam_csi_out0: endpoint@1 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan1: channel@1 {
++				status = "okay";
++				ports {
++					csi_chan1_port0: port@0 {
++						status = "okay";
++						ecam_csi_in1: endpoint@2 {
++							status = "okay";
++						};
++					};
++					csi_chan1_port1: port@1 {
++						status = "okay";
++						ecam_csi_out1: endpoint@3 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan2: channel@2 {
++				status = "okay";
++				ports {
++					csi_chan2_port0: port@0 {
++						status = "okay";
++						ecam_csi_in2: endpoint@4 {
++							status = "okay";
++						};
++					};
++					csi_chan2_port1: port@1 {
++						status = "okay";
++						ecam_csi_out2: endpoint@5 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan3: channel@3 {
++				status = "okay";
++				ports {
++					csi_chan3_port0: port@0 {
++						status = "okay";
++						ecam_csi_in3: endpoint@6 {
++							status = "okay";
++						};
++					};
++					csi_chan3_port1: port@1 {
++						status = "okay";
++						ecam_csi_out3: endpoint@7 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan4: channel@4 {
++				status = "okay";
++				ports {
++					csi_chan4_port0: port@0 {
++						status = "okay";
++						ecam_csi_in4: endpoint@8 {
++							status = "okay";
++						};
++					};
++					csi_chan4_port1: port@1 {
++						status = "okay";
++						ecam_csi_out4: endpoint@9 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan5: channel@5 {
++				status = "okay";
++				ports {
++					csi_chan5_port0: port@0 {
++						status = "okay";
++						ecam_csi_in5: endpoint@10 {
++							status = "okay";
++						};
++					};
++					csi_chan5_port1: port@1 {
++						status = "okay";
++						ecam_csi_out5: endpoint@11 {
++							status = "okay";
++						};
++					};
++				};
++			};
++		};
++	};
++};
++
++
+diff --git a/hardware/nvidia/platform/t23x/concord/kernel-dts/Makefile b/hardware/nvidia/platform/t23x/concord/kernel-dts/Makefile
+index 450191e..faef5d1 100644
+--- a/hardware/nvidia/platform/t23x/concord/kernel-dts/Makefile
++++ b/hardware/nvidia/platform/t23x/concord/kernel-dts/Makefile
+@@ -13,6 +13,7 @@ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-p3737-0000.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3701-0004-p3737-0000.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3767-0004-p3737-0000.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3767-0003-p3737-0000.dtb
++dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-p3737-0000-nilecam81_two_lane.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3767-0003-p3737-0000-dsi-innolux-a1-cphy.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3767-0003-p3737-0000-dsi-innolux-c1-dphy.dtb
+ dtb-$(BUILD_ENABLE) += tegra234-p3701-0000-as-p3767-0003-p3737-0000-dsi-innolux-c1-dsc-dphy.dtb
+diff --git a/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/nilecam81_cuoagx_mode.dtsi b/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/nilecam81_cuoagx_mode.dtsi
+new file mode 100644
+index 0000000..a794d48
+--- /dev/null
++++ b/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/nilecam81_cuoagx_mode.dtsi
+@@ -0,0 +1,98 @@
++					mode0 {		// MODE_1280X720
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1280";
++						active_h = "720";
++						readout_orientation = "90";
++						pix_clk_hz = "160000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1280";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++						//embedded_metadata_height = "0";
++					};
++					mode1 {		// MODE_1920X1080
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "1920";
++						active_h = "1080";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "180000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "1920";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "60";
++						min_exp_time = "60";
++						max_exp_time = "660000";
++					};
++					mode2 {		// MODE_3840X2160
++						mclk_khz = "24000";
++						num_lanes = "2";
++						tegra_sinterface = TEGRA_SINTERFACE;
++						phy_mode = "DPHY";
++						discontinuous_clk = "no";
++						dpcm_enable = "false";
++						cil_settletime = "0";
++						dynamic_pixel_bit_depth = "16";
++						csi_pixel_bit_depth = "16";
++						mode_type = "yuv";
++						pixel_phase = "uyvy";
++
++						active_w = "3840";
++						active_h = "2160";
++						readout_orientation = "0";
++						deskew_initial_enable = "false";
++						pix_clk_hz = "180000000";
++						/* Below mode parameter not used for econ UYVY camera sensor */ 
++						line_length = "3840";
++						inherent_gain = "1";
++						mclk_multiplier = "6";
++
++						min_gain_val = "0"; /* dB */
++						max_gain_val = "48"; /* dB */
++						min_hdr_ratio = "1";
++						max_hdr_ratio = "1";
++						min_framerate = "1.5";
++						max_framerate = "16";
++						min_exp_time = "16";
++						max_exp_time = "660000";
++					};
++
++
+diff --git a/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/tegra234-p3737-0000-nilecam81_two_lane.dtsi b/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/tegra234-p3737-0000-nilecam81_two_lane.dtsi
+new file mode 100644
+index 0000000..afaca2f
+--- /dev/null
++++ b/hardware/nvidia/platform/t23x/concord/kernel-dts/cvb/tegra234-p3737-0000-nilecam81_two_lane.dtsi
+@@ -0,0 +1,737 @@
++#include <dt-bindings/media/camera.h> 
++#include "dt-bindings/clock/tegra234-clock.h"
++#include <t234-common-cvb/tegra234-p3711-display.dtsi>
++
++#define RST_IO_EXP     TEGRA234_MAIN_GPIO(AC, 1)
++#define PWM_CALIB_GPIO	TEGRA234_MAIN_GPIO(H, 6)
++#define TRIGGER_SEL	TEGRA234_MAIN_GPIO(H, 3) 
++
++#define CAM_LANES 2
++#define CAM_LANES_STRING "2"
++
++// Enable Six overlays in Jetson Xavier 
++/*&Head0 {
++        win-mask = <0x3f>;
++};
++*/
++/ {
++      // set camera gpio direction to output 
++       	gpio@2200000 {
++		camera-control-output-high {
++                        status = "okay";
++                        gpio-hog;
++                        gpios = <RST_IO_EXP 1 TRIGGER_SEL 1>;
++                        output-high;
++                        label = "rst-io-expender", "trigger_sel";
++                };
++/*
++		camera-control-output-low {
++                        status = "okay";
++			gpio-hog;
++			gpios = <TRIGGER_SEL 0>;
++			output-low;
++			label = "trigger_sel";
++		};
++*/
++	};
++     
++    // all cameras are disabled by default 
++     capture_vi_base: tegra-capture-vi  {
++			num-channels = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;	
++				status = "okay";
++				port@0 {
++					reg = <0>;
++					status = "okay";
++					ecam_vi_in0: endpoint {
++						status = "okay";
++						port-index = <0>;
++						bus-width = <CAM_LANES>;
++						remote-endpoint = <&ecam_csi_out0>;
++					};
++				};
++				port@1 {
++                                        reg = <1>;
++					status = "okay";
++                                        ecam_vi_in1: endpoint {
++						status = "okay";
++                                                port-index = <1>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out1>;
++                                        };
++                                };
++                                port@2 {
++                                        reg = <2>;
++					status = "okay";
++                                        ecam_vi_in2: endpoint {
++						status = "okay";
++                                                port-index = <2>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out2>;
++                                        };
++                                };
++				port@3 {
++                                        reg = <3>;
++					status = "okay";
++                                        ecam_vi_in3: endpoint {
++						status = "okay";
++                                                port-index = <3>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out3>;
++                                        };
++                                };
++				port@4 {
++                                        reg = <4>;
++					status = "okay";
++                                        ecam_vi_in4: endpoint {
++						status = "okay";
++                                                port-index = <4>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out4>;
++                                        };
++                                };
++				port@5 {
++                                        reg = <5>;
++					status = "okay";
++                                        ecam_vi_in5: endpoint {
++						status = "okay";
++                                                port-index = <5>;
++                                                bus-width = <CAM_LANES>;
++                                                remote-endpoint = <&ecam_csi_out5>;
++                                        };
++                                };
++			};
++		};
++
++	host1x@13e00000 {
++
++		nvcsi@15a00000 {
++			num-channels = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++	    		channel@0 {
++				reg = <0>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_csi_in0: endpoint@0 {
++							status = "okay";
++							port-index = <0>;
++							bus-width = <CAM_LANES>;
++							remote-endpoint = <&ecam_ar0821_out0>;
++						};
++					};
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_csi_out0: endpoint@1 {
++							status = "okay";
++							remote-endpoint = <&ecam_vi_in0>;
++						};
++					};
++				};
++			};
++                        channel@1 {
++                                reg = <1>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in1: endpoint@2 {
++							status = "okay";
++                                                        port-index = <1>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out1>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out1: endpoint@3 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in1>;
++                                                };
++                                        };
++                                };
++                        };
++                        channel@2 {
++                                reg = <2>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in2: endpoint@4 {
++							status = "okay";
++                                                        port-index = <2>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out2>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out2: endpoint@5 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in2>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@3 {
++                                reg = <3>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in3: endpoint@6 {
++							status = "okay";
++                                                        port-index = <3>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out3>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out3: endpoint@7 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in3>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@4 {
++                                reg = <4>;
++				status = "okay";
++                                ports {
++                                        #address-cells = <1>;
++                                        #size-cells = <0>;
++                                        port@0 {
++                                                reg = <0>;
++						status = "okay";
++                                                ecam_csi_in4: endpoint@8 {
++							status = "okay";
++                                                        port-index = <4>;
++                                                        bus-width = <CAM_LANES>;
++                                                        remote-endpoint = <&ecam_ar0821_out4>;
++                                                };
++                                        };
++                                        port@1 {
++                                                reg = <1>;
++						status = "okay";
++                                                ecam_csi_out4: endpoint@9 {
++							status = "okay";
++                                                        remote-endpoint = <&ecam_vi_in4>;
++                                                };
++                                        };
++                                };
++                        };
++			channel@5 {
++				reg = <5>;
++				status = "okay";
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					port@0 {
++						reg = <0>;
++						status = "okay";
++						ecam_csi_in5: endpoint@10 {
++							status = "okay";
++							port-index = <6>;
++							bus-width = <CAM_LANES>;
++							remote-endpoint = <&ecam_ar0821_out5>;
++						};
++					};
++					port@1 {
++						reg = <1>;
++						status = "okay";
++						ecam_csi_out5: endpoint@11 {
++							status = "okay";
++							remote-endpoint = <&ecam_vi_in5>;
++						};
++					};
++				};
++			};
++		};
++	};
++              i2c@31e0000 {   
++     		status = "okay";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		tca6424_22: tca6424@22 {
++			compatible = "ti,tca6424";
++			gpio-controller;
++			#gpio-cells = <2>;
++			reg = <0x22>;
++                        vcc-supply = <&p3737_vdd_1v8_sys>;
++			reset = <&tegra_main_gpio RST_IO_EXP GPIO_ACTIVE_HIGH>;
++			trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++			status = "okay";
++			tca6424_22_outlow {
++				/*
++				 * GPIO-0  : RST_CAM1
++				 * GPIO-1  : RST_CAM2
++				 * GPIO-2  : RST_CAM3
++				 * GPIO-3  : RST_CAM4
++				 * GPIO-4  : RST_CAM5
++				 * GPIO-5  : RST_CAM6
++				 * GPIO-6  : PWDN_CAM1
++				 * GPIO-7  : PWDN_CAM2
++				 * GPIO-8  : PWDN_CAM3
++				 * GPIO-9  : PWDN_CAM4
++				 * GPIO-10 : PWDN_CAM5
++				 * GPIO-11 : PWDN_CAM6
++				*/ 
++
++				gpio-hog;
++				gpios = <0 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0 8 0 9 0 10 0 11 0 12 0 13 0 14 0 15 0 16 0 17 0 18 0>;
++				output-low;
++				label = "tca6424_22_rst_cam0_0",
++					"tca6424_22_rst_cam1_1",
++					"tca6424_22_rst_cam2_2",
++					"tca6424_22_rst_cam3_3",
++					"tca6424_22_rst_cam4_4",
++					"tca6424_22_rst_cam5_5",
++					"tca6424_22_boot_cam0_6",
++					"tca6424_22_boot_cam1_7",
++					"tca6424_22_boot_cam2_8",
++					"tca6424_22_boot_cam3_9",
++					"tca6424_22_boot_cam4_10",
++					"tca6424_22_boot_cam5_11",
++					"tca6424_22_flash1_cam0_12",
++					"tca6424_22_flash1_cam1_13",
++					"tca6424_22_flash1_cam2_14",
++					"tca6424_22_flash2_cam1_15",
++					"tca6424_22_pwdn_cam1_16",
++					"tca6424_22_pwdn_cam2_17",
++					"tca6424_22_pwdn_cam3_18";
++			};
++			tca6424_22_outhigh {
++				status= "disabled";
++			};
++			tca6424_22_input {
++		//		status = "disabled";
++		//		gpio-hog;
++		//		gpios = < 16 0 17 0 18 0 19 0 20 0 21 0>;
++		//		output-low;
++		/*		label = "tca6424_22_spi_cam0_16",
++					  "tca6424_22_spi_cam1_17",
++					  "tca6424_22_spi_cam2_18",
++					  "tca6424_22_spi_cam3_19",
++					  "tca6424_22_spi_cam4_20",
++					  "tca6424_22_spi_cam5_21";
++		*/
++			};
++		};
++	};	
++
++	/* i2c-2 - 3180000 for e-con camera */
++	i2c@3180000 {
++		status = "okay";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		tca9548@70 {	
++			compatible = "nxp,pca9548";
++			reg = <0x70>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			vcc-supply = <&p3737_vdd_1v8_sys>;
++			skip_mux_detect;
++			force_bus_start = <0x1e>;
++			i2c@0 {
++				reg = <0>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_a@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 0 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 3 GPIO_ACTIVE_HIGH>;
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 16 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal"; 
++					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;
++					camera-mipi-clk = <1152>;
++					sio-port = "A";
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";
++#define TEGRA_SINTERFACE "serial_a"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out0: endpoint {
++								port-index = <0>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in0>;
++								};
++							};
++						};
++					};
++			ar0821_b@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 0 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 3 GPIO_ACTIVE_HIGH>;
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 16 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal"; 
++					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_b"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out1: endpoint {
++								port-index = <1>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in1>;
++								};
++							};
++						};
++					};
++				};
++			i2c@1 {
++				reg = <1>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_c@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					clocks = <&bpmp_clks  TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 1 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 4 GPIO_ACTIVE_HIGH>; 
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 17 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;
++					camera-mipi-clk = <1152>;
++					sio-port = "A";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_c"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out2: endpoint {
++								port-index = <2>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in2>;
++								};
++							};
++						};
++				};
++			ar0821_d@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 1 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 4 GPIO_ACTIVE_HIGH>;
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 17 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_d"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out3: endpoint {
++								port-index = <3>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in3>;
++								};
++							};
++						};
++					};
++				};
++			i2c@2 {
++				reg = <2>;
++				i2c-mux,deselect-on-exit;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				status = "okay";
++				ar0821_e@43 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x43>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 2 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 5 GPIO_ACTIVE_HIGH>;
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 18 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++ 					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "A";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_e"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out4: endpoint {
++								port-index = <4>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in4>;
++								};
++							};
++						};
++					};
++				ar0821_f@44 {
++					status = "okay";
++					compatible = "nvidia,ar0821";
++					reg = <0x44>;
++					sensor_model ="ar0821";
++					avdd-reg = "vana";
++					iovdd-reg = "vif";
++					clocks = <&bpmp_clks  TEGRA234_CLK_EXTPERIPH1>,
++							 <&bpmp_clks TEGRA234_CLK_EXTPERIPH1>;
++					clock-names = "extperiph1", "pllp_grtba";
++					mclk = "extperiph1";
++					clock-frequency = <24000000>;
++					boot-gpios = <&tca6424_22 2 GPIO_ACTIVE_HIGH>;
++					reset-gpios = <&tca6424_22 5 GPIO_ACTIVE_HIGH>;
++					line-gpios = <&tca6424_22 15 GPIO_ACTIVE_HIGH>;
++					pwdn-gpios = <&tca6424_22 18 GPIO_ACTIVE_HIGH>;
++					trigger-gpios = <&tegra_main_gpio TRIGGER_SEL GPIO_ACTIVE_LOW>;
++					default-trigger = "internal";
++					vana-supply = <&p3737_avdd_cam_2v8>;
++					vif-supply = <&p3737_vdd_1v8_sys>;
++					use_sensor_mode_id = "false";
++					camera_mipi_lanes = <2>;	
++					camera-mipi-clk = <1152>;
++					sio-port = "B";	
++				        pwm-invert= <1>;
++                                        pwm-duty_ns = <0x1CBC720>;
++                                        pwm-period_ns = <0x2037FE7>;
++                                        pwm-calib-gpio = <&tegra_main_gpio PWM_CALIB_GPIO GPIO_ACTIVE_HIGH>;
++                                        pwm-name = "ecam-trigger";	
++#undef TEGRA_SINTERFACE	
++#define TEGRA_SINTERFACE "serial_f"
++#include "nilecam81_cuoagx_mode.dtsi"	
++					ports {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						port@0 {
++							reg = <0>;
++							ecam_ar0821_out5: endpoint {
++								port-index = <6>;
++								bus-width = <CAM_LANES>;
++								remote-endpoint = <&ecam_csi_in5>;
++								};
++							};
++						};
++					};
++				};
++			};
++		};
++
++	 tcp: tegra-camera-platform {
++
++		compatible = "nvidia, tegra-camera-platform";
++		num_csi_lanes = <16>;
++		max_lane_speed = <2500000>;
++		min_bits_per_pixel = <16>;
++		vi_peak_byte_per_pixel = <2>;
++		vi_bw_margin_pct = <67>;
++		max_pixel_rate = <750000>;
++		isp_peak_byte_per_pixel = <5>;
++		isp_bw_margin_pct = <25>;
++
++		modules {
++			module0 {
++				badge = "nilecam81_cuoagx";
++				position = "bottomleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 30-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@0/ar0821_a@43";
++					status = "okay";
++				};
++			};
++			module1 {
++				badge = "nilecam81_cuoagx";
++				position = "bottomright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 30-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@0/ar0821_b@44";
++					status = "okay";
++				};
++			};
++			module2 {
++				badge = "nilecam81_cuoagx";
++				position = "centerleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 31-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@1/ar0821_c@43";
++					status = "okay";
++				};
++			};
++			module3 {
++				badge = "nilecam81_cuoagx";
++				position = "centerright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 31-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@1/ar0821_d@44";
++					status = "okay";
++				};
++			};
++			module4 {
++				badge = "nilecam81_cuoagx";
++				position = "topleft";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 32-0043";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@2/ar0821_e@43";
++					status = "okay";
++				};
++			};
++			module5 {
++				badge = "nilecam81_cuoagx";
++				position = "topright";
++				orientation = "1";
++				drivernode0 {
++					pcl_id = "v4l2_sensor";
++					devname = "ar0821 32-0044";
++					proc-device-tree = "/proc/device-tree/i2c@3180000/tca9548@70/i2c@2/ar0821_f@44";
++					status = "okay";
++				};
++			};
++		};
++	};
++};
++
++
++
+diff --git a/hardware/nvidia/platform/t23x/concord/kernel-dts/tegra234-p3701-0000-p3737-0000-nilecam81_two_lane.dts b/hardware/nvidia/platform/t23x/concord/kernel-dts/tegra234-p3701-0000-p3737-0000-nilecam81_two_lane.dts
+new file mode 100644
+index 0000000..4ae7d7f
+--- /dev/null
++++ b/hardware/nvidia/platform/t23x/concord/kernel-dts/tegra234-p3701-0000-p3737-0000-nilecam81_two_lane.dts
+@@ -0,0 +1,182 @@
++/*
++ * tegra194-p2888-0001-p2822-0000-nilecam20_two_lane.dts : DTS file for Jetson AGX Xavier
++ * to enable e-con systems ar0230 camera modules.
++ *
++ * Copyright (c) 2016, NVIDIA CORPORATION.  All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; version 2 of the License.
++ *
++ * This program is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++ * more details.
++ *
++ */
++
++#include "tegra234-p3701-0000-p3737-0000.dts"
++#include "cvb/tegra234-p3737-0000-nilecam81_two_lane.dtsi"
++
++/* Enable Six overlays in Jetson Xavier 
++
++&head0 {
++	win-mask = <0x3f>;
++};
++
++*/
++
++/ {
++	nvidia,dtsfilename = __FILE__;
++
++	capture_vi_base: tegra-capture-vi {
++		ports {
++			vi_port0: port@0 {
++				status = "okay";
++				ecam_vi_in0: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port1: port@1 {
++				status = "okay";
++				ecam_vi_in1: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port2: port@2 {
++				status = "okay";
++				ecam_vi_in2: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port3: port@3 {
++				status = "okay";
++				ecam_vi_in3: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port4: port@4 {
++				status = "okay";
++				ecam_vi_in4: endpoint {
++					status = "okay";
++				};
++			};
++			vi_port5: port@5 {
++				status = "okay";
++				ecam_vi_in5: endpoint {
++					status = "okay";
++				};
++			};
++		};
++	};
++
++	host1x@13e00000 {
++		csi_base: nvcsi@15a00000 {
++/* TODO Need to check this*/
++//			num-tpg-channels = <36>;
++			csi_chan0: channel@0 {
++				status = "okay";
++				ports {
++					csi_chan0_port0: port@0 {
++						status = "okay";
++						ecam_csi_in0: endpoint@0 {
++							status = "okay";
++						};
++					};
++					csi_chan0_port1: port@1 {
++						status = "okay";
++						ecam_csi_out0: endpoint@1 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan1: channel@1 {
++				status = "okay";
++				ports {
++					csi_chan1_port0: port@0 {
++						status = "okay";
++						ecam_csi_in1: endpoint@2 {
++							status = "okay";
++						};
++					};
++					csi_chan1_port1: port@1 {
++						status = "okay";
++						ecam_csi_out1: endpoint@3 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan2: channel@2 {
++				status = "okay";
++				ports {
++					csi_chan2_port0: port@0 {
++						status = "okay";
++						ecam_csi_in2: endpoint@4 {
++							status = "okay";
++						};
++					};
++					csi_chan2_port1: port@1 {
++						status = "okay";
++						ecam_csi_out2: endpoint@5 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan3: channel@3 {
++				status = "okay";
++				ports {
++					csi_chan3_port0: port@0 {
++						status = "okay";
++						ecam_csi_in3: endpoint@6 {
++							status = "okay";
++						};
++					};
++					csi_chan3_port1: port@1 {
++						status = "okay";
++						ecam_csi_out3: endpoint@7 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan4: channel@4 {
++				status = "okay";
++				ports {
++					csi_chan4_port0: port@0 {
++						status = "okay";
++						ecam_csi_in4: endpoint@8 {
++							status = "okay";
++						};
++					};
++					csi_chan4_port1: port@1 {
++						status = "okay";
++						ecam_csi_out4: endpoint@9 {
++							status = "okay";
++						};
++					};
++				};
++			};
++			csi_chan5: channel@5 {
++				status = "okay";
++				ports {
++					csi_chan5_port0: port@0 {
++						status = "okay";
++						ecam_csi_in5: endpoint@10 {
++							status = "okay";
++						};
++					};
++					csi_chan5_port1: port@1 {
++						status = "okay";
++						ecam_csi_out5: endpoint@11 {
++							status = "okay";
++						};
++					};
++				};
++			};
++		};
++	};
++};
++

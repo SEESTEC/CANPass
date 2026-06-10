@@ -176,11 +176,16 @@ sudo usermod -aG video $USER && newgrp video   # adiciona usuário ao grupo vide
 
 ## Drivers de câmera e-con (Jetson AGX Orin)
 
-A câmera deste projeto é a **e-CAM82_CUOAGX**: **MIPI CSI-2**, sensor **Sony IMX485** com ISP externo, acessada via **Argus/V4L2** (`nvarguscamerasrc` / `/dev/video*`). **Ela NÃO é GMSL.**
+O projeto tem **duas câmeras alternáveis** (uma por boot, via `canpass-camera switch`):
 
-> A instalação principal (`install.sh`) **já instala este driver automaticamente** em Jetson,
-> de forma não-interativa. Rode `install_drivers.sh` à mão apenas para reinstalar ou escolher
-> outro pacote.
+- **e-CAM82_CUOAGX** (principal): **MIPI CSI-2**, sensor **Sony IMX485** com ISP externo,
+  via **Argus/V4L2** (`nvarguscamerasrc` / `/dev/video*`). **NÃO é GMSL.**
+- **NileCAM81_CUOAGX** (alternativa): **GMSL2**, sensor **AR0821** — exige o kit GMSL
+  (desserializadora `e-CAM_CUOAGX_DESER_6H01R1` no J509 + serializador + coax FAKRA + 12 V).
+
+> A instalação principal (`install.sh`) **já instala o driver da e-CAM82 automaticamente**
+> em Jetson, de forma não-interativa. Rode `install_drivers.sh` à mão para reinstalar,
+> instalar o da NileCAM81 ou escolher outro pacote.
 
 O `install_drivers.sh` deve ser executado **no próprio Orin** (aarch64), a partir da raiz deste repositório:
 
@@ -191,12 +196,21 @@ sudo bash install_drivers.sh --auto   # não-interativo: e-CAM82 IMX485, 4 lanes
 
 | Opção   | Pacote                         | Alvo                                          | Observação                          |
 |---------|--------------------------------|-----------------------------------------------|-------------------------------------|
-| **1** ✓ | **e-CAM82 (IMX485, MIPI)**     | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Driver CORRETO desta câmera**     |
-| 2 ⚠     | [GMSL] NileCAM81               | L4T 36.3.0 / JP 6.0.0                         | **OUTRO produto**                   |
+| **1** ✓ | **e-CAM82 (IMX485, MIPI)**     | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Câmera principal do projeto**     |
+| **2** ✓ | **NileCAM81 (GMSL/AR0821)**    | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Câmera alternativa** — build R02 solicitado à e-con (2026-06); **mesmo flash** da e-CAM82, alternância sem reflash. Exige o kit GMSL no J509 |
+| 3 ⚠     | [GMSL] e-CAM YUV OCTA (AR0821) | L4T 36.4.3 / JP 6.2.0                         | **OUTRO produto**                   |
+| 4 ⚠     | [GMSL] NileCAM81 p/ JP6        | L4T 36.3.0 / JP 6.0.0                         | Exige reflash p/ JP6 — use a opção 2 |
 
-> ⚠️ **Atenção:** instalar um driver **GMSL** (opção 2) na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
+> ⚠️ **Atenção:** instalar um driver **GMSL** errado na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
 
-**Requisito de flash:** o instalador da e-con confere `/etc/nv_tegra_release` e **aborta** se o L4T do flash não casar **exatamente** com o alvo do pacote. Para a e-CAM82, o Orin precisa estar em **L4T 35.2.1 / JP 5.1.0** (kernel `5.10.104-tegra`). O Orin usa **4 lanes**.
+**Requisito de flash:** o instalador da e-con confere `/etc/nv_tegra_release` e **aborta** se o L4T do flash não casar **exatamente** com o alvo do pacote. Para as opções 1 e 2, o Orin precisa estar em **L4T 35.2.1 / JP 5.1.0** (kernel `5.10.104-tegra`). A e-CAM82 usa **4 lanes**; a NileCAM81 é two-lane (DTB único do pacote).
+
+**Comportamento do instalador da e-con (opções 1 e 2):** substitui `/boot/Image` e o DTB
+genérico (backup automático em `~/Images_Backup`) e **reboota o Orin sozinho ao final**.
+O `install_drivers.sh` copia antes os **DTBs com nome próprio** (`*eimx485*.dtb` /
+`*nilecam81*.dtb`) para `/boot` — são eles que o `canpass-camera switch` aponta na linha
+`FDT` do extlinux para alternar as câmeras. Após o reboot, fixe a câmera desejada:
+`canpass-camera switch ecam82|nilecam81`.
 
 Após instalar, validar a captura com o app `eCAM_argus_camera` (libargus) que acompanha o pacote.
 
@@ -295,10 +309,12 @@ CANPASS_SENSOR_ID=1 canpass-camera preview                                      
 > ou use `CANPASS_AELOCK=true`. Referência completa dos controles: [`doc/e-CAM82/README.md`](doc/e-CAM82/README.md).
 
 > As duas câmeras **não rodam juntas** (conector J509 e device tree únicos):
-> é alternar, uma por boot — e a NileCAM81 ainda **não tem driver para L4T 35.2.1**
-> (o `switch` aborta enquanto o DTB dela não existir em `/boot`).
-> Análise em [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md);
-> roteiro de teste com reflash em [`doc/NileCAM81/TESTE_RAPIDO.md`](doc/NileCAM81/TESTE_RAPIDO.md).
+> é alternar, uma por boot. O driver da NileCAM81 para **L4T 35.2.1** está no repo
+> (`doc/NileCAM81/NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1/`) — instale com
+> `sudo bash install_drivers.sh` (opção 2); enquanto o DTB dela não estiver em `/boot`,
+> o `switch nilecam81` aborta com instrução (de propósito, p/ não deixar o Orin sem boot).
+> O `canpass` (menu de câmeras) anuncia qual das duas está ativa no boot atual.
+> Análise em [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md).
 
 ---
 
@@ -394,19 +410,24 @@ canpass-can down
 
 ```
 CANPass/
-├── README.md                                                  # documentação
-├── install.sh                                                 # instalador do stream (deps, scripts, alias, systemd)
-├── install_drivers.sh                                         # instalador de drivers e-con (rodar NO Orin, aarch64)
-├── doc/                                                       # tudo organizado por câmera (PDFs, drivers, CAD)
-│   ├── e-CAM82/                                               # e-CAM82_CUOAGX (MIPI/IMX485) — esta câmera
-│   │   ├── README.md                                          #   controles: Table 1, Flicker, auto-exposure
-│   │   ├── *.pdf                                              #   datasheets e guias
-│   │   ├── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/   # driver CORRETO (IMX485, JP5) — LFS
-│   │   └── e-CAM82_CUOAGX_L4T36.4.3/                          # driver GMSL OCTA (OUTRO produto) — LFS
-│   └── NileCAM81/             # NileCAM81_CUOAGX (GMSL/AR0821) — OUTRO produto
+├── README.md                  # documentação
+├── install.sh                 # instalador do stream (deps, scripts, alias, systemd)
+├── install_drivers.sh         # instalador de drivers e-con (rodar NO Orin, aarch64)
+├── doc/                       # tudo organizado por câmera (PDFs, drivers, CAD)
+│   ├── CAN/README.md          # referência do canpass-can (CANable/J1939)
+│   ├── e-CAM82/               # e-CAM82_CUOAGX (MIPI/IMX485) — câmera PRINCIPAL
+│   │   ├── README.md          #   controles: Table 1, Flicker, auto-exposure
+│   │   ├── *.pdf              #   datasheets e guias
+│   │   └── e-CAM82_CUOAGX/    #   drivers:
+│   │       ├── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/   # driver da e-CAM82 (IMX485, JP5) — LFS
+│   │       └── e-CAM_YUV-OCTA-GMSL-PRODUCTS_..._L4T36.4.3_R02/    # GMSL OCTA (OUTRO produto) — LFS
+│   └── NileCAM81/             # NileCAM81_CUOAGX (GMSL/AR0821) — câmera ALTERNATIVA
 │       ├── COMPATIBILIDADE.md · TESTE_RAPIDO.md
 │       ├── Common/ Hardware/ Software/ Software_R05_JP6/      # PDFs + CAD (STP/DXF, LFS)
-│       └── NileCAM81_CUOAGX/  # drivers: JP6.0_L4T36.3.0 (LFS) · JP5.1.2_L4T35.4.1 (fora do git)
+│       └── NileCAM81_CUOAGX/  # drivers:
+│           ├── JP5.1.0_L4T35.2.1/   # ★ build p/ o flash ATUAL (alternância s/ reflash) — LFS
+│           ├── JP6.0_L4T36.3.0/     # build p/ JP6 (exige reflash) — LFS
+│           └── JP5.1.2_L4T35.4.1/   # build antigo (fora do git)
 └── .rsc/
     ├── cam_view.sh            # script principal: detecção, stream RTSP/HLS/WebRTC, gravação
     ├── watchdog.sh            # supervisor de processo (alias `canpass`)
