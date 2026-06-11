@@ -102,16 +102,20 @@ setup_jetson_sudoers() {
     local sudoers_file="/etc/sudoers.d/canpass-nvargus"
 
     # Resolve caminhos (variam entre layouts L4T); só inclui o que existe.
-    local systemctl_bin nvpmodel_bin jetson_clocks_bin
+    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin
     systemctl_bin="$(command -v systemctl || echo /bin/systemctl)"
     nvpmodel_bin="$(command -v nvpmodel || true)"
     jetson_clocks_bin="$(command -v jetson_clocks || true)"
+    ip_bin="$(command -v ip || echo /usr/sbin/ip)"
 
     # cam_view.sh, no caminho CSI, reinicia o nvargus-daemon e maximiza os clocks
     # (nvpmodel/jetson_clocks + max-isp-vi-clks.sh da e-con) sem senha, via sudo -n.
+    # 'ip *': o canpass-can log roda em BACKGROUND (sem tty p/ pedir senha) e
+    # precisa de sudo p/ configurar/subir/derrubar a interface CAN do CANable.
     local -a cmds=("${systemctl_bin} restart nvargus-daemon")
     [[ -n "$nvpmodel_bin" ]]      && cmds+=("${nvpmodel_bin} -m 0")
     [[ -n "$jetson_clocks_bin" ]] && cmds+=("${jetson_clocks_bin}")
+    cmds+=("${ip_bin} *")
     cmds+=("${CALLING_HOME}/max-isp-vi-clks.sh")   # caminho determinístico; inofensivo se ausente
 
     local joined

@@ -21,9 +21,11 @@
 # máquina nem vai a bus-off. Para modo ativo (permitir cansend), use CANPASS_CAN_ACTIVE=1.
 #
 # Variáveis:
-#   CANPASS_CAN_IF       força a interface (ex.: can2), pulando a auto-detecção
-#   CANPASS_CAN_BITRATE  bitrate padrão (senão 250000 — J1939)
-#   CANPASS_CAN_ACTIVE   =1 sobe SEM listen-only (permite enviar; cuidado em veículo)
+#   CANPASS_CAN_IF         força a interface (ex.: can2), pulando a auto-detecção
+#   CANPASS_CAN_BITRATE    bitrate padrão (senão 250000 — J1939)
+#   CANPASS_CAN_ACTIVE     =1 sobe SEM listen-only (permite enviar; cuidado em veículo)
+#   CANPASS_CAN_LOG_HUMAN  =1 'log' com data+hora legível em vez de epoch (não replayável)
+#   CANPASS_CAN_LOG_ASCII  =1 'log' com coluna ASCII (candump -a; não replayável)
 
 set -uo pipefail
 
@@ -226,12 +228,19 @@ cmd_log() {
     local out="${dir}/can_$(date +%Y%m%d_%H%M%S).log"
 
     # Formato: epoch (-L, replayável por canplayer) por padrão; legível (-tA, data+hora)
-    # com CANPASS_CAN_LOG_HUMAN=1 — porém o formato legível NÃO é replayável.
+    # com CANPASS_CAN_LOG_HUMAN=1. CANPASS_CAN_LOG_ASCII=1 acrescenta a coluna de
+    # texto do candump (-a). O ÚNICO formato replayável é o epoch puro (-L) — tanto
+    # o legível quanto o ASCII usam o layout normal do candump, que o canplayer não lê.
+    local human="${CANPASS_CAN_LOG_HUMAN:-0}" ascii="${CANPASS_CAN_LOG_ASCII:-0}"
     local -a dargs; local note
-    if [[ "${CANPASS_CAN_LOG_HUMAN:-0}" == "1" ]]; then
-        dargs=(-tA); note="data+hora legível (NÃO replayável por canplayer)"
+    if [[ "$human" == "1" && "$ascii" == "1" ]]; then
+        dargs=(-tA -a); note="data+hora legível + ASCII (NÃO replayável por canplayer)"
+    elif [[ "$human" == "1" ]]; then
+        dargs=(-tA);    note="data+hora legível (NÃO replayável por canplayer)"
+    elif [[ "$ascii" == "1" ]]; then
+        dargs=(-ta -a); note="epoch + ASCII (NÃO replayável — p/ replay use o modo normal)"
     else
-        dargs=(-L);  note="epoch, replayável:  canplayer -I ${out##*/}"
+        dargs=(-L);     note="epoch, replayável:  canplayer -I ${out##*/}"
     fi
     log_ok "Gravando em ${out}"
     log_info "Formato: ${note}"

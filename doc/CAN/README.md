@@ -63,7 +63,13 @@ vídeo**, para manter vídeo + CAN juntos).
   imagem ↔ frame CAN depois.
 - **Formato legível**: `CANPASS_CAN_LOG_HUMAN=1` grava com `-tA` (data+hora) —
   porém esse formato **não** é replayável pelo `canplayer`.
+- **Coluna ASCII**: `CANPASS_CAN_LOG_ASCII=1` acrescenta a coluna de texto do
+  `candump -a` (com epoch usa `-ta`); útil p/ frames que carregam string (VIN,
+  nomes), mas o log deixa de ser replayável.
 - Acompanhe ao vivo em outro terminal: `tail -f <arquivo>`.
+- O `canpass` (watchdog) **inicia o `log` automaticamente** ao subir, com
+  bitrate/formato/destino escolhidos na entrevista de configuração — o log roda
+  contínuo enquanto o canpass estiver vivo.
 
 ### Supervisão (auto-resume + watchdog de fluxo) — `dump`/`ascii`/`sniff`/`log`
 
@@ -109,6 +115,7 @@ religa em listen-only.
 | `CANPASS_CAN_ACTIVE` | `0` | `=1` sobe **sem** listen-only — permite transmitir (`cansend`). **Cuidado em veículo.** |
 | `CANPASS_CAN_LOGDIR` | `CANPASS_REC_DIR` → `~/canpass_rec` | Diretório dos arquivos do `log`. |
 | `CANPASS_CAN_LOG_HUMAN` | `0` | `=1` grava o `log` com data+hora legível (`-tA`) em vez de epoch — **não replayável**. |
+| `CANPASS_CAN_LOG_ASCII` | `0` | `=1` grava o `log` com coluna ASCII (`candump -a`) — **não replayável**. |
 | `CANPASS_CAN_STALL_SECS` | `6` | Segundos sem frame novo antes de o watchdog (`dump`/`ascii`/`sniff`/`log`) reciclar a interface. |
 
 Exemplos:

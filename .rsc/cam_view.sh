@@ -498,10 +498,11 @@ _yuv_stream_loop() {
     done
 }
 
-# ─── 5b. Gravação por detecção de movimento (compartilhada single/--all) ──────
-# Lê o RTSP indicado, emite scene-scores (filtro select) e controla um ffmpeg
-# recorder (-c copy → MP4). $1 = URL RTSP · $2 = prefixo de arquivo/log
-# ("" no modo single — nomes inalterados; "camN_" no --all). Chame com '&'.
+# ─── 5b. Gravação por detecção de movimento (modo 'motion') ──────────────────
+# Um dos dois modos de gravação (ver _record_loop). Lê o RTSP indicado, emite
+# scene-scores (filtro select) e controla um ffmpeg recorder (-c copy → MP4 =
+# cópia EXATA do stream, máxima qualidade). $1 = URL RTSP · $2 = prefixo de
+# arquivo/log ("" no modo single — nomes inalterados; "camN_" no --all). Com '&'.
 _motion_loop() {
     local src_url="$1" prefix="${2:-}"
     local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
@@ -592,6 +593,67 @@ _motion_loop() {
         [[ $motion_active -eq 1 ]] && _ml_stop_recording
         sleep 5
     done
+}
+
+# ─── 5b-bis. Gravação CONTÍNUA (modo 'continuous') ───────────────────────────
+# Grava o RTSP sem parar, recomprimindo em H.264 (libx264, CRF) — arquivos bem
+# menores que a cópia do stream, com perda visual mínima (CRF ~21 ≈ transparente;
+# ajuste via CANPASS_CONT_CRF). Saída segmentada (CANPASS_CONT_SEGMENT_SECS,
+# padrão 600 s) em MP4 FRAGMENTADO: uma queda de energia corrompe no máximo o
+# segmento corrente — e mesmo ele continua abrindo no player.
+# $1 = URL RTSP · $2 = prefixo ("" single / "camN_" no --all). Chame com '&'.
+_continuous_loop() {
+    local src_url="$1" prefix="${2:-}"
+    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    mkdir -p "$rec_dir"
+    local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
+    local crf="${CANPASS_CONT_CRF:-21}"
+    local seg="${CANPASS_CONT_SEGMENT_SECS:-600}"
+
+    local fpid=""
+    trap '[[ -n "$fpid" ]] && kill "$fpid" 2>/dev/null; exit 0' INT TERM
+
+    log_info "${tag}Gravação contínua: x264 CRF ${crf}, segmentos de $(( seg / 60 )) min → ${rec_dir}"
+    while true; do
+        # espera o stream publicar no MediaMTX (evita spam de reconexão do ffmpeg)
+        until ffprobe -v quiet -rtsp_transport tcp -i "$src_url" >/dev/null 2>&1; do
+            sleep 2
+        done
+        ffmpeg -loglevel error \
+            -rtsp_transport tcp \
+            -i "$src_url" \
+            -c:v libx264 -preset veryfast -crf "$crf" -pix_fmt yuv420p -an \
+            -f segment -segment_time "$seg" -reset_timestamps 1 -strftime 1 \
+            -segment_format_options "movflags=+frag_keyframe+empty_moov+default_base_moof" \
+            "${rec_dir}/${prefix}cont_%d-%m-%Y_%H-%M-%S.mp4" 2>/dev/null &
+        fpid=$!
+        wait "$fpid"
+        local rc=$?
+        fpid=""
+        (( rc >= 128 )) && return
+        log_warn "${tag}Gravador contínuo encerrou (código ${rc}) — reiniciando em 5s..."
+        sleep 5
+    done
+}
+
+# Despacha para o gravador conforme CANPASS_REC_MODE (definido pela entrevista
+# do watchdog): 'continuous' = sempre gravando (recomprimido) · 'motion' (padrão)
+# = só com movimento (cópia exata). Mesma assinatura dos dois loops.
+_record_loop() {
+    if [[ "${CANPASS_REC_MODE:-motion}" == "continuous" ]]; then
+        _continuous_loop "$@"
+    else
+        _motion_loop "$@"
+    fi
+}
+
+# Linha-resumo do modo de gravação para os banners de status.
+_record_mode_label() {
+    if [[ "${CANPASS_REC_MODE:-motion}" == "continuous" ]]; then
+        echo "contínuo: x264 CRF ${CANPASS_CONT_CRF:-21}, segmentos de $(( ${CANPASS_CONT_SEGMENT_SECS:-600} / 60 )) min"
+    else
+        echo "movimento: threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s"
+    fi
 }
 
 show_camera() {
@@ -772,22 +834,17 @@ show_camera() {
     _ffmpeg_loop &
     loop_pid=$!
 
-    # ── Gravação por detecção de movimento ───────────────────────────────────
-    # Arquitetura:
-    #   ffmpeg detector  →  select filter (scene score)  →  bash state machine
-    #                                                              ↓
-    #                                                   ffmpeg recorder (-c copy → MP4)
-    #
-    # O detector lê o RTSP e emite apenas frames onde ≥ MOTION_THRESHOLD da
-    # imagem mudou. A máquina de estados inicia/para a gravação conforme o fluxo
-    # de eventos e o cooldown configurado.
+    # ── Gravação (contínua ou por movimento — CANPASS_REC_MODE) ──────────────
+    # 'motion' (padrão): ffmpeg detector → select filter (scene score) → máquina
+    # de estados → ffmpeg recorder (-c copy → MP4, cópia exata).
+    # 'continuous': ffmpeg único reencodando (x264 CRF) em segmentos MP4.
 
     local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     mkdir -p "$rec_dir"
 
-    # Detector + recorder compartilhados com o modo --all (seção 5b); prefixo
+    # Gravador compartilhado com o modo --all (seções 5b/5b-bis); prefixo
     # vazio mantém os nomes de arquivo do modo single inalterados.
-    _motion_loop "$RTSP_URL" "" &
+    _record_loop "$RTSP_URL" "" &
     local motion_rec_pid=$!
 
     # Encerra os loops ao sair (Q, Ctrl+C ou término normal).
@@ -841,7 +898,7 @@ show_camera() {
         log_ok "Stream WebRTC  [${iface}]:  http://${iface_ip}:8889${HLS_PATH}  (~100 ms)"
         log_ok "Stream HLS     [${iface}]:  http://${iface_ip}:8888${HLS_PATH}  (~200 ms)"
     done < <(ip -4 -o addr show | awk '$2 != "lo" {print $2, $4}')
-    log_ok "Gravando em:   ${rec_dir}  (movimento: threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
+    log_ok "Gravando em:   ${rec_dir}  ($(_record_mode_label))"
     if [[ "$display" == "--display" ]]; then
         log_info "Iniciando visualização local — pressione Q para sair."
         echo
@@ -902,7 +959,7 @@ show_all_cameras() {
 
     local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     for sid in "${sids[@]}"; do
-        _motion_loop "rtsp://localhost:8554/cam${sid}" "cam${sid}_" &
+        _record_loop "rtsp://localhost:8554/cam${sid}" "cam${sid}_" &
         rec_pids+=($!)
     done
 
@@ -949,7 +1006,7 @@ show_all_cameras() {
             log_ok "  cam${sid}:  http://${iface_ip}:8889/cam${sid}"
         done
     done < <(ip -4 -o addr show | awk '$2 != "lo" {print $2, $4}')
-    log_ok "Gravando em: ${rec_dir} — camN_<início>_<fim>.mp4 por câmera (threshold=${MOTION_THRESHOLD}, cooldown=${MOTION_COOLDOWN_SECS}s)"
+    log_ok "Gravando em: ${rec_dir} — arquivos camN_*.mp4 por câmera ($(_record_mode_label))"
 
     if [[ "$display" == "--display" ]]; then
         log_info "Abrindo uma janela ffplay por stream — Ctrl+C aqui encerra tudo."
