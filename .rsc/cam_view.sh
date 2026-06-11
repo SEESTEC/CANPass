@@ -1058,16 +1058,20 @@ show_local() {
         log_info "Preview local YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${y_w}x${y_h} (nv3dsink)."
         _boost_jetson_clocks
         log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+        # Caps NV12 NVMM explícitos após o nvvidconv — sem eles a negociação com
+        # o nv3dsink falha ("not-negotiated": passthrough UYVY NVMM não aceito).
         if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
             gst-launch-1.0 -q \
                 nvv4l2camerasrc device="/dev/video${vnode}" ! \
                 "video/x-raw(memory:NVMM),format=UYVY,width=${y_w},height=${y_h}" ! \
-                nvvidconv ! nv3dsink sync=false
+                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                nv3dsink sync=false
         else
             gst-launch-1.0 -q \
                 v4l2src device="/dev/video${vnode}" ! \
                 "video/x-raw,format=UYVY,width=${y_w},height=${y_h}" ! \
-                nvvidconv ! nv3dsink sync=false
+                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                nv3dsink sync=false
         fi
     elif [[ "$dev" == csi:* ]]; then
         local sensor_id="${dev#csi:}"
@@ -1150,14 +1154,16 @@ show_local_all() {
     for i in "${!cams[@]}"; do
         sid="${cams[$i]#*:}"
         if [[ "${cams[$i]}" == yuv:* ]]; then
+            # Caps NV12 NVMM explícitos após o nvvidconv (mesma razão do preview:
+            # sem eles o passthrough UYVY NVMM quebra a negociação).
             if [[ "$yuv_src" == "nvv4l2camerasrc" ]]; then
                 gst+=( nvv4l2camerasrc device="/dev/video${sid}" ! \
                        "video/x-raw(memory:NVMM),format=UYVY,width=${csi_w},height=${csi_h}" ! \
-                       nvvidconv ! "comp.sink_${i}" )
+                       nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! "comp.sink_${i}" )
             else
                 gst+=( v4l2src device="/dev/video${sid}" ! \
                        "video/x-raw,format=UYVY,width=${csi_w},height=${csi_h}" ! \
-                       nvvidconv ! "comp.sink_${i}" )
+                       nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! "comp.sink_${i}" )
             fi
         else
             gst+=( nvarguscamerasrc sensor-id="$sid" ! \

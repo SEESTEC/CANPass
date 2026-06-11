@@ -445,20 +445,45 @@ cmd_preview() {
         local vdev="/dev/video${SENSOR_ID}"
         [[ -e "$vdev" ]] || { log_error "${vdev} ausente — a NileCAM81 não enumerou (12V? LINK A? dmesg | grep ar0821)."; return 1; }
         _apply_nilecam81_ctrls
-        log_info "Pipeline V4L2 (UYVY → nvvidconv → nv3dsink) — sem Argus."
+        log_info "Pipeline V4L2 (UYVY → nvvidconv → NV12 → nv3dsink) — sem Argus."
         log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
+        # nvvidconv SEM caps de saída quebra a negociação com o nv3dsink
+        # ("not-negotiated": ele tenta passthrough de UYVY NVMM, que o sink não
+        # aceita). Forçar NV12 NVMM — mesmo formato do caminho Argus e do stream
+        # (pipeline comprovado; é também o pipeline de referência da e-con).
+        local rc=0
         if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
             gst-launch-1.0 -q \
                 nvv4l2camerasrc device="$vdev" ! \
                 "video/x-raw(memory:NVMM),format=UYVY,width=${w},height=${h}" ! \
-                nvvidconv ! nv3dsink sync=false
+                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                nv3dsink sync=false
+            rc=$?
+            # >=128 = sinal (Ctrl+C etc.) — não é falha; <128 = pipeline não subiu
+            if (( rc != 0 && rc < 128 )); then
+                log_warn "Pipeline NVMM falhou (rc=${rc}) — tentando captura por CPU (v4l2src)..."
+                gst-launch-1.0 -q \
+                    v4l2src device="$vdev" ! \
+                    "video/x-raw,format=UYVY,width=${w},height=${h}" ! \
+                    nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    nv3dsink sync=false
+                rc=$?
+            fi
         else
             gst-launch-1.0 -q \
                 v4l2src device="$vdev" ! \
                 "video/x-raw,format=UYVY,width=${w},height=${h}" ! \
-                nvvidconv ! nv3dsink sync=false
+                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                nv3dsink sync=false
+            rc=$?
         fi
-        return
+        if (( rc != 0 && rc < 128 )); then
+            log_error "Preview falhou (rc=${rc})."
+            log_info  "A câmera está ocupada por outro processo? Cheque:  sudo fuser -v ${vdev}"
+            log_info  "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
+            return 1
+        fi
+        return 0
     fi
 
     # WDR/HDR é controle V4L2 (driver e-con) — aplicado antes de abrir o Argus.
