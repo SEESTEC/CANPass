@@ -243,7 +243,9 @@ ${BOLD}canpass-camera${NC} — alterna e ajusta a câmera do Orin (e-CAM82 ↔ N
   canpass-camera status                      câmera ativa neste boot (FDT do extlinux)
   canpass-camera list                        DTBs candidatos em /boot
   canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
-  canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+  canpass-camera preview [ecam82|nilecam81]  preview c/ menu de resolução e fallback de sink
+      (nv3dsink → xvimagesink → ximagesink · --local = monitor do Orin via SSH ·
+       --nv3dsink | --xvimagesink | --ximagesink = força um sink)
   canpass-camera ctrls                       controles V4L2: atual vs padrão (* = alterado)
   canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
 

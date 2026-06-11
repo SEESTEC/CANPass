@@ -387,30 +387,83 @@ _apply_nilecam81_ctrls() {
 #   xvimagesink — XVideo (CPU); funciona na maioria dos displays locais.
 #   ximagesink  — X puro; funciona em QUALQUER display (até remoto), mais lento.
 # CANPASS_PREVIEW_SINK=nv3d|xv|x pula direto para um sink específico.
+# Roda UM pipeline de preview, vigiando a inicialização: alguns erros fatais
+# (ex.: nv3dsink sem GL+CUDA → 'cuGraphicsGLRegisterBuffer error 219') deixam o
+# gst-launch TRAVADO com janela preta, sem sair — detectamos pelo stderr e
+# matamos para o chamador tentar o próximo sink. Ctrl+C do usuário encerra de
+# verdade (flag _PREVIEW_INT — o gst-launch captura SIGINT e sai com rc=2, o que
+# antes era confundido com falha e fazia a cadeia "avançar" no Ctrl+C).
+# $1 = rótulo · $2.. = pipeline. Retorno: 0 = rodou (ou usuário encerrou);
+# 1 = falhou na inicialização (chamador tenta o próximo sink).
+_PREVIEW_INT=0
+_run_sink() {
+    local label="$1"; shift
+    local elog pid rc t=0
+    elog=$(mktemp /tmp/canpass_preview.XXXXXX)
+    gst-launch-1.0 -q "$@" 2> >(tee "$elog" >&2) &
+    pid=$!
+    # Janela de init (~6 s): saída precoce OU erro fatal no stderr = falha.
+    while (( t < 60 )); do
+        (( _PREVIEW_INT )) && { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rm -f "$elog"; return 0; }
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; rc=$?
+            rm -f "$elog"
+            (( _PREVIEW_INT )) && return 0
+            log_warn "${label} encerrou na inicialização (rc=${rc})."
+            return 1
+        fi
+        if grep -qE 'cuGraphicsGLRegisterBuffer|not-negotiated|Internal data stream error|Could not initialise Xv|cannot open display|Failed to create GL context' "$elog" 2>/dev/null; then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+            rm -f "$elog"
+            (( _PREVIEW_INT )) && return 0
+            log_warn "${label} falhou na inicialização (erro fatal no pipeline)."
+            return 1
+        fi
+        sleep 0.1; t=$(( t + 1 ))
+    done
+    # Init OK — fica rodando até o usuário encerrar.
+    log_ok "${label} rodando — Ctrl+C encerra."
+    wait "$pid"; rc=$?
+    if (( _PREVIEW_INT )); then
+        # Ctrl+C: garante o fim do gst (caso não tenha recebido/honrado o INT).
+        kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+        rm -f "$elog"
+        return 0
+    fi
+    rm -f "$elog"
+    (( rc != 0 )) && log_info "${label} encerrou (rc=${rc})."
+    return 0
+}
+
 _preview_run() {
     local -a srcpipe=( "$@" )
-    local want="${CANPASS_PREVIEW_SINK:-auto}" rc=1
+    local want="${CANPASS_PREVIEW_SINK:-auto}"
+    _PREVIEW_INT=0
+    trap '_PREVIEW_INT=1' INT
+
     if [[ "$want" == auto || "$want" == nv3d ]]; then
-        gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
-            "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false
-        rc=$?; (( rc == 0 || rc >= 128 )) && return 0   # >=128 = Ctrl+C (intencional)
-        [[ "$want" == nv3d ]] && { log_error "nv3dsink falhou (rc=${rc})."; return 1; }
-        log_warn "nv3dsink falhou (rc=${rc}) — display sem GL+CUDA (SSH -X/VNC?). Tentando XVideo..."
+        _run_sink "nv3dsink (GPU)" "${srcpipe[@]}" ! nvvidconv ! \
+            "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false \
+            && { trap - INT; return 0; }
+        [[ "$want" == nv3d ]] && { trap - INT; log_error "nv3dsink falhou."; return 1; }
+        log_warn "Display sem GL+CUDA (SSH -X/VNC?) — caindo para XVideo..."
     fi
     if [[ "$want" == auto || "$want" == xv ]]; then
-        gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
-            "video/x-raw,format=I420" ! xvimagesink sync=false
-        rc=$?; (( rc == 0 || rc >= 128 )) && return 0
-        [[ "$want" == xv ]] && { log_error "xvimagesink falhou (rc=${rc})."; return 1; }
-        log_warn "xvimagesink falhou (rc=${rc}) — tentando X puro (ximagesink)..."
+        _run_sink "xvimagesink (XVideo)" "${srcpipe[@]}" ! nvvidconv ! \
+            "video/x-raw,format=I420" ! xvimagesink sync=false \
+            && { trap - INT; return 0; }
+        [[ "$want" == xv ]] && { trap - INT; log_error "xvimagesink falhou."; return 1; }
+        log_warn "XVideo indisponível — caindo para X puro (ximagesink)..."
     fi
-    gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
-        "video/x-raw,format=I420" ! videoconvert ! ximagesink sync=false
-    rc=$?; (( rc == 0 || rc >= 128 )) && return 0
-    log_error "Preview falhou em todos os sinks (último rc=${rc})."
+    if _run_sink "ximagesink (X puro)" "${srcpipe[@]}" ! nvvidconv ! \
+        "video/x-raw,format=I420" ! videoconvert ! ximagesink sync=false; then
+        trap - INT; return 0
+    fi
+    trap - INT
+    log_error "Preview falhou em todos os sinks."
     log_info  "Câmera em uso por outro processo? Cheque:  sudo fuser -v /dev/video${SENSOR_ID}"
     log_info  "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
-    log_info  "nv3dsink exige o desktop LOCAL do Orin; via SSH/VNC force CANPASS_PREVIEW_SINK=xv ou x."
+    log_info  "nv3dsink exige o desktop LOCAL do Orin (use 'preview --local' via SSH)."
     return 1
 }
 
@@ -418,7 +471,23 @@ _preview_run() {
 # Visualização local no estilo see_cam.sh (menu de resolução → sink), com
 # banner informativo e parâmetros de AE/flicker/WDR ajustáveis por ambiente.
 cmd_preview() {
-    local cam="${1:-}"
+    # Flags (qualquer posição, combináveis com a câmera):
+    #   --local                       janela no monitor do Orin (DISPLAY=:0) — útil via SSH
+    #   --nv3dsink | --nv3d           força GPU direta (exige GL+CUDA no display)
+    #   --xvimagesink | --xv          força XVideo (CPU — funciona em VNC/SSH na maioria)
+    #   --ximagesink | --x            força X puro (funciona em QUALQUER display)
+    # Sem flag de sink: cadeia automática nv3dsink → xvimagesink → ximagesink.
+    local cam="" a
+    for a in "$@"; do
+        case "$a" in
+            --local)            export DISPLAY=:0 ;;
+            --nv3dsink|--nv3d)  export CANPASS_PREVIEW_SINK=nv3d ;;
+            --xvimagesink|--xv) export CANPASS_PREVIEW_SINK=xv ;;
+            --ximagesink|--x)   export CANPASS_PREVIEW_SINK=x ;;
+            ecam82|nilecam81)   cam="$a" ;;
+            *) log_warn "Argumento desconhecido ignorado: '$a'" ;;
+        esac
+    done
 
     # Sem argumento: tenta inferir pela câmera ativa no extlinux.
     if [[ -z "$cam" ]]; then
@@ -646,7 +715,10 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
   canpass-camera status                      câmera ativa (FDT atual)
   canpass-camera list                        DTBs candidatos em /boot
   canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
-  canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+  canpass-camera preview [ecam82|nilecam81] [flags]   preview com menu de resolução
+      sinks em fallback automático: nv3dsink (GPU) → xvimagesink → ximagesink
+      --local = janela no monitor do Orin (DISPLAY=:0, útil via SSH)
+      --nv3dsink | --xvimagesink | --ximagesink = força um sink específico
   canpass-camera ctrls                       controles V4L2: atual vs padrão (* = alterado)
   canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
 
