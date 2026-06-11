@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # watchdog.sh — Entrada do 'canpass':
+#   0. imprime a referência completa de comandos/parâmetros (CANPASS_NO_HELP=1
+#      oculta; 'canpass --help' imprime só ela e sai);
 #   1. entrevista de configuração (modo de gravação de vídeo, CAN, armazenamento);
 #   2. inicia o log CAN contínuo (canpass-can log) em segundo plano — roda
 #      enquanto o canpass estiver vivo, independente de reinícios do cam_view;
@@ -219,6 +221,70 @@ _stop_can_logger() {
     CAN_LOG_PID=""
 }
 
+# ─── Referência completa de comandos (impressa em toda partida) ──────────────
+# CANPASS_NO_HELP=1 pula. Também acessível via 'canpass --help' (imprime e sai).
+
+_show_reference() {
+    [[ "${CANPASS_NO_HELP:-0}" == "1" ]] && return 0
+    echo -e "${BOLD}${CYAN}══════════════════ CANPass — referência de comandos e parâmetros ══════════════════${NC}"
+    echo -e "
+${BOLD}canpass${NC} — stream + gravação de vídeo + log CAN (este comando)
+  canpass                  entrevista → stream RTSP/WebRTC/HLS + gravação + log CAN contínuo
+  canpass --display        idem, + janela ffplay local do stream
+  canpass --all            todas as câmeras CSI/YUV: 1 stream por camN + gravação por câmera
+  canpass --all --display  idem, + uma janela ffplay por stream
+  canpass --local          preview direto no monitor do Orin (sem rede/gravação/entrevista/CAN)
+  canpass --local --all    mosaico local com todas as câmeras (nvcompositor)
+  canpass --help           imprime esta referência e sai
+
+${BOLD}canpass-camera${NC} — alterna e ajusta a câmera do Orin (e-CAM82 ↔ NileCAM81, uma por boot)
+  canpass-camera status                      câmera ativa neste boot (FDT do extlinux)
+  canpass-camera list                        DTBs candidatos em /boot
+  canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
+  canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+  canpass-camera ctrls                       controles V4L2: atual vs padrão (* = alterado)
+  canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
+
+${BOLD}canpass-can${NC} — sniffer/log do CANable USB (gs_usb, J1939 250k; listen-only por padrão)
+  canpass-can detect            lista interfaces CAN + driver; aponta a do CANable
+  canpass-can dump [bitrate]    sobe + candump no terminal (-tA = data+hora)
+  canpass-can log [bitrate]     sobe + grava can_*.log (o canpass já inicia isso sozinho)
+  canpass-can ascii [bitrate]   sobe + candump -a (hex + coluna ASCII)
+  canpass-can sniff [bitrate]   monitora bytes que MUDAM (29-bit — achar eixo/botão)
+  canpass-can selftest [br]     loopback interno: prova o adaptador sem depender do bus
+  canpass-can up|status|down    só sobe / contadores e estado / derruba a interface
+
+${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
+  Partida:   CANPASS_NO_INTERVIEW=1 (pula entrevista) · CANPASS_PROMPT_TIMEOUT (30 s/pergunta)
+             CANPASS_NO_HELP=1 (oculta esta referência)
+  Stream:    CANPASS_CSI_RES \"WxH@FPS\" (1920x1080@30) · CANPASS_CSI_BITRATE (8000000)
+             CANPASS_CSI_ENCODER auto|hw|sw · CANPASS_CSI_SENSORS \"0 1...\" (fallback s/ /dev/video)
+             CANPASS_NO_CLOCK_BOOST=1 · CANPASS_MOSAIC_W/CANPASS_MOSAIC_H (mosaico --local --all)
+  Gravação:  CANPASS_REC_MODE continuous|motion · CANPASS_REC_DIR (~/canpass_rec)
+             CANPASS_CONT_CRF (21) · CANPASS_CONT_SEGMENT_SECS (600)
+             MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30)
+  CAN:       CANPASS_CAN_IF (força iface) · CANPASS_CAN_BITRATE (250000) · CANPASS_CAN_ACTIVE=1
+             CANPASS_CAN_LOGDIR · CANPASS_CAN_LOG_HUMAN=1 · CANPASS_CAN_LOG_ASCII=1
+             CANPASS_CAN_STALL_SECS (6)
+  Câmera:    CANPASS_DTB_ECAM82 · CANPASS_DTB_NILECAM81 · CANPASS_SENSOR_ID (0) · CANPASS_EXTLINUX
+
+${BOLD}Controles de imagem${NC} (valem p/ 'canpass-camera preview' e p/ o stream; nomes por câmera)
+  e-CAM82 (Argus):  CANPASS_FLICKER 0..3 · CANPASS_EXPOSURECOMP -2..2 · CANPASS_EXPTIME \"min max\" ns
+                    CANPASS_GAINRANGE · CANPASS_ISPGAIN · CANPASS_AELOCK · CANPASS_AWBLOCK
+                    CANPASS_WBMODE 0..9 · CANPASS_SATURATION 0..2 · CANPASS_TNR_MODE/_STRENGTH
+                    CANPASS_EE_MODE/_STRENGTH · CANPASS_AEREGION · CANPASS_SENSOR_MODE · CANPASS_HDR 0|1
+  NileCAM81 (V4L2): CANPASS_HDR 0|1|2 · CANPASS_EXPAUTO 0|1|2 · CANPASS_EXPTIME 1..10000
+                    CANPASS_EXPOSURECOMP 8000..1000000 · CANPASS_ROI_SIZE/_POS · CANPASS_GAIN 1..100
+                    CANPASS_WBAUTO 0|1 · CANPASS_WBTEMP 1000..10000 · CANPASS_BRIGHTNESS -15..15
+                    CANPASS_CONTRAST 0..10 · CANPASS_SATURATION 0..60 · CANPASS_GAMMA 40..500
+                    CANPASS_SHARPNESS 0..7 · CANPASS_DENOISE 0..15 · CANPASS_HFLIP/_VFLIP 0|1
+                    CANPASS_FPS 3..60 · CANPASS_FRAMESYNC 0..3 · CANPASS_TRIGGER 0|1 · CANPASS_EFFECT 0..4
+
+  Ajuda detalhada:  canpass-camera --help · canpass-can --help · canpass-camera ctrls
+  Documentação:     doc/e-CAM82/README.md · doc/NileCAM81/CONTROLES.md · doc/CAN/README.md
+${BOLD}${CYAN}════════════════════════════════════════════════════════════════════════════════════${NC}"
+}
+
 # ─── Limpeza do diretório de instalação temporário ───────────────────────────
 
 _cleanup_install_dir() {
@@ -234,11 +300,18 @@ _cleanup_install_dir() {
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+# --help: só a referência, sem subir nada
+for _a in "$@"; do
+    [[ "$_a" == "-h" || "$_a" == "--help" ]] && { _show_reference; exit 0; }
+done
+
 trap '_stop_can_logger' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
 _cleanup_install_dir
+
+_show_reference
 
 # --local = preview manual de diagnóstico: sem entrevista e sem log CAN
 _preview=0
