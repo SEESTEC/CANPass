@@ -379,8 +379,43 @@ _apply_nilecam81_ctrls() {
     done
 }
 
-# ─── preview (local, nv3dsink) ───────────────────────────────────────────────
-# Visualização local no estilo see_cam.sh (menu de resolução → nv3dsink), com
+# Roda o preview com CADEIA DE FALLBACK de sinks. Recebe os elementos da FONTE
+# (terminando nos caps dela); concatena conversão + sink:
+#   nv3dsink    — render direto na GPU; exige GL+CUDA no display (desktop LOCAL
+#                 do Orin). Em SSH -X / VNC / GL quebrado falha com
+#                 'cuGraphicsGLRegisterBuffer error 219'.
+#   xvimagesink — XVideo (CPU); funciona na maioria dos displays locais.
+#   ximagesink  — X puro; funciona em QUALQUER display (até remoto), mais lento.
+# CANPASS_PREVIEW_SINK=nv3d|xv|x pula direto para um sink específico.
+_preview_run() {
+    local -a srcpipe=( "$@" )
+    local want="${CANPASS_PREVIEW_SINK:-auto}" rc=1
+    if [[ "$want" == auto || "$want" == nv3d ]]; then
+        gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
+            "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false
+        rc=$?; (( rc == 0 || rc >= 128 )) && return 0   # >=128 = Ctrl+C (intencional)
+        [[ "$want" == nv3d ]] && { log_error "nv3dsink falhou (rc=${rc})."; return 1; }
+        log_warn "nv3dsink falhou (rc=${rc}) — display sem GL+CUDA (SSH -X/VNC?). Tentando XVideo..."
+    fi
+    if [[ "$want" == auto || "$want" == xv ]]; then
+        gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
+            "video/x-raw,format=I420" ! xvimagesink sync=false
+        rc=$?; (( rc == 0 || rc >= 128 )) && return 0
+        [[ "$want" == xv ]] && { log_error "xvimagesink falhou (rc=${rc})."; return 1; }
+        log_warn "xvimagesink falhou (rc=${rc}) — tentando X puro (ximagesink)..."
+    fi
+    gst-launch-1.0 -q "${srcpipe[@]}" ! nvvidconv ! \
+        "video/x-raw,format=I420" ! videoconvert ! ximagesink sync=false
+    rc=$?; (( rc == 0 || rc >= 128 )) && return 0
+    log_error "Preview falhou em todos os sinks (último rc=${rc})."
+    log_info  "Câmera em uso por outro processo? Cheque:  sudo fuser -v /dev/video${SENSOR_ID}"
+    log_info  "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
+    log_info  "nv3dsink exige o desktop LOCAL do Orin; via SSH/VNC force CANPASS_PREVIEW_SINK=xv ou x."
+    return 1
+}
+
+# ─── preview (local, nv3dsink com fallback xv/x) ─────────────────────────────
+# Visualização local no estilo see_cam.sh (menu de resolução → sink), com
 # banner informativo e parâmetros de AE/flicker/WDR ajustáveis por ambiente.
 cmd_preview() {
     local cam="${1:-}"
@@ -445,45 +480,20 @@ cmd_preview() {
         local vdev="/dev/video${SENSOR_ID}"
         [[ -e "$vdev" ]] || { log_error "${vdev} ausente — a NileCAM81 não enumerou (12V? LINK A? dmesg | grep ar0821)."; return 1; }
         _apply_nilecam81_ctrls
-        log_info "Pipeline V4L2 (UYVY → nvvidconv → NV12 → nv3dsink) — sem Argus."
-        log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
-        # nvvidconv SEM caps de saída quebra a negociação com o nv3dsink
-        # ("not-negotiated": ele tenta passthrough de UYVY NVMM, que o sink não
-        # aceita). Forçar NV12 NVMM — mesmo formato do caminho Argus e do stream
-        # (pipeline comprovado; é também o pipeline de referência da e-con).
-        local rc=0
+        # Fonte: NVMM (nvv4l2camerasrc, zero-copy) se existir, senão V4L2 por CPU.
+        # Conversão + sink ficam no _preview_run (nv3dsink → xvimagesink → ximagesink).
+        local -a srcpipe
         if gst-inspect-1.0 nvv4l2camerasrc &>/dev/null; then
-            gst-launch-1.0 -q \
-                nvv4l2camerasrc device="$vdev" ! \
-                "video/x-raw(memory:NVMM),format=UYVY,width=${w},height=${h}" ! \
-                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                nv3dsink sync=false
-            rc=$?
-            # >=128 = sinal (Ctrl+C etc.) — não é falha; <128 = pipeline não subiu
-            if (( rc != 0 && rc < 128 )); then
-                log_warn "Pipeline NVMM falhou (rc=${rc}) — tentando captura por CPU (v4l2src)..."
-                gst-launch-1.0 -q \
-                    v4l2src device="$vdev" ! \
-                    "video/x-raw,format=UYVY,width=${w},height=${h}" ! \
-                    nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                    nv3dsink sync=false
-                rc=$?
-            fi
+            srcpipe=( nvv4l2camerasrc device="$vdev" !
+                      "video/x-raw(memory:NVMM),format=UYVY,width=${w},height=${h}" )
         else
-            gst-launch-1.0 -q \
-                v4l2src device="$vdev" ! \
-                "video/x-raw,format=UYVY,width=${w},height=${h}" ! \
-                nvvidconv ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                nv3dsink sync=false
-            rc=$?
+            srcpipe=( v4l2src device="$vdev" !
+                      "video/x-raw,format=UYVY,width=${w},height=${h}" )
         fi
-        if (( rc != 0 && rc < 128 )); then
-            log_error "Preview falhou (rc=${rc})."
-            log_info  "A câmera está ocupada por outro processo? Cheque:  sudo fuser -v ${vdev}"
-            log_info  "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
-            return 1
-        fi
-        return 0
+        log_info "Pipeline V4L2 (UYVY → conversão → sink com fallback) — sem Argus."
+        log_info "Janela abrindo — pressione Ctrl+C aqui para encerrar."
+        _preview_run "${srcpipe[@]}"
+        return
     fi
 
     # WDR/HDR é controle V4L2 (driver e-con) — aplicado antes de abrir o Argus.
@@ -517,10 +527,9 @@ cmd_preview() {
     $sudo -n systemctl restart nvargus-daemon &>/dev/null && sleep 3
 
     log_info "Propriedades Argus: ${props[*]}"
-    log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
-    gst-launch-1.0 nvarguscamerasrc "${props[@]}" ! \
-        "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12" ! \
-        nv3dsink sync=false
+    log_info "Janela abrindo — pressione Ctrl+C aqui para encerrar."
+    _preview_run nvarguscamerasrc "${props[@]}" ! \
+        "video/x-raw(memory:NVMM),width=${w},height=${h},framerate=${fps}/1,format=NV12"
 }
 
 # ─── ctrls (estado atual dos controles V4L2) ─────────────────────────────────
