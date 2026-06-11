@@ -7,8 +7,8 @@
 #   • e-CAM82_CUOAGX (IMX485, MIPI)  → L4T 35.2.1 / JP 5.1.0 → kernel 5.10.104-tegra  (câmera PRINCIPAL do projeto)
 #   • NileCAM81_CUOAGX (GMSL/AR0821) → L4T 35.2.1 / JP 5.1.0 → kernel 5.10.104-tegra  (câmera ALTERNATIVA — build R02
 #     solicitado à e-con em 2026-06; MESMO flash da e-CAM82 → alternância sem reflash via canpass-camera switch)
-#   • [GMSL] e-CAM YUV OCTA (AR0821) → L4T 36.4.3 / JP 6.2.0 → kernel 5.15.148-tegra  (OUTRO produto — não usar)
-#   • [GMSL] NileCAM81 JP6           → L4T 36.3.0 / JP 6.0.0 → kernel 5.15.136-tegra  (build p/ JP6 — exige reflash)
+# (Os pacotes de OUTROS alvos — GMSL OCTA L4T 36.4.3 e NileCAM81 p/ JP6 L4T 36.3.0 —
+#  foram REMOVIDOS do repo na v1.5.0; existem no histórico git e nos archives locais.)
 #
 # IMPORTANTE — a e-CAM82_CUOAGX é MIPI CSI-2 (Sony IMX485, ISP externo, Argus/V4L2);
 # a NileCAM81_CUOAGX é GMSL2 (AR0821 + desserializadora no J509). As duas usam o MESMO
@@ -60,10 +60,6 @@ ECAM82_IMX485_DIR="${SCRIPT_DIR}/doc/e-CAM82/e-CAM82_CUOAGX/e-CAM82_CUOAGX_JETSO
 # NileCAM81 (GMSL) p/ L4T 35.2.1 — câmera ALTERNATIVA, mesmo flash da e-CAM82
 NILECAM81_3521_DIR="${SCRIPT_DIR}/doc/NileCAM81/NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1"
 
-# Pacotes GMSL p/ JP6 — outros alvos de flash, mantidos apenas por referência
-GMSL_OCTA_DIR="${SCRIPT_DIR}/doc/e-CAM82/e-CAM82_CUOAGX/e-CAM_YUV-OCTA-GMSL-PRODUCTS_JETSON_AGX_ORIN_L4T36.4.3_10-FEB-2025_R02"
-NILECAM81_JP6_DIR="${SCRIPT_DIR}/doc/NileCAM81/NileCAM81_CUOAGX/JP6.0_L4T36.3.0/e-CAM_YUV-GMSL-PRODUCTS_JETSON_AGX_ORIN_L4T36.3.0_09-AUG-2024_R03"
-
 # ── Validações ───────────────────────────────────────────────────────────────
 
 if [[ $EUID -ne 0 ]]; then
@@ -101,10 +97,8 @@ else
     echo "  1) e-CAM82 (IMX485, MIPI)   — L4T 35.2.1 / JP 5.1.0  ✓ câmera principal"
     echo "  2) NileCAM81 (GMSL/AR0821)  — L4T 35.2.1 / JP 5.1.0  ✓ câmera alternativa (mesmo flash;"
     echo "                                exige a placa desserializadora GMSL no J509)"
-    echo "  3) [GMSL] e-CAM YUV OCTA (AR0821) — L4T 36.4.3 / JP 6.2  ⚠ OUTRO produto"
-    echo "  4) [GMSL] NileCAM81 p/ JP6 — L4T 36.3.0 / JP 6.0  ⚠ exige reflash p/ JP6 (use a opção 2)"
     echo ""
-    read -rp "Escolha [1–4]: " choice
+    read -rp "Escolha [1–2]: " choice
 fi
 
 # ── e-CAM82 IMX485 (MIPI) — pacote correto ────────────────────────────────────
@@ -261,77 +255,13 @@ install_nilecam81_3521() {
     bash install_binaries.sh
 }
 
-# ── [GMSL] e-CAM YUV OCTA (AR0821) — OUTRO produto ────────────────────────────
-
-install_gmsl_octa() {
-    log_warn "Este NÃO é o driver da e-CAM82 deste projeto."
-    log_warn "É o pacote GMSL OCTA (sensor AR0821 + desserializador max96712), de outro produto."
-    log_warn "Instalá-lo na e-CAM82 (IMX485) causa 'ser_status=f0' / 'ret=-121'."
-    read -rp "Tem certeza que quer prosseguir? [s/N]: " confirm
-    [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
-
-    if [[ ! -d "${GMSL_OCTA_DIR}" ]]; then
-        log_error "Pasta '${GMSL_OCTA_DIR}' não encontrada. Verifique o git pull."
-        exit 1
-    fi
-
-    KERNEL_VER="$(uname -r)"
-    if [[ "${KERNEL_VER}" != *"5.15.148"* ]]; then
-        log_warn "Kernel detectado: ${KERNEL_VER} (alvo: 5.15.148-tegra / L4T 36.4.3)."
-        read -rp "Continuar mesmo assim? [s/N]: " confirm
-        [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
-    fi
-
-    echo ""
-    log_info "Selecione a variante:"
-    echo "  1) 4 câmeras  — DTBO: ar0821_four_lane_four_cam"
-    echo "  2) 8 câmeras  — DTBO: ar0821_four_lane"
-    echo ""
-    read -rp "Variante [1 ou 2]: " cam_variant
-    if [[ "${cam_variant}" != "1" && "${cam_variant}" != "2" ]]; then
-        log_error "Opção inválida: '${cam_variant}'."
-        exit 1
-    fi
-
-    log_info "Iniciando instalação GMSL OCTA (variante ${cam_variant})..."
-    cd "${GMSL_OCTA_DIR}"
-    echo "${cam_variant}" | bash install_binaries.sh 81
-}
-
-# ── [GMSL] NileCAM81 p/ JP6 — exige reflash p/ L4T 36.3.0 ────────────────────
-
-install_nilecam81_jp6() {
-    log_warn "Este build da NileCAM81 é para L4T 36.3.0 / JP 6.0 — NÃO roda no flash"
-    log_warn "atual do projeto (35.2.1). Para usar a NileCAM81 sem reflash, use a OPÇÃO 2."
-    read -rp "Tem certeza que quer prosseguir? [s/N]: " confirm
-    [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
-
-    if [[ ! -d "${NILECAM81_JP6_DIR}" ]]; then
-        log_error "Pasta '${NILECAM81_JP6_DIR}' não encontrada. Verifique o git pull."
-        exit 1
-    fi
-
-    KERNEL_VER="$(uname -r)"
-    if [[ "${KERNEL_VER}" != *"5.15.136"* ]]; then
-        log_warn "Kernel detectado: ${KERNEL_VER} (alvo: 5.15.136-tegra / L4T 36.3.0)."
-        read -rp "Continuar mesmo assim? [s/N]: " confirm
-        [[ "${confirm,,}" == "s" ]] || { log_info "Cancelado."; exit 0; }
-    fi
-
-    log_info "Iniciando instalação NileCAM81 (JP6)..."
-    cd "${NILECAM81_JP6_DIR}"
-    bash install_binaries.sh 81
-}
-
 # ── Execução ─────────────────────────────────────────────────────────────────
 
 case "${choice}" in
     1) install_ecam82_imx485 ;;
     2) install_nilecam81_3521 ;;
-    3) install_gmsl_octa ;;
-    4) install_nilecam81_jp6 ;;
     *)
-        log_error "Opção inválida: '${choice}'. Escolha 1, 2, 3 ou 4."
+        log_error "Opção inválida: '${choice}'. Escolha 1 ou 2."
         exit 1
         ;;
 esac

@@ -254,9 +254,9 @@ sudo bash install_drivers.sh --auto   # não-interativo: e-CAM82 IMX485, 4 lanes
 | **1** ✓ | **e-CAM82 (IMX485, MIPI)**     | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Câmera principal do projeto**                                                                                                                |
 | **2** ✓ | **NileCAM81 (GMSL/AR0821)**    | L4T 35.2.1 / JP 5.1.0 (kernel 5.10.104-tegra) | **Câmera alternativa** — build R02 solicitado à e-con (2026-06); **mesmo flash** da e-CAM82, alternância sem reflash. Exige o kit GMSL no J509 |
 
-> O menu interativo ainda lista as opções **3** (GMSL OCTA, L4T 36.4.3 — **outro produto**) e
-> **4** (NileCAM81 p/ JP6, L4T 36.3.0 — exige reflash), mantidas apenas por referência, com
-> aviso e confirmação extra. **Não as use neste projeto.**
+> Os pacotes de **outros alvos** (GMSL OCTA L4T 36.4.3 — outro produto — e NileCAM81 p/ JP6
+> L4T 36.3.0) foram **removidos do repositório na v1.5.0** (~1,5 GB de LFS a menos no clone);
+> permanecem no histórico git, se um dia forem necessários.
 
 > ⚠️ **Atenção:** instalar um driver **GMSL** errado na e-CAM82 (IMX485) causa os erros `ser_status=f0` / `ret=-121`. Câmera, cabo e alimentação não são o problema nesse caso — é o driver errado.
 
@@ -487,16 +487,13 @@ CANPass/
 │   ├── e-CAM82/                                                   # e-CAM82_CUOAGX (MIPI/IMX485) — câmera PRINCIPAL
 │   │   ├── README.md                                              #   controles: Table 1, Flicker, auto-exposure
 │   │   ├── *.pdf                                                  #   datasheets e guias
-│   │   └── e-CAM82_CUOAGX/                                        #   drivers:
-│   │       ├── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/   # driver da e-CAM82 (IMX485, JP5) — LFS
-│   │       └── e-CAM_YUV-OCTA-GMSL-PRODUCTS_..._L4T36.4.3_R02/    # GMSL OCTA (OUTRO produto) — LFS
+│   │   └── e-CAM82_CUOAGX/                                        #   driver:
+│   │       └── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/   # driver da e-CAM82 (IMX485, JP5) — LFS
 │   └── NileCAM81/                                                 # NileCAM81_CUOAGX (GMSL/AR0821) — câmera ALTERNATIVA
-│       ├── COMPATIBILIDADE.md
+│       ├── COMPATIBILIDADE.md · CONTROLES.md
 │       ├── Common/ Hardware/ Software/ Software_R05_JP6/          # PDFs + CAD (STP/DXF, LFS)
-│       └── NileCAM81_CUOAGX/                                      # drivers:
-│           ├── JP5.1.0_L4T35.2.1/                                 # ★ build p/ o flash ATUAL (alternância s/ reflash) — LFS
-│           ├── JP6.0_L4T36.3.0/                                   # build p/ JP6 (exige reflash) — LFS
-│           └── JP5.1.2_L4T35.4.1/                                 # build antigo (fora do git)
+│       └── NileCAM81_CUOAGX/                                      # driver:
+│           └── JP5.1.0_L4T35.2.1/                                 # ★ build p/ o flash ATUAL (alternância s/ reflash) — LFS
 └── .rsc/
     ├── cam_view.sh                                                # script principal: detecção, stream RTSP/HLS/WebRTC, gravação (contínua/movimento)
     ├── watchdog.sh                                                # entrada do `canpass`: referência, entrevista, log CAN, supervisão, update
@@ -520,6 +517,7 @@ CANPass/
 - `install.sh`: regra sudoers NOPASSWD para `ip` (o log CAN em background sobe a interface sem senha).
 - Suporte completo à **NileCAM81** (YUV/ISP onboard, V4L2 sem Argus): stream, `--all`, mosaico, preview com controles V4L2 completos via env, `canpass-camera ctrls`. Resoluções confirmadas no hardware (1080p60 / 720p60 / 4K@16). Driver L4T 35.2.1 (R02) no repo — alternância e-CAM82 ↔ NileCAM81 sem reflash.
 - Auditoria geral: correção do corte de segmentos da gravação contínua (`-force_key_frames`), fix de `sudo -n` rodando como root no `canpass-camera`, documentação revisada e sincronizada com o código (README, doc/CAN, COMPATIBILIDADE), remoção do `TESTE_RAPIDO.md` (obsoleto desde o build 35.2.1).
+- **Repo enxuto**: pacotes de drivers de outros alvos (GMSL OCTA L4T 36.4.3 e NileCAM81 p/ JP6 L4T 36.3.0) removidos (~1,5 GB de LFS a menos; seguem no histórico git). `install_drivers.sh` agora só com as opções 1 (e-CAM82) e 2 (NileCAM81), as duas câmeras reais do projeto.
 
 ### v1.4.13 — 2026-06-08
 
