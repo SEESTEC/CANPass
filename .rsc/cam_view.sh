@@ -469,6 +469,11 @@ _yuv_stream_loop() {
     local ylog="/tmp/canpass_yuv_${vnode}.log"
     while true; do
         : > "$ylog"
+        # Formato pré-fixado: o nvv4l2camerasrc herda o formato corrente do nó
+        # (um preview anterior pode ter deixado outra resolução) e não renegocia
+        # direito — sintoma: 'NvBufSurfaceCopy: buffer size mismatch' / tela verde.
+        command -v v4l2-ctl &>/dev/null && \
+            v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
         if (( use_hw )); then
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
@@ -1057,6 +1062,10 @@ show_local() {
         IFS='x@' read -r y_w y_h y_fps <<< "$res"
         log_info "Preview local YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${y_w}x${y_h} (nv3dsink)."
         _boost_jetson_clocks
+        # Formato pré-fixado (evita 'NvBufSurfaceCopy: buffer size mismatch'/tela
+        # verde quando o nó ficou em outra resolução — ver _yuv_stream_loop).
+        command -v v4l2-ctl &>/dev/null && \
+            v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${y_w},height=${y_h},pixelformat=UYVY" 2>/dev/null
         log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
         # Caps NV12 NVMM explícitos após o nvvidconv — sem eles a negociação com
         # o nv3dsink falha ("not-negotiated": passthrough UYVY NVMM não aceito).
@@ -1140,6 +1149,16 @@ show_local_all() {
 
     local yuv_src="v4l2src"
     gst-inspect-1.0 nvv4l2camerasrc &>/dev/null && yuv_src="nvv4l2camerasrc"
+
+    # Formato pré-fixado nos nós YUV (evita 'NvBufSurfaceCopy: buffer size
+    # mismatch'/tela verde quando o nó ficou em outra resolução).
+    if command -v v4l2-ctl &>/dev/null; then
+        local yc
+        for yc in "${cams[@]}"; do
+            [[ "$yc" == yuv:* ]] && v4l2-ctl -d "/dev/video${yc#yuv:}" \
+                --set-fmt-video="width=${csi_w},height=${csi_h},pixelformat=UYVY" 2>/dev/null
+        done
+    fi
 
     # Pipeline: posições/tamanhos por sink do compositor + um ramo de captura por
     # câmera (Argus p/ csi:N, V4L2 p/ yuv:N), tudo em memória NVMM (GPU).

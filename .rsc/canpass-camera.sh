@@ -390,11 +390,13 @@ _apply_nilecam81_ctrls() {
 # Roda UM pipeline de preview, vigiando a inicialização: alguns erros fatais
 # (ex.: nv3dsink sem GL+CUDA → 'cuGraphicsGLRegisterBuffer error 219') deixam o
 # gst-launch TRAVADO com janela preta, sem sair — detectamos pelo stderr e
-# matamos para o chamador tentar o próximo sink. Ctrl+C do usuário encerra de
-# verdade (flag _PREVIEW_INT — o gst-launch captura SIGINT e sai com rc=2, o que
-# antes era confundido com falha e fazia a cadeia "avançar" no Ctrl+C).
-# $1 = rótulo · $2.. = pipeline. Retorno: 0 = rodou (ou usuário encerrou);
-# 1 = falhou na inicialização (chamador tenta o próximo sink).
+# matamos para o chamador tentar o próximo sink.
+# Ctrl+C (flag _PREVIEW_INT — o gst-launch captura SIGINT e sai com rc=2):
+#   • DURANTE a janela de init (janela preta/sem imagem) = "pula este sink";
+#   • DEPOIS de declarado 'rodando' (imagem na tela)     = encerra o preview.
+# $1 = rótulo · $2.. = pipeline.
+# Retorno: 0 = rodou (ou usuário encerrou com imagem) · 1 = falhou no init ·
+#          2 = usuário PULOU (Ctrl+C na janela de init).
 _PREVIEW_INT=0
 _run_sink() {
     local label="$1"; shift
@@ -404,25 +406,28 @@ _run_sink() {
     pid=$!
     # Janela de init (~6 s): saída precoce OU erro fatal no stderr = falha.
     while (( t < 60 )); do
-        (( _PREVIEW_INT )) && { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rm -f "$elog"; return 0; }
+        if (( _PREVIEW_INT )); then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rm -f "$elog"
+            return 2
+        fi
         if ! kill -0 "$pid" 2>/dev/null; then
             wait "$pid"; rc=$?
             rm -f "$elog"
-            (( _PREVIEW_INT )) && return 0
+            (( _PREVIEW_INT )) && return 2
             log_warn "${label} encerrou na inicialização (rc=${rc})."
             return 1
         fi
-        if grep -qE 'cuGraphicsGLRegisterBuffer|not-negotiated|Internal data stream error|Could not initialise Xv|cannot open display|Failed to create GL context' "$elog" 2>/dev/null; then
+        if grep -qE 'cuGraphicsGLRegisterBuffer|not-negotiated|Internal data stream error|NvBufSurfaceCopy|Could not initialise Xv|cannot open display|Failed to create GL context' "$elog" 2>/dev/null; then
             kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
             rm -f "$elog"
-            (( _PREVIEW_INT )) && return 0
+            (( _PREVIEW_INT )) && return 2
             log_warn "${label} falhou na inicialização (erro fatal no pipeline)."
             return 1
         fi
         sleep 0.1; t=$(( t + 1 ))
     done
     # Init OK — fica rodando até o usuário encerrar.
-    log_ok "${label} rodando — Ctrl+C encerra."
+    log_ok "${label} rodando — Ctrl+C encerra o preview."
     wait "$pid"; rc=$?
     if (( _PREVIEW_INT )); then
         # Ctrl+C: garante o fim do gst (caso não tenha recebido/honrado o INT).
@@ -437,33 +442,59 @@ _run_sink() {
 
 _preview_run() {
     local -a srcpipe=( "$@" )
-    local want="${CANPASS_PREVIEW_SINK:-auto}"
+    local want="${CANPASS_PREVIEW_SINK:-auto}" rc s
     _PREVIEW_INT=0
     trap '_PREVIEW_INT=1' INT
 
-    if [[ "$want" == auto || "$want" == nv3d ]]; then
-        _run_sink "nv3dsink (GPU)" "${srcpipe[@]}" ! nvvidconv ! \
-            "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false \
-            && { trap - INT; return 0; }
-        [[ "$want" == nv3d ]] && { trap - INT; log_error "nv3dsink falhou."; return 1; }
-        log_warn "Display sem GL+CUDA (SSH -X/VNC?) — caindo para XVideo..."
-    fi
-    if [[ "$want" == auto || "$want" == xv ]]; then
-        _run_sink "xvimagesink (XVideo)" "${srcpipe[@]}" ! nvvidconv ! \
-            "video/x-raw,format=I420" ! xvimagesink sync=false \
-            && { trap - INT; return 0; }
-        [[ "$want" == xv ]] && { trap - INT; log_error "xvimagesink falhou."; return 1; }
-        log_warn "XVideo indisponível — caindo para X puro (ximagesink)..."
-    fi
-    if _run_sink "ximagesink (X puro)" "${srcpipe[@]}" ! nvvidconv ! \
-        "video/x-raw,format=I420" ! videoconvert ! ximagesink sync=false; then
-        trap - INT; return 0
-    fi
+    local -a order
+    case "$want" in
+        nv3d|xv|x) order=( "$want" ) ;;
+        *)         order=( nv3d xv x ) ;;
+    esac
+    local forced=0; (( ${#order[@]} == 1 )) && forced=1
+
+    for s in "${order[@]}"; do
+        case "$s" in
+            nv3d) _run_sink "nv3dsink (GPU)" "${srcpipe[@]}" ! nvvidconv ! \
+                      "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false ;;
+            xv)   _run_sink "xvimagesink (XVideo)" "${srcpipe[@]}" ! nvvidconv ! \
+                      "video/x-raw,format=I420" ! xvimagesink sync=false ;;
+            x)    _run_sink "ximagesink (X puro)" "${srcpipe[@]}" ! nvvidconv ! \
+                      "video/x-raw,format=I420" ! videoconvert ! ximagesink sync=false ;;
+        esac
+        rc=$?
+        if (( rc == 0 )); then trap - INT; return 0; fi
+        if (( rc == 2 )); then
+            _PREVIEW_INT=0
+            (( forced )) && { trap - INT; return 0; }   # forçado: usuário desistiu
+            log_info "Sink pulado (Ctrl+C na inicialização) — tentando o próximo..."
+            continue
+        fi
+        if (( ! forced )); then
+            case "$s" in
+                nv3d) log_warn "Display sem GL+CUDA (SSH -X/VNC?) — caindo para XVideo..." ;;
+                xv)   log_warn "XVideo indisponível — caindo para X puro (ximagesink)..." ;;
+            esac
+        fi
+    done
     trap - INT
-    log_error "Preview falhou em todos os sinks."
-    log_info  "Câmera em uso por outro processo? Cheque:  sudo fuser -v /dev/video${SENSOR_ID}"
-    log_info  "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
-    log_info  "nv3dsink exige o desktop LOCAL do Orin (use 'preview --local' via SSH)."
+
+    # Falhou tudo (ou o sink forçado): explica e aponta as opções corretas.
+    if (( forced )); then
+        case "${order[0]}" in
+            nv3d) log_error "nv3dsink não funcionou — exige GL+CUDA (desktop LOCAL do Orin)."
+                  log_info  "Alternativas:  --xvimagesink · --ximagesink (VNC/SSH) · --local (monitor do Orin)" ;;
+            xv)   log_error "xvimagesink não funcionou — este display não oferece XVideo."
+                  log_info  "Alternativas:  --ximagesink (X puro, funciona via VNC/SSH) · --local (monitor do Orin)" ;;
+            x)    log_error "ximagesink não funcionou — sem display X utilizável (DISPLAY=${DISPLAY:-?})."
+                  log_info  "Rode num desktop/VNC ativo, ou use --local p/ abrir no monitor do Orin." ;;
+        esac
+    else
+        log_error "Preview falhou em todos os sinks."
+        log_info  "nv3dsink exige o desktop LOCAL do Orin (use 'preview --local' via SSH)."
+    fi
+    log_info "Câmera em uso por outro processo? Cheque:  sudo fuser -v /dev/video${SENSOR_ID}"
+    log_info "(o canpass/serviço usa a câmera — pare antes:  sudo systemctl stop canpass)"
     return 1
 }
 
@@ -533,7 +564,7 @@ cmd_preview() {
     # "3840x2160@60  4K UHD" → w/h/fps
     local res="${sel%% *}" w h fps
     IFS='x@' read -r w h fps <<< "$res"
-    log_info "Iniciando preview ${w}x${h} @ ${fps} fps (nv3dsink)."
+    log_info "Iniciando preview ${w}x${h} @ ${fps} fps."
 
     if [[ -z "${DISPLAY:-}" ]]; then
         export DISPLAY=:0
@@ -549,6 +580,12 @@ cmd_preview() {
         local vdev="/dev/video${SENSOR_ID}"
         [[ -e "$vdev" ]] || { log_error "${vdev} ausente — a NileCAM81 não enumerou (12V? LINK A? dmesg | grep ar0821)."; return 1; }
         _apply_nilecam81_ctrls
+        # O nvv4l2camerasrc herda o formato CORRENTE do nó V4L2 (que o stream do
+        # canpass pode ter deixado em OUTRA resolução) e não renegocia direito —
+        # sintoma: 'NvBufSurfaceCopy: buffer size mismatch' e tela VERDE.
+        # Fixa o formato pedido ANTES de abrir o pipeline.
+        command -v v4l2-ctl &>/dev/null && \
+            v4l2-ctl -d "$vdev" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
         # Fonte: NVMM (nvv4l2camerasrc, zero-copy) se existir, senão V4L2 por CPU.
         # Conversão + sink ficam no _preview_run (nv3dsink → xvimagesink → ximagesink).
         local -a srcpipe
