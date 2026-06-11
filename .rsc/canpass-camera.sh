@@ -462,9 +462,10 @@ cmd_preview() {
     fi
 
     # WDR/HDR é controle V4L2 (driver e-con) — aplicado antes de abrir o Argus.
+    # ($sudo vazio quando root: 'sudo -n' só entra no caminho não-root.)
     if [[ -n "${CANPASS_HDR:-}" ]] && command -v v4l2-ctl &>/dev/null; then
         log_info "WDR/HDR: hdr_enable=${CANPASS_HDR} em /dev/video${SENSOR_ID}."
-        $sudo -n v4l2-ctl -d "/dev/video${SENSOR_ID}" -c hdr_enable="${CANPASS_HDR}" 2>/dev/null \
+        ${sudo:+sudo -n} v4l2-ctl -d "/dev/video${SENSOR_ID}" -c hdr_enable="${CANPASS_HDR}" 2>/dev/null \
             || v4l2-ctl -d "/dev/video${SENSOR_ID}" -c hdr_enable="${CANPASS_HDR}" 2>/dev/null \
             || log_warn "Não foi possível setar hdr_enable (sem permissão ou controle ausente)."
     fi

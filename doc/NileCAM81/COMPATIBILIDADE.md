@@ -5,8 +5,8 @@
 > e-CAM82) chegou da e-con e está no repositório em
 > `doc/NileCAM81/NileCAM81_CUOAGX/JP5.1.0_L4T35.2.1/` (md5 conferido).
 > Instalação: `sudo bash install_drivers.sh` → **opção 2**; alternância por boot:
-> `canpass-camera switch ecam82|nilecam81`. O reflash para 35.4.1/36.3.0 (rota B e o
-> roteiro do TESTE_RAPIDO.md) ficou **obsoleto** para este fim.
+> `canpass-camera switch ecam82|nilecam81`. O reflash para 35.4.1/36.3.0 (rota B
+> abaixo) ficou **obsoleto** para este fim.
 > ⚠️ O bloqueio de **HARDWARE** continua: a NileCAM81 só conecta com o kit GMSL
 > (desserializadora `e-CAM_CUOAGX_DESER_6H01R1` no J509 + serializador + coax FAKRA + 12 V).
 > A análise original segue abaixo como registro.
@@ -164,9 +164,9 @@ novo), mas funciona.
 
 ### Sensor — comparação rápida
 
-| | e-CAM82_CUOAGX (atual) | NileCAM81_CUOAGX |
-|---|---|---|
-| Sensor | Sony **IMX485** 8 MP | onsemi **AR0821** 8 MP |
-| Interface | **MIPI CSI-2** (IPEX) | **GMSL2** (coax FAKRA) |
-| Conexão ao Orin | base board MIPI | desserializador no **J509** |
-| Flash atual serve? | ✅ (35.2.1) | ❌ (precisa 35.4.1 / 36.3.0 ou build 35.2.1) |
+|                    | e-CAM82_CUOAGX (atual) | NileCAM81_CUOAGX                              |
+|--------------------|------------------------|-----------------------------------------------|
+| Sensor             | Sony **IMX485** 8 MP   | onsemi **AR0821** 8 MP                        |
+| Interface          | **MIPI CSI-2** (IPEX)  | **GMSL2** (coax FAKRA)                        |
+| Conexão ao Orin    | base board MIPI        | desserializador no **J509**                   |
+| Flash atual serve? | ✅ (35.2.1)           | ✅ hoje (build R02 35.2.1 no repo; era ❌)    |

@@ -183,7 +183,7 @@ install_scripts() {
     done
 
     # Comandos canpass-*: instalados SEM o sufixo .sh (voltados ao usuário).
-    local cc src name
+    local cc src
     for cc in canpass-camera canpass-can; do
         src="${SCRIPT_DIR}/.rsc/${cc}.sh"
         [[ -f "$src" ]] || continue

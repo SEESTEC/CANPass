@@ -619,10 +619,13 @@ _continuous_loop() {
         until ffprobe -v quiet -rtsp_transport tcp -i "$src_url" >/dev/null 2>&1; do
             sleep 2
         done
+        # -force_key_frames: o segment muxer só corta em keyframe — sem isso o
+        # keyint padrão do x264 (250 frames) atrasa/impede o corte no tempo certo.
         ffmpeg -loglevel error \
             -rtsp_transport tcp \
             -i "$src_url" \
             -c:v libx264 -preset veryfast -crf "$crf" -pix_fmt yuv420p -an \
+            -force_key_frames "expr:gte(t,n_forced*${seg})" \
             -f segment -segment_time "$seg" -reset_timestamps 1 -strftime 1 \
             -segment_format_options "movflags=+frag_keyframe+empty_moov+default_base_moof" \
             "${rec_dir}/${prefix}cont_%d-%m-%Y_%H-%M-%S.mp4" 2>/dev/null &

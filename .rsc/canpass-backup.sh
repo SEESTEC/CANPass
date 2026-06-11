@@ -21,9 +21,9 @@
 #   L4T_DIR     caminho do Linux_for_Tegra
 #   L4T_BOARD   nome da placa (padrão: jetson-agx-orin-devkit)
 #
-# IMPORTANTE p/ este projeto: para o BACKUP/RESTORE do estado e-CAM82 (L4T 35.2.1),
-# use um Linux_for_Tegra do MESMO L4T 35.2.1. O flash de TESTE da NileCAM (35.4.1)
-# é uma operação separada (flash.sh / SDK Manager) — não é este script.
+# IMPORTANTE p/ este projeto: para o BACKUP/RESTORE do estado atual (L4T 35.2.1 —
+# que hoje cobre e-CAM82 E NileCAM81, alternáveis no mesmo flash), use um
+# Linux_for_Tegra do MESMO L4T 35.2.1.
 
 set -uo pipefail
 
