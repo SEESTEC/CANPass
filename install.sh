@@ -253,6 +253,20 @@ EOF
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
+    # --update: atualização leve (chamada pelo 'canpass update' após o git pull) —
+    # recopia scripts e reaplica sudoers/alias/serviço, SEM apt/docker/driver
+    # (não depende de rede nem dispara instalação de driver em campo).
+    if [[ "${1:-}" == "--update" || "${1:-}" == "update" ]]; then
+        log_step "Atualização — scripts, sudoers, alias e serviço (sem deps/driver)"
+        setup_jetson_sudoers
+        install_scripts
+        setup_alias
+        setup_systemd_service
+        echo
+        log_ok "Atualização concluída."
+        return 0
+    fi
+
     echo -e "${BOLD}${CYAN}"
     echo "╔══════════════════════════════════════╗"
     echo "║       CANPass — Instalador           ║"

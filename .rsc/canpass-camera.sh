@@ -599,7 +599,8 @@ cmd_update() {
     [[ $installed -eq 1 ]] || { log_error "Nenhum script encontrado em ${src}/.rsc/."; return 1; }
 
     log_ok "Atualização concluída."
-    log_info "Para deps/serviço/sudoers (mudanças maiores), rode: sudo bash ${src}/install.sh"
+    log_info "Atualização completa (+ sudoers/alias/serviço): canpass update"
+    log_info "Para deps/docker/driver (mudanças maiores): sudo bash ${src}/install.sh"
 }
 
 # ─── Uso / dispatch ──────────────────────────────────────────────────────────

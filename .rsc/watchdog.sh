@@ -14,11 +14,12 @@
 
 set -uo pipefail
 
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
-log_info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()   { echo -e "${GREEN}[ OK ]${NC}  $*"; }
-log_warn() { echo -e "${YELLOW}[AVISO]${NC} $*"; }
+log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
+log_ok()    { echo -e "${GREEN}[ OK ]${NC}  $*"; }
+log_warn()  { echo -e "${YELLOW}[AVISO]${NC} $*"; }
+log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
 CAM_VIEW="/usr/bin/cam_view.sh"
 RESTART_DELAY_SECS=3
@@ -235,6 +236,7 @@ ${BOLD}canpass${NC} — stream + gravação de vídeo + log CAN (este comando)
   canpass --all --display  idem, + uma janela ffplay por stream
   canpass --local          preview direto no monitor do Orin (sem rede/gravação/entrevista/CAN)
   canpass --local --all    mosaico local com todas as câmeras (nvcompositor)
+  canpass update           atualiza TODO o projeto (git pull + scripts + sudoers + serviço)
   canpass --help           imprime esta referência e sai
 
 ${BOLD}canpass-camera${NC} — alterna e ajusta a câmera do Orin (e-CAM82 ↔ NileCAM81, uma por boot)
@@ -299,6 +301,32 @@ _cleanup_install_dir() {
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
+# 'canpass update': atualização COMPLETA do projeto no Orin — git pull no
+# repo-fonte + install.sh --update (scripts, sudoers, alias e serviço systemd;
+# sem apt/driver). Repo-fonte: CANPASS_SRC ou o registrado pelo install.sh.
+if [[ "${1:-}" == "update" || "${1:-}" == "--update" ]]; then
+    src="${CANPASS_SRC:-$(cat /usr/local/share/canpass/src_dir 2>/dev/null)}"
+    if [[ -z "$src" || ! -d "$src" ]]; then
+        log_error "Repo-fonte não encontrado."
+        log_error "Aponte com:  CANPASS_SRC=/caminho/do/clone canpass update"
+        exit 1
+    fi
+    log_info "Repo-fonte: ${src}"
+    if [[ -d "$src/.git" ]]; then
+        log_info "git pull..."
+        git -C "$src" pull --ff-only \
+            || { log_error "git pull falhou (mudanças locais? rede?). Resolva e tente de novo."; exit 1; }
+    else
+        log_warn "${src} não é um clone git — pulando o git pull, apenas reaplicando a instalação."
+    fi
+    if [[ ! -f "$src/install.sh" ]]; then
+        log_error "install.sh não encontrado em ${src}."
+        exit 1
+    fi
+    sudo bash "$src/install.sh" --update
+    exit $?
+fi
 
 # --help: só a referência, sem subir nada
 for _a in "$@"; do
