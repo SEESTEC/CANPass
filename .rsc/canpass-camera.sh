@@ -584,8 +584,13 @@ cmd_preview() {
         # canpass pode ter deixado em OUTRA resolução) e não renegocia direito —
         # sintoma: 'NvBufSurfaceCopy: buffer size mismatch' e tela VERDE.
         # Fixa o formato pedido ANTES de abrir o pipeline.
-        command -v v4l2-ctl &>/dev/null && \
+        if command -v v4l2-ctl &>/dev/null; then
             v4l2-ctl -d "$vdev" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
+            # fps real = fps do menu (a não ser que o usuário tenha forçado
+            # CANPASS_FPS, já aplicado por _apply_nilecam81_ctrls acima).
+            [[ -z "${CANPASS_FPS:-}" ]] && \
+                v4l2-ctl -d "$vdev" -c frame_rate_control="${fps}" 2>/dev/null
+        fi
         # Fonte: NVMM (nvv4l2camerasrc, zero-copy) se existir, senão V4L2 por CPU.
         # Conversão + sink ficam no _preview_run (nv3dsink → xvimagesink → ximagesink).
         local -a srcpipe

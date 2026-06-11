@@ -472,8 +472,27 @@ _yuv_stream_loop() {
         # Formato pré-fixado: o nvv4l2camerasrc herda o formato corrente do nó
         # (um preview anterior pode ter deixado outra resolução) e não renegocia
         # direito — sintoma: 'NvBufSurfaceCopy: buffer size mismatch' / tela verde.
-        command -v v4l2-ctl &>/dev/null && \
+        # FPS REAL (CRÍTICO p/ fidelidade temporal): o H.264 cru do fdsink não
+        # carrega timestamps — o ffmpeg estampa com '-r ${fps}'. O driver da
+        # NileCAM81 entrega o fps do controle frame_rate_control (PADRÃO 30!),
+        # não o dos caps: com hint 60 e entrega real 30, cada frame é estampado
+        # a 1/60 s → vídeo gravado ACELERADO 2×. Antídoto em duas partes:
+        #   1) alinha o controle ao fps pedido;
+        #   2) LÊ DE VOLTA o valor que o driver realmente aceitou e estampa com
+        #      ELE — fiel ao tempo real mesmo se o driver recusar/limitar o pedido.
+        if command -v v4l2-ctl &>/dev/null; then
             v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
+            v4l2-ctl -d "/dev/video${vnode}" -c frame_rate_control="${fps}" 2>/dev/null
+            local real_fps
+            real_fps=$(v4l2-ctl -d "/dev/video${vnode}" --get-ctrl frame_rate_control 2>/dev/null \
+                       | awk -F': *' '/frame_rate_control/{print $2}')
+            [[ -z "$real_fps" ]] && real_fps=$(v4l2-ctl -d "/dev/video${vnode}" --get-parm 2>/dev/null \
+                       | sed -n 's/.*(\([0-9][0-9]*\)\/1).*/\1/p')
+            if [[ "$real_fps" =~ ^[0-9]+$ && "$real_fps" -gt 0 && "$real_fps" != "$fps" ]]; then
+                log_warn "[cam${vnode}] Câmera entrega ${real_fps} fps (pedido: ${fps}) — estampando com o fps REAL p/ manter o tempo fiel."
+                fps="$real_fps"
+            fi
+        fi
         if (( use_hw )); then
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
@@ -1062,10 +1081,12 @@ show_local() {
         IFS='x@' read -r y_w y_h y_fps <<< "$res"
         log_info "Preview local YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${y_w}x${y_h} (nv3dsink)."
         _boost_jetson_clocks
-        # Formato pré-fixado (evita 'NvBufSurfaceCopy: buffer size mismatch'/tela
-        # verde quando o nó ficou em outra resolução — ver _yuv_stream_loop).
-        command -v v4l2-ctl &>/dev/null && \
+        # Formato + fps reais pré-fixados (evita tela verde por formato herdado
+        # e fps divergente do pedido — ver _yuv_stream_loop).
+        if command -v v4l2-ctl &>/dev/null; then
             v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${y_w},height=${y_h},pixelformat=UYVY" 2>/dev/null
+            v4l2-ctl -d "/dev/video${vnode}" -c frame_rate_control="${y_fps}" 2>/dev/null
+        fi
         log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
         # Caps NV12 NVMM explícitos após o nvvidconv — sem eles a negociação com
         # o nv3dsink falha ("not-negotiated": passthrough UYVY NVMM não aceito).
@@ -1150,13 +1171,15 @@ show_local_all() {
     local yuv_src="v4l2src"
     gst-inspect-1.0 nvv4l2camerasrc &>/dev/null && yuv_src="nvv4l2camerasrc"
 
-    # Formato pré-fixado nos nós YUV (evita 'NvBufSurfaceCopy: buffer size
-    # mismatch'/tela verde quando o nó ficou em outra resolução).
+    # Formato + fps reais pré-fixados nos nós YUV (evita tela verde por formato
+    # herdado e fps divergente — ver _yuv_stream_loop).
     if command -v v4l2-ctl &>/dev/null; then
         local yc
         for yc in "${cams[@]}"; do
-            [[ "$yc" == yuv:* ]] && v4l2-ctl -d "/dev/video${yc#yuv:}" \
+            [[ "$yc" == yuv:* ]] || continue
+            v4l2-ctl -d "/dev/video${yc#yuv:}" \
                 --set-fmt-video="width=${csi_w},height=${csi_h},pixelformat=UYVY" 2>/dev/null
+            v4l2-ctl -d "/dev/video${yc#yuv:}" -c frame_rate_control="${csi_fps}" 2>/dev/null
         done
     fi
 
