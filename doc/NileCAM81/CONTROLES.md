@@ -109,3 +109,10 @@ v4l2-ctl -d /dev/video0 -c cam_mode=1          # Night HDR direto, sem preview
 > ⚠️ Diferente do Argus (que recebe propriedades por sessão), os controles V4L2 são
 > **persistentes no driver** enquanto a câmera estiver probada — um valor setado fica
 > valendo para o `canpass`/stream também, até ser alterado ou a câmera repovoar.
+
+## Inspecionar o estado atual
+
+```bash
+canpass-camera ctrls            # resumo: atual vs padrão (* amarelo = alterado) + formato/fps
+v4l2-ctl -d /dev/video0 --list-ctrls-menus   # lista crua completa, com menus
+```

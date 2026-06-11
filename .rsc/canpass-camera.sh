@@ -497,6 +497,54 @@ cmd_preview() {
         nv3dsink sync=false
 }
 
+# ─── ctrls (estado atual dos controles V4L2) ─────────────────────────────────
+# Resumo do --list-ctrls: valor ATUAL vs PADRÃO por controle, destacando em
+# amarelo (*) o que está fora do default. Essencial na NileCAM81, cujos controles
+# PERSISTEM no driver entre execuções; na e-CAM82 lista os controles V4L2 do
+# driver e-con (hdr_enable etc. — o grosso dela é Argus, por sessão).
+cmd_ctrls() {
+    local vdev="/dev/video${SENSOR_ID}"
+    command -v v4l2-ctl &>/dev/null || { log_error "v4l2-ctl ausente — instale: sudo apt-get install v4l-utils"; return 1; }
+    [[ -e "$vdev" ]] || { log_error "${vdev} ausente — a câmera não enumerou (canpass-camera status)."; return 1; }
+
+    local fdt cam
+    fdt=$(grep -m1 -E '^[[:space:]]*FDT[[:space:]]' "$EXTLINUX" 2>/dev/null | awk '{print $2}')
+    cam=$(_dtb_to_camera "${fdt:-}")
+    log_info "Controles V4L2 de ${vdev} — câmera ativa: ${cam}"
+
+    # Formato/fps em uso
+    local fmt fps
+    fmt=$(v4l2-ctl -d "$vdev" --get-fmt-video 2>/dev/null \
+          | awk -F': ' '/Width\/Height/{wh=$2} /Pixel Format/{pf=$2} END{print wh" "pf}')
+    fps=$(v4l2-ctl -d "$vdev" --get-parm 2>/dev/null | awk -F': ' '/Frames per second/{print $2}')
+    [[ -n "${fmt// /}" ]] && log_info "Formato atual: ${fmt}${fps:+ @ ${fps}}"
+
+    # Linhas do v4l2-ctl: "name 0x... (tipo) : min=.. default=D value=V ..."
+    # Controles de infraestrutura do tegra-video são ocultados (não mexer neles).
+    v4l2-ctl -d "$vdev" --list-ctrls 2>/dev/null | awk \
+        -v Y="$YELLOW" -v B="$BOLD" -v N="$NC" '
+        /^[A-Za-z].*Controls/ { printf "\n%s%s%s\n", B, $0, N; next }
+        /^[[:space:]]*[a-z0-9_]+ 0x/ {
+            name=$1
+            if (name ~ /^(bypass_mode|override_enable|height_align|size_align|write_isp_format|sensor_|low_latency_mode|preferred_stride)/) next
+            def=""; val=""; mn=""; mx=""
+            for (i=1; i<=NF; i++) {
+                if ($i ~ /^default=/) def=substr($i,9)
+                if ($i ~ /^value=/)   val=substr($i,7)
+                if ($i ~ /^min=/)     mn=substr($i,5)
+                if ($i ~ /^max=/)     mx=substr($i,5)
+            }
+            if (val == "") next
+            if (val == def)
+                printf "    %-27s atual=%-9s padrão=%-9s faixa=%s..%s\n", name, val, def, mn, mx
+            else
+                printf "  %s* %-27s atual=%-9s padrão=%-9s faixa=%s..%s%s\n", Y, name, val, def, mn, mx, N
+        }'
+    echo
+    log_info "* = fora do padrão (controles persistem no driver até serem alterados)."
+    log_info "Menus/valores nomeados:  v4l2-ctl -d ${vdev} --list-ctrls-menus"
+}
+
 # ─── update (git pull + reinstala os scripts) ────────────────────────────────
 # Acha o repo-fonte (clone git) e atualiza os comandos em /usr/bin a partir dele.
 # Ordem de descoberta: $CANPASS_SRC → registro do install (/usr/local/share/canpass/
@@ -563,6 +611,7 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
   canpass-camera list                        DTBs candidatos em /boot
   canpass-camera switch ecam82|nilecam81     troca o DTB ativo e oferece reboot
   canpass-camera preview [ecam82|nilecam81]  preview local (nv3dsink) com menu de resolução
+  canpass-camera ctrls                       controles V4L2: atual vs padrão (* = alterado)
   canpass-camera update                      git pull no repo-fonte + recopia p/ /usr/bin
 
 O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de imagem, e
@@ -583,6 +632,7 @@ main() {
         list)              cmd_list "$@" ;;
         switch)            cmd_switch "$@" ;;
         preview)           cmd_preview "$@" ;;
+        ctrls|controls)    cmd_ctrls "$@" ;;
         update|--update)   cmd_update "$@" ;;
         -h|--help|help)    usage ;;
         *) log_error "Comando desconhecido: '$cmd'"; echo; usage; return 2 ;;
