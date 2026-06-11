@@ -472,14 +472,10 @@ _yuv_stream_loop() {
         # Formato pré-fixado: o nvv4l2camerasrc herda o formato corrente do nó
         # (um preview anterior pode ter deixado outra resolução) e não renegocia
         # direito — sintoma: 'NvBufSurfaceCopy: buffer size mismatch' / tela verde.
-        # FPS REAL (CRÍTICO p/ fidelidade temporal): o H.264 cru do fdsink não
-        # carrega timestamps — o ffmpeg estampa com '-r ${fps}'. O driver da
-        # NileCAM81 entrega o fps do controle frame_rate_control (PADRÃO 30!),
-        # não o dos caps: com hint 60 e entrega real 30, cada frame é estampado
-        # a 1/60 s → vídeo gravado ACELERADO 2×. Antídoto em duas partes:
-        #   1) alinha o controle ao fps pedido;
-        #   2) LÊ DE VOLTA o valor que o driver realmente aceitou e estampa com
-        #      ELE — fiel ao tempo real mesmo se o driver recusar/limitar o pedido.
+        # FPS: alinha o frame_rate_control ao pedido (o padrão do driver é 30 e
+        # PERSISTE) e lê de volta o aceito — usado p/ GOP do encoder e p/ avisar
+        # divergência. A fidelidade temporal NÃO depende mais dele: os PTS reais
+        # de captura viajam no MPEG-TS (ver pipeline abaixo).
         if command -v v4l2-ctl &>/dev/null; then
             v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
             v4l2-ctl -d "/dev/video${vnode}" -c frame_rate_control="${fps}" 2>/dev/null
@@ -489,11 +485,31 @@ _yuv_stream_loop() {
             [[ -z "$real_fps" ]] && real_fps=$(v4l2-ctl -d "/dev/video${vnode}" --get-parm 2>/dev/null \
                        | sed -n 's/.*(\([0-9][0-9]*\)\/1).*/\1/p')
             if [[ "$real_fps" =~ ^[0-9]+$ && "$real_fps" -gt 0 && "$real_fps" != "$fps" ]]; then
-                log_warn "[cam${vnode}] Câmera entrega ${real_fps} fps (pedido: ${fps}) — estampando com o fps REAL p/ manter o tempo fiel."
+                log_warn "[cam${vnode}] Câmera reporta ${real_fps} fps (pedido: ${fps})."
                 fps="$real_fps"
             fi
         fi
-        if (( use_hw )); then
+        if (( use_hw )) && gst-inspect-1.0 mpegtsmux &>/dev/null; then
+            # FIDELIDADE TEMPORAL fim-a-fim: H.264 cru não carrega timestamps e
+            # qualquer '-r' nominal no ffmpeg vira aposta (a câmera pode entregar
+            # OUTRO fps — ex.: modos HDR reduzem a taxa real sem refletir no
+            # controle). Solução definitiva: o gst estampa cada frame com o
+            # relógio REAL de captura e o mpegtsmux TRANSPORTA esses PTS pelo
+            # pipe — o ffmpeg só repassa (-c copy), sem assumir fps nenhum.
+            gst-launch-1.0 -q "${src[@]}" ! \
+                nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
+                    insert-sps-pps=1 iframeinterval="${fps}" idrinterval="${fps}" ! \
+                h264parse config-interval=-1 ! mpegtsmux alignment=7 ! \
+                fdsink fd=1 2>>"$ylog" | \
+            ffmpeg -loglevel warning \
+                -flags low_delay -analyzeduration 1000000 -probesize 262144 \
+                -f mpegts -i pipe:0 \
+                -c:v copy -muxdelay 0 -muxpreload 0 \
+                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
+        elif (( use_hw )); then
+            # mpegtsmux ausente — legado: H.264 cru estampado com o fps lido do
+            # driver (menos robusto que os PTS reais, mas melhor que o nominal).
+            log_warn "[cam${vnode}] mpegtsmux indisponível — usando fps nominal ${fps} (instale gst-plugins-bad)."
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
                     insert-sps-pps=1 iframeinterval="${fps}" idrinterval="${fps}" ! \
@@ -504,15 +520,19 @@ _yuv_stream_loop() {
                 -c:v copy -muxdelay 0 -muxpreload 0 \
                 -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
         else
+            # Caminho por software (raro): rawvideo não carrega PTS — estampa
+            # pelo RELÓGIO DE CHEGADA (wallclock), fiel ao tempo real mesmo se
+            # o fps real divergir do nominal.
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvvidconv ! "video/x-raw,format=I420" ! \
                 fdsink fd=1 2>>"$ylog" | \
             ffmpeg -loglevel warning \
                 -f rawvideo -pix_fmt yuv420p \
                 -s "${w}x${h}" -r "${fps}" \
+                -use_wallclock_as_timestamps 1 \
                 -fflags nobuffer -flags low_delay -analyzeduration 0 \
                 -i pipe:0 \
-                "${SW_ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
+                "${SW_ENCODE[@]}" -vsync vfr -muxdelay 0 -muxpreload 0 \
                 -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
         fi
         local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
