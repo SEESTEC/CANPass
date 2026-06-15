@@ -13,6 +13,41 @@ log_ok()    { echo -e "${GREEN}[ OK ]${NC}  $*"; }
 log_warn()  { echo -e "${YELLOW}[AVISO]${NC} $*"; }
 log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
+# ─── Timestamp queimado na gravação (overlay drawtext) ───────────────────────
+# Carimba a hora do relógio do sistema em HH:MM:SS.mmm (mesmo formato legível do
+# canpass-can log, sem a data), texto branco no canto inferior-esquerdo. Como
+# queimar texto exige modificar pixels, a gravação que o usa é REENCODADA (a
+# contínua já reencoda; a por movimento passa a reencodar — antes era cópia
+# exata). Desligue com CANPASS_REC_TIMESTAMP=0 (a por movimento volta a -c copy).
+#   CANPASS_TS_FONTSIZE  tamanho da fonte (expr ffmpeg; padrão h/22 = escala c/ a altura)
+_TS_FONT_CACHED=""
+_ts_fontfile() {
+    [[ -n "$_TS_FONT_CACHED" ]] && { echo "$_TS_FONT_CACHED"; return 0; }
+    local f
+    for f in \
+        /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
+        /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf \
+        /usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf \
+        /usr/share/fonts/truetype/freefont/FreeMono.ttf; do
+        [[ -f "$f" ]] && { _TS_FONT_CACHED="$f"; echo "$f"; return 0; }
+    done
+    f=$(find /usr/share/fonts -name '*.ttf' 2>/dev/null | head -1)
+    [[ -n "$f" ]] && { _TS_FONT_CACHED="$f"; echo "$f"; return 0; }
+    return 1
+}
+
+# Imprime no stdout o filtro -vf do drawtext (ou vazio se desligado/sem fonte).
+# %{localtime\:%T} = HH:MM:SS do relógio do sistema; .%{eif...} = milissegundos
+# do tempo do stream (PTS real, que já é fiel ao tempo — ver _yuv_stream_loop).
+_timestamp_vf() {
+    [[ "${CANPASS_REC_TIMESTAMP:-1}" == "1" ]] || return 0
+    local font
+    font=$(_ts_fontfile) || return 0
+    local fontsize="${CANPASS_TS_FONTSIZE:-h/22}"
+    printf "drawtext=fontfile=%s:fontcolor=white:fontsize=%s:x=14:y=h-text_h-14:box=1:boxcolor=black@0.4:boxborderw=6:text='%%{localtime\\:%%T}.%%{eif\\:mod(t\\,1)*1000\\:d\\:3}'" \
+        "$font" "$fontsize"
+}
+
 # ─── Constantes ──────────────────────────────────────────────────────────────
 CONTAINER_NAME="mediamtx"
 RTSP_URL="rtsp://localhost:8554/stream"
@@ -558,18 +593,30 @@ _motion_loop() {
     local recorder_pid=""
     local recording_start_ts=""
     local recording_tmp_file=""
+    # Overlay de timestamp (uma vez por loop): se ativo, a gravação reencoda com
+    # o relógio queimado; se vazio, mantém a cópia exata (-c copy) de antes.
+    local ts_vf; ts_vf=$(_timestamp_vf)
+    [[ -n "$ts_vf" ]] && log_info "${tag}Timestamp na gravação ativo (reencode); CANPASS_REC_TIMESTAMP=0 desliga."
 
     _ml_start_recording() {
         recording_start_ts=$(date +"%d-%m-%Y_%H-%M-%S")
         recording_tmp_file="${rec_dir}/.rec_${prefix}${recording_start_ts}.mp4"
-        ffmpeg -loglevel error \
-            -fflags nobuffer \
-            -analyzeduration 0 \
-            -probesize 32768 \
-            -rtsp_transport tcp \
-            -i "$src_url" \
-            -c copy \
-            "$recording_tmp_file" 2>/dev/null &
+        if [[ -n "$ts_vf" ]]; then
+            ffmpeg -loglevel error \
+                -fflags nobuffer -analyzeduration 0 -probesize 32768 \
+                -rtsp_transport tcp \
+                -i "$src_url" \
+                -vf "$ts_vf" \
+                -c:v libx264 -preset veryfast -crf "${CANPASS_MOTION_CRF:-18}" -pix_fmt yuv420p -an \
+                "$recording_tmp_file" 2>/dev/null &
+        else
+            ffmpeg -loglevel error \
+                -fflags nobuffer -analyzeduration 0 -probesize 32768 \
+                -rtsp_transport tcp \
+                -i "$src_url" \
+                -c copy \
+                "$recording_tmp_file" 2>/dev/null &
+        fi
         recorder_pid=$!
         log_info "${tag}Movimento detectado — gravando: ${recording_start_ts}"
     }
@@ -653,11 +700,15 @@ _continuous_loop() {
     local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
     local crf="${CANPASS_CONT_CRF:-21}"
     local seg="${CANPASS_CONT_SEGMENT_SECS:-600}"
+    # Overlay de timestamp (já reencoda neste modo → custo zero adicional além do filtro).
+    local ts_vf; ts_vf=$(_timestamp_vf)
+    local -a vfargs=(); [[ -n "$ts_vf" ]] && vfargs=(-vf "$ts_vf")
 
     local fpid=""
     trap '[[ -n "$fpid" ]] && kill "$fpid" 2>/dev/null; exit 0' INT TERM
 
     log_info "${tag}Gravação contínua: x264 CRF ${crf}, segmentos de $(( seg / 60 )) min → ${rec_dir}"
+    [[ -n "$ts_vf" ]] && log_info "${tag}Timestamp na gravação ativo (HH:MM:SS.mmm, canto inferior-esquerdo)."
     while true; do
         # espera o stream publicar no MediaMTX (evita spam de reconexão do ffmpeg)
         until ffprobe -v quiet -rtsp_transport tcp -i "$src_url" >/dev/null 2>&1; do
@@ -668,6 +719,7 @@ _continuous_loop() {
         ffmpeg -loglevel error \
             -rtsp_transport tcp \
             -i "$src_url" \
+            "${vfargs[@]}" \
             -c:v libx264 -preset veryfast -crf "$crf" -pix_fmt yuv420p -an \
             -force_key_frames "expr:gte(t,n_forced*${seg})" \
             -f segment -segment_time "$seg" -reset_timestamps 1 -strftime 1 \

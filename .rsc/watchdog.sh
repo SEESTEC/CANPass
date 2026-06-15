@@ -266,7 +266,8 @@ ${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
              CANPASS_NO_CLOCK_BOOST=1 · CANPASS_MOSAIC_W/CANPASS_MOSAIC_H (mosaico --local --all)
   Gravação:  CANPASS_REC_MODE continuous|motion · CANPASS_REC_DIR (~/canpass_rec)
              CANPASS_CONT_CRF (21) · CANPASS_CONT_SEGMENT_SECS (600)
-             MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30)
+             MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30) · CANPASS_MOTION_CRF (18)
+             CANPASS_REC_TIMESTAMP=1 (relógio HH:MM:SS.mmm queimado) · CANPASS_TS_FONTSIZE (h/22)
   CAN:       CANPASS_CAN_IF (força iface) · CANPASS_CAN_BITRATE (250000) · CANPASS_CAN_ACTIVE=1
              CANPASS_CAN_LOGDIR · CANPASS_CAN_LOG_HUMAN=1 · CANPASS_CAN_LOG_ASCII=1
              CANPASS_CAN_STALL_SECS (6)

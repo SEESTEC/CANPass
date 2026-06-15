@@ -187,6 +187,14 @@ dd-mm-aaaa_hh-mm-ss_hh-mm-ss.mp4
 Exemplo: `11-05-2026_14-32-00_14-35-47.mp4`. No modo `--all`, cada câmera grava o
 seu arquivo com prefixo `camN_` (ex.: `cam2_11-05-2026_14-32-00_14-35-47.mp4`).
 
+**Timestamp na imagem:** por padrão a gravação leva o **relógio do sistema queimado**
+no canto inferior-esquerdo, em **`HH:MM:SS.mmm`** (mesmo formato legível do `canpass-can
+log`, sem a data), texto branco. Como queimar texto exige reescrever pixels, a gravação
+que o usa é **reencodada**: a contínua já reencoda (custo zero adicional); a por movimento
+passa a reencodar (`CANPASS_MOTION_CRF`, padrão **18** ≈ visualmente sem perda). Desligue
+com `CANPASS_REC_TIMESTAMP=0` — aí a gravação por movimento volta a ser **cópia exata**
+(`-c copy`). Tamanho da fonte via `CANPASS_TS_FONTSIZE` (padrão `h/22`, escala com a altura).
+
 | Variável de ambiente        | Padrão          | Descrição                                                                       |
 |-----------------------------|-----------------|---------------------------------------------------------------------------------|
 | `CANPASS_REC_MODE`          | `motion`        | Modo de gravação: `continuous` ou `motion` (a entrevista define; padrão dela é `continuous`) |
@@ -195,6 +203,9 @@ seu arquivo com prefixo `camN_` (ex.: `cam2_11-05-2026_14-32-00_14-35-47.mp4`).
 | `CANPASS_CONT_SEGMENT_SECS` | `600`           | Duração de cada segmento da gravação contínua, em segundos                     |
 | `MOTION_THRESHOLD`          | `0.02`          | Fração de pixels alterados que caracteriza movimento (0.0–1.0)                  |
 | `MOTION_COOLDOWN_SECS`      | `30`            | Segundos sem movimento antes de encerrar a gravação                             |
+| `CANPASS_REC_TIMESTAMP`     | `1`             | `=1` queima o relógio `HH:MM:SS.mmm` (branco, inferior-esquerdo); `=0` desliga  |
+| `CANPASS_MOTION_CRF`        | `18`            | CRF do reencode da gravação por movimento quando o timestamp está ligado        |
+| `CANPASS_TS_FONTSIZE`       | `h/22`          | Tamanho da fonte do timestamp (expressão ffmpeg; escala com a altura)           |
 | `CANPASS_CSI_RES`           | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30`                       |
 | `CANPASS_CSI_SENSORS`       | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1`                  |
 | `CANPASS_NO_CLOCK_BOOST`    | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI  |
