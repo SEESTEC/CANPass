@@ -26,6 +26,7 @@ RESTART_DELAY_SECS=3
 PROMPT_TIMEOUT="${CANPASS_PROMPT_TIMEOUT:-30}"
 CAN_CONSOLE_LOG="/tmp/canpass_can_console.log"
 CAN_LOG_PID=""
+CAN_BIN=""   # caminho resolvido do canpass-can (p/ derrubar a iface no encerramento)
 
 # Códigos que indicam encerramento intencional pelo usuário
 INTENTIONAL_EXIT_CODES=(0 130 143)
@@ -195,6 +196,7 @@ _start_can_logger() {
         log_warn "canpass-can não encontrado — log CAN desativado (rode o install.sh)."
         return 0
     fi
+    CAN_BIN="$bin"   # guarda p/ o _stop_can_logger derrubar a interface ao sair
 
     # Subir a interface usa sudo; valida a credencial AGORA para o processo em
     # background não morrer pedindo senha (o install.sh cria regra NOPASSWD p/ ip).
@@ -218,8 +220,15 @@ _stop_can_logger() {
     [[ -n "$CAN_LOG_PID" ]] || return 0
     kill "$CAN_LOG_PID" 2>/dev/null
     wait "$CAN_LOG_PID" 2>/dev/null
-    log_info "Log CAN encerrado."
     CAN_LOG_PID=""
+    # Derruba a interface CAN — antes ela ficava UP após encerrar o canpass.
+    # ('ip link set down' usa sudo NOPASSWD já configurado p/ o canpass-can.)
+    if [[ -n "$CAN_BIN" ]]; then
+        "$CAN_BIN" down >/dev/null 2>&1 && log_info "Log CAN encerrado e interface CAN derrubada." \
+            || log_info "Log CAN encerrado."
+    else
+        log_info "Log CAN encerrado."
+    fi
 }
 
 # ─── Referência completa de comandos (impressa em toda partida) ──────────────

@@ -13,6 +13,51 @@ log_ok()    { echo -e "${GREEN}[ OK ]${NC}  $*"; }
 log_warn()  { echo -e "${YELLOW}[AVISO]${NC} $*"; }
 log_error() { echo -e "${RED}[ERRO]${NC}  $*" >&2; }
 
+# Mata um PID e TODA a sua descendência. Os loops de stream rodam `gst | ffmpeg`
+# como FILHOS de um subshell — matar só o subshell (kill $loop_pid) deixava o
+# gst/ffmpeg vivos segurando /dev/video* (câmera "não encerrava" no Ctrl+C).
+# Recorre nos filhos primeiro (TERM), depois o próprio; um SIGKILL de garantia
+# pega quem ignorou o TERM. $1 = PID raiz · $2 = sinal (padrão TERM).
+_kill_tree() {
+    local pid="$1" sig="${2:-TERM}" child
+    [[ -n "$pid" ]] || return 0
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        _kill_tree "$child" "$sig"
+    done
+    kill -"$sig" "$pid" 2>/dev/null || true
+}
+
+# ─── Recuperação da NileCAM81 travada (MCU em -121 / EREMOTEIO) ──────────────
+# A NileCAM81 tem um MCU on-board (driver ar0821, I²C-sobre-GMSL). Stream-config
+# falho repetido (ex.: o antigo loop de reconexão de 2 s martelando o S_FMT)
+# TRAVA o MCU: o ioctl S_FMT passa a retornar EIO/-121 e a câmera só volta com
+# reboot OU recarregando o módulo. Esta função tenta o caminho sem-reboot:
+# recarrega o ar0821 (que reissua o CHIP reset da desserializadora + re-proba o
+# sensor). Rate-limited por lockfile (no --all, vários loops não recarregam
+# juntos). Precisa de NOPASSWD p/ 'modprobe ar0821' (configurado pelo install.sh);
+# sem isso, só recomenda reboot. Desligue com CANPASS_NO_CAM_RECOVER=1.
+_cam_recover_ar0821() {
+    local vnode="$1"
+    [[ "${CANPASS_NO_CAM_RECOVER:-0}" == "1" ]] && return 1
+    lsmod 2>/dev/null | grep -q '^ar0821' || return 1   # só faz sentido p/ a NileCAM81
+    local lock="/tmp/canpass_cam_recover.lock" now last
+    now=$(date +%s); last=$(cat "$lock" 2>/dev/null || echo 0)
+    (( now - last < 60 )) && return 1                    # outro loop já tentou há <60s
+    echo "$now" > "$lock"
+    log_warn "[cam${vnode}] Câmera travada (-121 = MCU da NileCAM81 sem responder no I²C) — recarregando ar0821..."
+    if sudo -n modprobe -r ar0821 2>/dev/null && sudo -n modprobe ar0821 2>/dev/null; then
+        local t=0; until [[ -e "/dev/video${vnode}" ]] || (( t >= 12 )); do sleep 1; ((t++)); done
+        if [[ -e "/dev/video${vnode}" ]]; then
+            log_ok "[cam${vnode}] Módulo ar0821 recarregado — /dev/video${vnode} de volta."
+            return 0
+        fi
+        log_warn "[cam${vnode}] ar0821 recarregado mas /dev/video${vnode} não voltou — REBOOT recomendado."
+        return 1
+    fi
+    log_warn "[cam${vnode}] Não consegui recarregar ar0821 (sem NOPASSWD? rode 'canpass update') — REBOOT é o reset garantido do MCU."
+    return 1
+}
+
 # ─── Timestamp queimado na gravação (overlay drawtext) ───────────────────────
 # Carimba a hora do relógio do sistema em HH:MM:SS.mmm (mesmo formato legível do
 # canpass-can log, sem a data), texto branco no canto inferior-esquerdo. Como
@@ -502,6 +547,7 @@ _yuv_stream_loop() {
     )
 
     local ylog="/tmp/canpass_yuv_${vnode}.log"
+    local wedge_count=0   # falhas consecutivas de negociação (câmera travada)
     while true; do
         : > "$ylog"
         # Formato pré-fixado: o nvv4l2camerasrc herda o formato corrente do nó
@@ -572,8 +618,22 @@ _yuv_stream_loop() {
         fi
         local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
         (( gst_rc >= 128 || ffmpeg_rc >= 128 )) && return
-        log_warn "[cam${vnode}] Stream YUV encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${ylog})"
-        sleep 2
+        # Assinatura de câmera TRAVADA (NileCAM81: MCU não responde no I²C/GMSL):
+        # S_FMT falha com EIO / not-negotiated / -121. Diferente de uma queda
+        # transitória — aqui reconectar a cada 2s só MANTÉM o MCU travado. Conta
+        # falhas consecutivas, faz backoff e tenta recuperar recarregando o ar0821.
+        if grep -qiE 'S_FMT failed|VIDIOC_S_FMT|not-negotiated|ret = -121|Input/output error' "$ylog"; then
+            (( wedge_count++ ))
+            log_warn "[cam${vnode}] Stream YUV não negocia — câmera travada? (gst=${gst_rc} ffmpeg=${ffmpeg_rc}, falha ${wedge_count}; log: ${ylog})"
+            (( wedge_count == 2 )) && _cam_recover_ar0821 "$vnode"   # tenta destravar sem reboot
+            (( wedge_count >= 4 )) && log_warn "[cam${vnode}] Câmera segue sem negociar — REBOOT é o reset garantido do MCU (-121)."
+            local backoff=$(( wedge_count * 3 )); (( backoff > 30 )) && backoff=30
+            sleep "$backoff"   # backoff progressivo: para de martelar o MCU
+        else
+            wedge_count=0
+            log_warn "[cam${vnode}] Stream YUV encerrado (gst=${gst_rc} ffmpeg=${ffmpeg_rc}) — reconectando em 2s... (log: ${ylog})"
+            sleep 2
+        fi
     done
 }
 
@@ -952,7 +1012,10 @@ show_camera() {
         # Guarda com :- porque o trap EXIT pode disparar fora do escopo de
         # show_camera (ex.: após um return antecipado), quando os locais já
         # não existem — sem isso, `set -u` aborta com "unbound variable".
-        kill "${loop_pid:-}" "${motion_rec_pid:-}" 2>/dev/null
+        # _kill_tree (não um kill simples): o loop roda `gst | ffmpeg` como
+        # filhos — matar só o subshell deixava o gst/ffmpeg segurando a câmera.
+        _kill_tree "${loop_pid:-}"
+        _kill_tree "${motion_rec_pid:-}"
         if [[ -n "$_TEMP_IP_ADDR" && -n "$_TEMP_IP_IFACE" ]]; then
             sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null \
                 && log_info "IP temporário ${_TEMP_IP_ADDR} removido de ${_TEMP_IP_IFACE}."
@@ -1065,7 +1128,7 @@ show_all_cameras() {
     _all_cleanup() {
         local p
         for p in "${play_pids[@]:-}" "${rec_pids[@]:-}" "${pids[@]:-}"; do
-            [[ -n "$p" ]] && { pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; }
+            _kill_tree "$p"   # mata gst/ffmpeg filhos, não só o subshell
         done
     }
     trap _all_cleanup EXIT INT TERM

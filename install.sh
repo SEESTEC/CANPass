@@ -102,11 +102,12 @@ setup_jetson_sudoers() {
     local sudoers_file="/etc/sudoers.d/canpass-nvargus"
 
     # Resolve caminhos (variam entre layouts L4T); só inclui o que existe.
-    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin
+    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin
     systemctl_bin="$(command -v systemctl || echo /bin/systemctl)"
     nvpmodel_bin="$(command -v nvpmodel || true)"
     jetson_clocks_bin="$(command -v jetson_clocks || true)"
     ip_bin="$(command -v ip || echo /usr/sbin/ip)"
+    modprobe_bin="$(command -v modprobe || echo /usr/sbin/modprobe)"
 
     # cam_view.sh, no caminho CSI, reinicia o nvargus-daemon e maximiza os clocks
     # (nvpmodel/jetson_clocks + max-isp-vi-clks.sh da e-con) sem senha, via sudo -n.
@@ -117,6 +118,9 @@ setup_jetson_sudoers() {
     [[ -n "$jetson_clocks_bin" ]] && cmds+=("${jetson_clocks_bin}")
     cmds+=("${ip_bin} *")
     cmds+=("${CALLING_HOME}/max-isp-vi-clks.sh")   # caminho determinístico; inofensivo se ausente
+    # Recuperação da NileCAM81 travada (MCU em -121): cam_view.sh recarrega o
+    # ar0821 sem reboot — precisa de modprobe sem senha (roda sem tty).
+    cmds+=("${modprobe_bin} -r ar0821" "${modprobe_bin} ar0821")
 
     local joined
     joined=$(IFS=,; echo "${cmds[*]}")
