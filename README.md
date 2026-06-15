@@ -189,10 +189,13 @@ seu arquivo com prefixo `camN_` (ex.: `cam2_11-05-2026_14-32-00_14-35-47.mp4`).
 
 **Timestamp na imagem:** por padrão a gravação leva o **relógio do sistema queimado**
 no canto inferior-esquerdo, em **`HH:MM:SS.mmm`** (mesmo formato legível do `canpass-can
-log`, sem a data), texto branco. Como queimar texto exige reescrever pixels, a gravação
-que o usa é **reencodada**: a contínua já reencoda (custo zero adicional); a por movimento
-passa a reencodar (`CANPASS_MOTION_CRF`, padrão **18** ≈ visualmente sem perda). Desligue
-com `CANPASS_REC_TIMESTAMP=0` — aí a gravação por movimento volta a ser **cópia exata**
+log`, sem a data), texto branco. A **entrevista de inicialização pergunta o canto** (ou
+desligar): inferior esquerdo/direito, superior esquerdo/direito, ou sem timestamp —
+o equivalente em variável é `CANPASS_TS_POSITION` (`bl`/`br`/`tl`/`tr`/`off`, padrão `bl`).
+Como queimar texto exige reescrever pixels, a gravação que o usa é **reencodada**: a
+contínua já reencoda (custo zero adicional); a por movimento passa a reencodar
+(`CANPASS_MOTION_CRF`, padrão **18** ≈ visualmente sem perda). Desligar (`off` na entrevista,
+ou `CANPASS_REC_TIMESTAMP=0`) faz a gravação por movimento voltar a ser **cópia exata**
 (`-c copy`). Tamanho da fonte via `CANPASS_TS_FONTSIZE` (padrão `h/22`, escala com a altura).
 
 | Variável de ambiente        | Padrão          | Descrição                                                                       |
@@ -203,7 +206,8 @@ com `CANPASS_REC_TIMESTAMP=0` — aí a gravação por movimento volta a ser **c
 | `CANPASS_CONT_SEGMENT_SECS` | `600`           | Duração de cada segmento da gravação contínua, em segundos                     |
 | `MOTION_THRESHOLD`          | `0.02`          | Fração de pixels alterados que caracteriza movimento (0.0–1.0)                  |
 | `MOTION_COOLDOWN_SECS`      | `30`            | Segundos sem movimento antes de encerrar a gravação                             |
-| `CANPASS_REC_TIMESTAMP`     | `1`             | `=1` queima o relógio `HH:MM:SS.mmm` (branco, inferior-esquerdo); `=0` desliga  |
+| `CANPASS_REC_TIMESTAMP`     | `1`             | `=1` queima o relógio `HH:MM:SS.mmm` (branco); `=0` desliga                      |
+| `CANPASS_TS_POSITION`       | `bl`            | Canto do timestamp: `bl` inf-esq · `br` inf-dir · `tl` sup-esq · `tr` sup-dir · `off` sem |
 | `CANPASS_MOTION_CRF`        | `18`            | CRF do reencode da gravação por movimento quando o timestamp está ligado        |
 | `CANPASS_TS_FONTSIZE`       | `h/22`          | Tamanho da fonte do timestamp (expressão ffmpeg; escala com a altura)           |
 | `CANPASS_CSI_RES`           | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30`                       |

@@ -143,6 +143,23 @@ _setup_interview() {
     ans=$(_ask "Modo [1/2] (padrão 1):" "1")
     [[ "$ans" == "2" ]] && export CANPASS_REC_MODE="motion" || export CANPASS_REC_MODE="continuous"
 
+    # 1b. Posição do timestamp queimado na gravação (relógio do Orin HH:MM:SS.mmm)
+    echo
+    log_info "Timestamp na gravação (relógio HH:MM:SS.mmm queimado no vídeo):"
+    echo -e "  ${GREEN}[1]${NC} Inferior esquerdo (padrão)"
+    echo -e "  ${GREEN}[2]${NC} Inferior direito"
+    echo -e "  ${GREEN}[3]${NC} Superior esquerdo"
+    echo -e "  ${GREEN}[4]${NC} Superior direito"
+    echo -e "  ${GREEN}[5]${NC} Sem timestamp"
+    ans=$(_ask "Posição [1-5] (padrão 1):" "1")
+    case "$ans" in
+        2) export CANPASS_TS_POSITION="br" ;;
+        3) export CANPASS_TS_POSITION="tl" ;;
+        4) export CANPASS_TS_POSITION="tr" ;;
+        5) export CANPASS_TS_POSITION="off" ;;
+        *) export CANPASS_TS_POSITION="bl" ;;
+    esac
+
     # 2. Bitrate do CAN
     echo
     ans=$(_ask "Bitrate do CAN em bps [padrão 250000 — J1939/Caterpillar]:" "250000")
@@ -173,8 +190,14 @@ _setup_interview() {
     echo
     _choose_storage
 
+    local ts_label
+    case "$CANPASS_TS_POSITION" in
+        br) ts_label="inf-dir" ;; tl) ts_label="sup-esq" ;;
+        tr) ts_label="sup-dir" ;; off) ts_label="desligado" ;;
+        *)  ts_label="inf-esq" ;;
+    esac
     echo
-    log_ok "Configuração: vídeo=$([[ "$CANPASS_REC_MODE" == continuous ]] && echo "contínua" || echo "movimento") · CAN ${CANPASS_CAN_BITRATE} bps · ts=$([[ "$CANPASS_CAN_LOG_HUMAN" == 1 ]] && echo "humano" || echo "epoch")$([[ "$CANPASS_CAN_LOG_ASCII" == 1 ]] && echo " +ascii") · destino: ${CANPASS_REC_DIR}"
+    log_ok "Configuração: vídeo=$([[ "$CANPASS_REC_MODE" == continuous ]] && echo "contínua" || echo "movimento") · ts-gravação=${ts_label} · CAN ${CANPASS_CAN_BITRATE} bps · ts-log=$([[ "$CANPASS_CAN_LOG_HUMAN" == 1 ]] && echo "humano" || echo "epoch")$([[ "$CANPASS_CAN_LOG_ASCII" == 1 ]] && echo " +ascii") · destino: ${CANPASS_REC_DIR}"
     echo
 }
 
@@ -277,6 +300,7 @@ ${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
              CANPASS_CONT_CRF (21) · CANPASS_CONT_SEGMENT_SECS (600)
              MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30) · CANPASS_MOTION_CRF (18)
              CANPASS_REC_TIMESTAMP=1 (relógio HH:MM:SS.mmm queimado) · CANPASS_TS_FONTSIZE (h/22)
+             CANPASS_TS_POSITION bl|br|tl|tr|off (canto do timestamp; padrão bl=inf-esq)
   CAN:       CANPASS_CAN_IF (força iface) · CANPASS_CAN_BITRATE (250000) · CANPASS_CAN_ACTIVE=1
              CANPASS_CAN_LOGDIR · CANPASS_CAN_LOG_HUMAN=1 · CANPASS_CAN_LOG_ASCII=1
              CANPASS_CAN_STALL_SECS (6)

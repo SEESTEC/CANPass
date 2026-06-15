@@ -60,10 +60,12 @@ _cam_recover_ar0821() {
 
 # ─── Timestamp queimado na gravação (overlay drawtext) ───────────────────────
 # Carimba a hora do relógio do sistema em HH:MM:SS.mmm (mesmo formato legível do
-# canpass-can log, sem a data), texto branco no canto inferior-esquerdo. Como
-# queimar texto exige modificar pixels, a gravação que o usa é REENCODADA (a
-# contínua já reencoda; a por movimento passa a reencodar — antes era cópia
-# exata). Desligue com CANPASS_REC_TIMESTAMP=0 (a por movimento volta a -c copy).
+# canpass-can log, sem a data), texto branco. Como queimar texto exige modificar
+# pixels, a gravação que o usa é REENCODADA (a contínua já reencoda; a por
+# movimento passa a reencodar — antes era cópia exata).
+#   CANPASS_TS_POSITION  canto: bl=inf-esq (padrão) · br=inf-dir · tl=sup-esq ·
+#                        tr=sup-dir · off=sem timestamp (a entrevista define isto)
+#   CANPASS_REC_TIMESTAMP=0  também desliga (a por movimento volta a -c copy)
 #   CANPASS_TS_FONTSIZE  tamanho da fonte (expr ffmpeg; padrão h/22 = escala c/ a altura)
 _TS_FONT_CACHED=""
 _ts_fontfile() {
@@ -84,13 +86,23 @@ _ts_fontfile() {
 # Imprime no stdout o filtro -vf do drawtext (ou vazio se desligado/sem fonte).
 # %{localtime\:%T} = HH:MM:SS do relógio do sistema; .%{eif...} = milissegundos
 # do tempo do stream (PTS real, que já é fiel ao tempo — ver _yuv_stream_loop).
+# A posição (canto) vem de CANPASS_TS_POSITION; margem fixa de 14 px da borda.
 _timestamp_vf() {
-    [[ "${CANPASS_REC_TIMESTAMP:-1}" == "1" ]] || return 0
+    local pos="${CANPASS_TS_POSITION:-bl}"
+    [[ "${CANPASS_REC_TIMESTAMP:-1}" == "1" ]] || pos="off"
+    [[ "$pos" == "off" ]] && return 0
     local font
     font=$(_ts_fontfile) || return 0
     local fontsize="${CANPASS_TS_FONTSIZE:-h/22}"
-    printf "drawtext=fontfile=%s:fontcolor=white:fontsize=%s:x=14:y=h-text_h-14:box=1:boxcolor=black@0.4:boxborderw=6:text='%%{localtime\\:%%T}.%%{eif\\:mod(t\\,1)*1000\\:d\\:3}'" \
-        "$font" "$fontsize"
+    local m=14 x y   # w/h = frame; text_w/text_h = caixa do texto (vars do drawtext)
+    case "$pos" in
+        tl) x="$m";          y="$m" ;;
+        tr) x="w-text_w-$m"; y="$m" ;;
+        br) x="w-text_w-$m"; y="h-text_h-$m" ;;
+        bl|*) x="$m";        y="h-text_h-$m" ;;
+    esac
+    printf "drawtext=fontfile=%s:fontcolor=white:fontsize=%s:x=%s:y=%s:box=1:boxcolor=black@0.4:boxborderw=6:text='%%{localtime\\:%%T}.%%{eif\\:mod(t\\,1)*1000\\:d\\:3}'" \
+        "$font" "$fontsize" "$x" "$y"
 }
 
 # ─── Constantes ──────────────────────────────────────────────────────────────
