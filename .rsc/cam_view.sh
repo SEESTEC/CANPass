@@ -87,6 +87,14 @@ _ts_fontfile() {
 # %{localtime\:%T} = HH:MM:SS do relógio do sistema; .%{eif...} = milissegundos
 # do tempo do stream (PTS real, que já é fiel ao tempo — ver _yuv_stream_loop).
 # A posição (canto) vem de CANPASS_TS_POSITION; margem fixa de 14 px da borda.
+# Rótulo legível do canto atual do timestamp (p/ os logs de gravação).
+_ts_position_label() {
+    case "${CANPASS_TS_POSITION:-bl}" in
+        br) echo "inferior-direito" ;; tl) echo "superior-esquerdo" ;;
+        tr) echo "superior-direito" ;; *)  echo "inferior-esquerdo" ;;
+    esac
+}
+
 _timestamp_vf() {
     local pos="${CANPASS_TS_POSITION:-bl}"
     [[ "${CANPASS_REC_TIMESTAMP:-1}" == "1" ]] || pos="off"
@@ -780,7 +788,7 @@ _continuous_loop() {
     trap '[[ -n "$fpid" ]] && kill "$fpid" 2>/dev/null; exit 0' INT TERM
 
     log_info "${tag}Gravação contínua: x264 CRF ${crf}, segmentos de $(( seg / 60 )) min → ${rec_dir}"
-    [[ -n "$ts_vf" ]] && log_info "${tag}Timestamp na gravação ativo (HH:MM:SS.mmm, canto inferior-esquerdo)."
+    [[ -n "$ts_vf" ]] && log_info "${tag}Timestamp na gravação ativo (HH:MM:SS.mmm, canto $(_ts_position_label))."
     while true; do
         # espera o stream publicar no MediaMTX (evita spam de reconexão do ffmpeg)
         until ffprobe -v quiet -rtsp_transport tcp -i "$src_url" >/dev/null 2>&1; do
