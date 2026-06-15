@@ -1,6 +1,6 @@
 # CANPass
 
-> **v1.5.0** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC (single ou **multi-câmera `--all`** com mosaico local), gravação **contínua ou por detecção de movimento**, **log CAN automático** (CANable/J1939) sincronizável com o vídeo, entrevista de configuração na partida (modo de gravação, bitrate, timestamp, armazenamento interno/externo), watchdog, alternância de câmeras e-CAM82 ↔ NileCAM81, atualização integrada (`canpass update`) e instalador de drivers e-con para NVIDIA Jetson AGX Orin.
+> **v2.0** — Stream de câmeras V4L2/CSI/IP via RTSP/HLS/WebRTC (single ou **multi-câmera `--all`** com mosaico local), gravação **contínua ou por detecção de movimento** com **fidelidade temporal** (PTS reais de captura via MPEG-TS, p/ casar vídeo ↔ CAN) e **timestamp do Orin queimado** na imagem (canto configurável na entrevista), **log CAN automático** (CANable/J1939) sincronizável com o vídeo, entrevista de configuração na partida (modo de gravação, posição do timestamp, bitrate, formato do log, armazenamento interno/externo), watchdog, alternância de câmeras e-CAM82 ↔ NileCAM81, **auto-recuperação da NileCAM81 travada** (`-121`/GMSL) e **encerramento limpo** (câmera + CAN) no Ctrl+C, atualização integrada (`canpass update`) e instalador de drivers e-con para NVIDIA Jetson AGX Orin.
 
 ## Descrição
 
@@ -67,9 +67,10 @@ canpass
 Na partida, o `canpass` imprime a **referência completa de comandos/parâmetros** e abre a
 **entrevista de configuração** (cada pergunta com timeout de 30 s — sem resposta, segue com
 os padrões, então o boot via systemd nunca trava): modo de gravação (contínua/movimento),
-bitrate do CAN, formato do timestamp do log, conteúdo (normal/ASCII) e onde salvar
-(interno ou dispositivo externo montado — HDD/SSD/pendrive/SD). Em seguida inicia o
-**log CAN contínuo** em segundo plano e sobe o stream. `canpass --help` mostra só a referência.
+**posição do timestamp queimado** (4 cantos ou desligado), bitrate do CAN, formato do
+timestamp do log, conteúdo (normal/ASCII) e onde salvar (interno ou dispositivo externo
+montado — HDD/SSD/pendrive/SD). Em seguida inicia o **log CAN contínuo** em segundo plano
+e sobe o stream. `canpass --help` mostra só a referência.
 
 **Com exibição local** (abre janela ffplay além do stream):
 
@@ -210,7 +211,7 @@ ou `CANPASS_REC_TIMESTAMP=0`) faz a gravação por movimento voltar a ser **cóp
 | `CANPASS_TS_POSITION`       | `bl`            | Canto do timestamp: `bl` inf-esq · `br` inf-dir · `tl` sup-esq · `tr` sup-dir · `off` sem |
 | `CANPASS_MOTION_CRF`        | `18`            | CRF do reencode da gravação por movimento quando o timestamp está ligado        |
 | `CANPASS_TS_FONTSIZE`       | `h/22`          | Tamanho da fonte do timestamp (expressão ffmpeg; escala com a altura)           |
-| `CANPASS_CSI_RES`           | `1920x1080@30`  | Resolução e FPS da câmera CSI (Jetson). Ex: `1280x720@30`                       |
+| `CANPASS_CSI_RES`           | CSI/Argus `@30` · YUV/NileCAM81 `@60` | Resolução e FPS `WxH@FPS` (Jetson). Ex: `1280x720@30`. O default de FPS difere por caminho: Argus (e-CAM82) usa `1920x1080@30`, V4L2/ISP (NileCAM81) `1920x1080@60` |
 | `CANPASS_CSI_SENSORS`       | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1`                  |
 | `CANPASS_NO_CLOCK_BOOST`    | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI  |
 | `CANPASS_CSI_BITRATE`       | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido   |
@@ -522,6 +523,17 @@ CANPass/
 ---
 
 ## Changelog
+
+### v2.0 — 2026-06-15
+
+Consolida a linha v1.6 → v1.8 e fecha o pacote. Validado em hardware (Orin + NileCAM81 GMSL).
+
+- **Fidelidade temporal vídeo ↔ CAN** (`cam_view.sh`, caminho YUV/NileCAM81): o stream carrega os **PTS reais de captura** via `mpegtsmux` (o gst estampa cada frame com o relógio de captura e o ffmpeg só repassa, `-c copy`), em vez de assumir um FPS nominal. Casa o vídeo com o log CAN em epoch comum.
+- **Timestamp do Orin queimado na gravação** — relógio `HH:MM:SS.mmm` (mesmo formato legível do `canpass-can`), texto branco em caixa translúcida. A **entrevista pergunta o canto** (inferior esq./dir., superior esq./dir.) ou **desligar**; equivalente em variável: `CANPASS_TS_POSITION` (`bl`/`br`/`tl`/`tr`/`off`). Tamanho via `CANPASS_TS_FONTSIZE`. A contínua já reencoda (custo zero); a por movimento reencoda só quando o timestamp está ligado (`CANPASS_MOTION_CRF`), senão segue em cópia exata.
+- **Auto-recuperação da NileCAM81 travada** (`-121` = MCU sem responder no I²C/GMSL): o loop de stream detecta a assinatura de travamento (`S_FMT`/`not-negotiated`/`-121`), faz **backoff progressivo** (3→30 s, em vez de martelar a cada 2 s — o que mantinha o MCU travado) e tenta destravar **sem reboot** recarregando o `ar0821` (`CANPASS_NO_CAM_RECOVER=1` desliga). `install.sh`: NOPASSWD para `modprobe ar0821`.
+- **Encerramento limpo no Ctrl+C**: `cam_view.sh` mata a **árvore** de processos (gst/ffmpeg filhos — antes sobreviviam segurando `/dev/video*`) e o `watchdog.sh` **derruba a interface CAN** (`canpass-can down`) ao sair (antes ficava UP).
+- **Robustez de boot não-interativo**: a seleção de câmera auto-seleciona a primeira detectada quando não há tty (serviço systemd) ou `CANPASS_NO_INTERVIEW=1` — antes esse prompt podia travar o boot indefinidamente.
+- **Auditoria geral**: remoção de código morto (`_cleanup_install_dir`/`/tmp/.canpass_src_dir`, de um fluxo de instalação antigo), banner/README sincronizados com o código (defaults de `CANPASS_CSI_RES` por caminho, nova `CANPASS_TS_POSITION`, descrição da entrevista).
 
 ### v1.5.0 — 2026-06-11
 

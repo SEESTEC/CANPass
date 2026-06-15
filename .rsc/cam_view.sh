@@ -1439,19 +1439,33 @@ main() {
     echo
 
     local selected="" choice
-    while true; do
-        read -rp "$(echo -e "${CYAN}Selecione [0–${ip_idx}]:${NC} ")" choice
-        if [[ "$choice" =~ ^[0-9]+$ ]]; then
-            if (( choice < ${#cameras[@]} )); then
-                selected="${cameras[$choice]}"
-                break
-            elif (( choice == ip_idx )); then
-                selected=$(_prompt_ip_camera) || { log_warn "Câmera IP não configurada. Tente novamente."; continue; }
-                [[ -n "$selected" ]] && break
-            fi
+    # Sem tty (boot via systemd) ou CANPASS_NO_INTERVIEW=1: NÃO travar no prompt.
+    # A entrevista tem timeout, mas este read não — sem isto o serviço pendurava
+    # aqui esperando uma tecla que nunca vem. Auto-seleciona a 1ª câmera local.
+    if [[ ! -t 0 || "${CANPASS_NO_INTERVIEW:-0}" == "1" ]]; then
+        if (( ${#cameras[@]} > 0 )); then
+            selected="${cameras[0]}"
+            log_info "Modo não-interativo — câmera [0] selecionada automaticamente: ${selected}"
+        else
+            log_error "Nenhuma câmera local e modo não-interativo — nada a transmitir."
+            log_error "(o watchdog tentará de novo; verifique 'canpass-camera status' / cabo / driver)"
+            exit 1
         fi
-        log_warn "Opção inválida. Tente novamente."
-    done
+    else
+        while true; do
+            read -rp "$(echo -e "${CYAN}Selecione [0–${ip_idx}]:${NC} ")" choice
+            if [[ "$choice" =~ ^[0-9]+$ ]]; then
+                if (( choice < ${#cameras[@]} )); then
+                    selected="${cameras[$choice]}"
+                    break
+                elif (( choice == ip_idx )); then
+                    selected=$(_prompt_ip_camera) || { log_warn "Câmera IP não configurada. Tente novamente."; continue; }
+                    [[ -n "$selected" ]] && break
+                fi
+            fi
+            log_warn "Opção inválida. Tente novamente."
+        done
+    fi
 
     echo
     if [[ "$mode" == "local" ]]; then

@@ -293,7 +293,7 @@ ${BOLD}canpass-can${NC} — sniffer/log do CANable USB (gs_usb, J1939 250k; list
 ${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
   Partida:   CANPASS_NO_INTERVIEW=1 (pula entrevista) · CANPASS_PROMPT_TIMEOUT (30 s/pergunta)
              CANPASS_NO_HELP=1 (oculta esta referência)
-  Stream:    CANPASS_CSI_RES \"WxH@FPS\" (1920x1080@30) · CANPASS_CSI_BITRATE (8000000)
+  Stream:    CANPASS_CSI_RES \"WxH@FPS\" (CSI/Argus 1920x1080@30 · YUV/NileCAM81 @60) · CANPASS_CSI_BITRATE (8000000)
              CANPASS_CSI_ENCODER auto|hw|sw · CANPASS_CSI_SENSORS \"0 1...\" (fallback s/ /dev/video)
              CANPASS_NO_CLOCK_BOOST=1 · CANPASS_MOSAIC_W/CANPASS_MOSAIC_H (mosaico --local --all)
   Gravação:  CANPASS_REC_MODE continuous|motion · CANPASS_REC_DIR (~/canpass_rec)
@@ -321,19 +321,6 @@ ${BOLD}Controles de imagem${NC} (valem p/ 'canpass-camera preview' e p/ o stream
   Ajuda detalhada:  canpass-camera --help · canpass-can --help · canpass-camera ctrls
   Documentação:     doc/e-CAM82/README.md · doc/NileCAM81/CONTROLES.md · doc/CAN/README.md
 ${BOLD}${CYAN}════════════════════════════════════════════════════════════════════════════════════${NC}"
-}
-
-# ─── Limpeza do diretório de instalação temporário ───────────────────────────
-
-_cleanup_install_dir() {
-    local src_file="/tmp/.canpass_src_dir"
-    [[ -f "$src_file" ]] || return
-    local src_dir
-    src_dir=$(cat "$src_file")
-    rm -f "$src_file"
-    [[ -d "$src_dir" ]] || return
-    rm -rf "$src_dir"
-    log_info "Repositório de instalação removido: ${src_dir}"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -372,8 +359,6 @@ done
 trap '_stop_can_logger' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
-_cleanup_install_dir
 
 _show_reference
 
