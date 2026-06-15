@@ -38,7 +38,7 @@ _ts_fontfile() {
 
 # Imprime no stdout o filtro -vf do drawtext (ou vazio se desligado/sem fonte).
 # %{localtime\:%T} = HH:MM:SS do relógio do sistema; .%{eif...} = milissegundos
-# do tempo do stream (PTS real, que já é fiel ao tempo — ver _yuv_stream_loop).
+# derivados do tempo de apresentação do stream (fração de segundo).
 _timestamp_vf() {
     [[ "${CANPASS_REC_TIMESTAMP:-1}" == "1" ]] || return 0
     local font
@@ -507,44 +507,9 @@ _yuv_stream_loop() {
         # Formato pré-fixado: o nvv4l2camerasrc herda o formato corrente do nó
         # (um preview anterior pode ter deixado outra resolução) e não renegocia
         # direito — sintoma: 'NvBufSurfaceCopy: buffer size mismatch' / tela verde.
-        # FPS: alinha o frame_rate_control ao pedido (o padrão do driver é 30 e
-        # PERSISTE) e lê de volta o aceito — usado p/ GOP do encoder e p/ avisar
-        # divergência. A fidelidade temporal NÃO depende mais dele: os PTS reais
-        # de captura viajam no MPEG-TS (ver pipeline abaixo).
-        if command -v v4l2-ctl &>/dev/null; then
+        command -v v4l2-ctl &>/dev/null && \
             v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${w},height=${h},pixelformat=UYVY" 2>/dev/null
-            v4l2-ctl -d "/dev/video${vnode}" -c frame_rate_control="${fps}" 2>/dev/null
-            local real_fps
-            real_fps=$(v4l2-ctl -d "/dev/video${vnode}" --get-ctrl frame_rate_control 2>/dev/null \
-                       | awk -F': *' '/frame_rate_control/{print $2}')
-            [[ -z "$real_fps" ]] && real_fps=$(v4l2-ctl -d "/dev/video${vnode}" --get-parm 2>/dev/null \
-                       | sed -n 's/.*(\([0-9][0-9]*\)\/1).*/\1/p')
-            if [[ "$real_fps" =~ ^[0-9]+$ && "$real_fps" -gt 0 && "$real_fps" != "$fps" ]]; then
-                log_warn "[cam${vnode}] Câmera reporta ${real_fps} fps (pedido: ${fps})."
-                fps="$real_fps"
-            fi
-        fi
-        if (( use_hw )) && gst-inspect-1.0 mpegtsmux &>/dev/null; then
-            # FIDELIDADE TEMPORAL fim-a-fim: H.264 cru não carrega timestamps e
-            # qualquer '-r' nominal no ffmpeg vira aposta (a câmera pode entregar
-            # OUTRO fps — ex.: modos HDR reduzem a taxa real sem refletir no
-            # controle). Solução definitiva: o gst estampa cada frame com o
-            # relógio REAL de captura e o mpegtsmux TRANSPORTA esses PTS pelo
-            # pipe — o ffmpeg só repassa (-c copy), sem assumir fps nenhum.
-            gst-launch-1.0 -q "${src[@]}" ! \
-                nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
-                    insert-sps-pps=1 iframeinterval="${fps}" idrinterval="${fps}" ! \
-                h264parse config-interval=-1 ! mpegtsmux alignment=7 ! \
-                fdsink fd=1 2>>"$ylog" | \
-            ffmpeg -loglevel warning \
-                -flags low_delay -analyzeduration 1000000 -probesize 262144 \
-                -f mpegts -i pipe:0 \
-                -c:v copy -muxdelay 0 -muxpreload 0 \
-                -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
-        elif (( use_hw )); then
-            # mpegtsmux ausente — legado: H.264 cru estampado com o fps lido do
-            # driver (menos robusto que os PTS reais, mas melhor que o nominal).
-            log_warn "[cam${vnode}] mpegtsmux indisponível — usando fps nominal ${fps} (instale gst-plugins-bad)."
+        if (( use_hw )); then
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvv4l2h264enc maxperf-enable=1 control-rate=1 bitrate="${bitrate}" \
                     insert-sps-pps=1 iframeinterval="${fps}" idrinterval="${fps}" ! \
@@ -555,19 +520,15 @@ _yuv_stream_loop() {
                 -c:v copy -muxdelay 0 -muxpreload 0 \
                 -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
         else
-            # Caminho por software (raro): rawvideo não carrega PTS — estampa
-            # pelo RELÓGIO DE CHEGADA (wallclock), fiel ao tempo real mesmo se
-            # o fps real divergir do nominal.
             gst-launch-1.0 -q "${src[@]}" ! \
                 nvvidconv ! "video/x-raw,format=I420" ! \
                 fdsink fd=1 2>>"$ylog" | \
             ffmpeg -loglevel warning \
                 -f rawvideo -pix_fmt yuv420p \
                 -s "${w}x${h}" -r "${fps}" \
-                -use_wallclock_as_timestamps 1 \
                 -fflags nobuffer -flags low_delay -analyzeduration 0 \
                 -i pipe:0 \
-                "${SW_ENCODE[@]}" -vsync vfr -muxdelay 0 -muxpreload 0 \
+                "${SW_ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
                 -rtsp_transport tcp -f rtsp "$out_url" 2>>"$ylog"
         fi
         local gst_rc=${PIPESTATUS[0]} ffmpeg_rc=${PIPESTATUS[1]}
@@ -1153,12 +1114,10 @@ show_local() {
         IFS='x@' read -r y_w y_h y_fps <<< "$res"
         log_info "Preview local YUV/V4L2 (ISP onboard): /dev/video${vnode}, ${y_w}x${y_h} (nv3dsink)."
         _boost_jetson_clocks
-        # Formato + fps reais pré-fixados (evita tela verde por formato herdado
-        # e fps divergente do pedido — ver _yuv_stream_loop).
-        if command -v v4l2-ctl &>/dev/null; then
+        # Formato pré-fixado (evita 'NvBufSurfaceCopy: buffer size mismatch'/tela
+        # verde quando o nó ficou em outra resolução — ver _yuv_stream_loop).
+        command -v v4l2-ctl &>/dev/null && \
             v4l2-ctl -d "/dev/video${vnode}" --set-fmt-video="width=${y_w},height=${y_h},pixelformat=UYVY" 2>/dev/null
-            v4l2-ctl -d "/dev/video${vnode}" -c frame_rate_control="${y_fps}" 2>/dev/null
-        fi
         log_info "Janela abrindo no monitor do Orin — pressione Ctrl+C aqui para encerrar."
         # Caps NV12 NVMM explícitos após o nvvidconv — sem eles a negociação com
         # o nv3dsink falha ("not-negotiated": passthrough UYVY NVMM não aceito).
@@ -1243,15 +1202,13 @@ show_local_all() {
     local yuv_src="v4l2src"
     gst-inspect-1.0 nvv4l2camerasrc &>/dev/null && yuv_src="nvv4l2camerasrc"
 
-    # Formato + fps reais pré-fixados nos nós YUV (evita tela verde por formato
-    # herdado e fps divergente — ver _yuv_stream_loop).
+    # Formato pré-fixado nos nós YUV (evita 'NvBufSurfaceCopy: buffer size
+    # mismatch'/tela verde quando o nó ficou em outra resolução).
     if command -v v4l2-ctl &>/dev/null; then
         local yc
         for yc in "${cams[@]}"; do
-            [[ "$yc" == yuv:* ]] || continue
-            v4l2-ctl -d "/dev/video${yc#yuv:}" \
+            [[ "$yc" == yuv:* ]] && v4l2-ctl -d "/dev/video${yc#yuv:}" \
                 --set-fmt-video="width=${csi_w},height=${csi_h},pixelformat=UYVY" 2>/dev/null
-            v4l2-ctl -d "/dev/video${yc#yuv:}" -c frame_rate_control="${csi_fps}" 2>/dev/null
         done
     fi
 
