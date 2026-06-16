@@ -219,6 +219,11 @@ O modo é escolhido na entrevista de partida (ou via `CANPASS_REC_MODE=continuou
 Os arquivos vão para o destino escolhido na entrevista (padrão `~/canpass_rec/`; sobreponível
 via `CANPASS_REC_DIR`) — o **mesmo diretório dos logs CAN**, para manter vídeo + CAN juntos.
 
+> **Pasta por sessão:** a cada partida o `canpass` cria, dentro do destino, uma subpasta
+> `canpass_dd-mm-aaaa_hh-mm-ss/` e guarda ali **as gravações e o log CAN daquela execução** —
+> assim cada sessão fica isolada, em vez de tudo solto em `canpass_rec/`. Ex.:
+> `~/canpass_rec/canpass_16-06-2026_14-30-00/{cont_*.mp4, can_*.log}`.
+
 **Contínua** (`continuous` — padrão da entrevista): grava **sempre**, recomprimindo em H.264
 (x264 CRF 21 ≈ visualmente transparente, arquivos bem menores que a cópia do stream), em
 **segmentos** de 10 min em **MP4 fragmentado** — uma queda de energia corrompe no máximo o

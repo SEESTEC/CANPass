@@ -124,6 +124,24 @@ _choose_storage() {
     log_ok "Gravações e logs CAN serão salvos em: ${dir}"
 }
 
+# Cria uma pasta de SESSÃO (canpass_dd-mm-aaaa_hh-mm-ss) dentro do destino escolhido
+# e aponta CANPASS_REC_DIR p/ ela — vídeo + log CAN desta execução ficam juntos e
+# separados das sessões anteriores (antes tudo caía solto em canpass_rec). Vale
+# tanto p/ a entrevista quanto p/ o modo não-interativo (systemd). Exportado, é
+# herdado pelo cam_view.sh e pelo canpass-can.
+_setup_session_dir() {
+    local base session
+    base="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    session="${base%/}/canpass_$(date +%d-%m-%Y_%H-%M-%S)"
+    if mkdir -p "$session" 2>/dev/null; then
+        export CANPASS_REC_DIR="$session"
+        log_ok "Sessão: arquivos desta execução em ${session}"
+    else
+        log_warn "Não consegui criar a pasta de sessão em ${base} — salvando direto em ${base}."
+        export CANPASS_REC_DIR="$base"
+    fi
+}
+
 _setup_interview() {
     [[ "${CANPASS_NO_INTERVIEW:-0}" == "1" ]] && return 0
 
@@ -372,6 +390,7 @@ for _a in "$@"; do [[ "$_a" == "--local" ]] && _preview=1; done
 
 if (( ! _preview )); then
     _setup_interview
+    _setup_session_dir
     _start_can_logger
 fi
 
