@@ -271,20 +271,58 @@ _check_and_configure_subnet() {
 
 # ─── 3. Coleta dados de câmera IP e monta URL RTSP ───────────────────────────
 
+# Pergunta o MODELO e monta o caminho RTSP conforme o fabricante. Todos os prompts
+# vão p/ stderr (>&2) — o stdout carrega só "ip:<url>" capturado pelo chamador.
+# Caminhos por fabricante (verificados):
+#   Intelbras (Dahua OEM): /cam/realmonitor?channel=<N>&subtype=<0 main|1 sub>
+#   Hikvision:             /Streaming/Channels/<canal><stream 01 main|02 sub>  (ex.: 101)
+#   Vivotek (media2):      /media2/stream.sdp?profile=<token>                  (ex.: profile1)
 _prompt_ip_camera() {
-    local ip port path user pass url
+    local model ip port path user pass url channel stream subtype profile ans
     echo >&2
+    echo -e "${CYAN}  Modelo da câmera IP:${NC}" >&2
+    echo -e "    ${GREEN}[1]${NC} Intelbras (Dahua OEM)" >&2
+    echo -e "    ${GREEN}[2]${NC} Hikvision" >&2
+    echo -e "    ${GREEN}[3]${NC} Vivotek" >&2
+    echo -e "    ${GREEN}[4]${NC} Outra / caminho manual" >&2
+    read -rp "$(echo -e "${CYAN}  Modelo [1-4] (padrão 1):${NC} ")" model
+    model="${model:-1}"
+
     read -rp "$(echo -e "${CYAN}  IP da câmera:${NC} ")" ip
     [[ -z "$ip" ]] && return 1
-
     _check_and_configure_subnet "$ip" >&2
 
     read -rp "$(echo -e "${CYAN}  Porta RTSP [554]:${NC} ")" port
     port="${port:-554}"
 
-    read -rp "$(echo -e "${CYAN}  Caminho do stream [/cam/realmonitor?channel=1&subtype=0]:${NC} ")" path
-    path="${path:-/cam/realmonitor?channel=1&subtype=0}"
-    [[ "$path" != /* ]] && path="/${path}"
+    case "$model" in
+        2)  # Hikvision
+            read -rp "$(echo -e "${CYAN}  Canal [1]:${NC} ")" channel
+            channel="${channel:-1}"
+            echo -e "${CYAN}  Stream: ${NC}[1] Principal (main)  [2] Secundário (sub)" >&2
+            read -rp "$(echo -e "${CYAN}  Stream [1/2] (padrão 1):${NC} ")" ans
+            [[ "$ans" == "2" ]] && stream="02" || stream="01"
+            path="/Streaming/Channels/${channel}${stream}"
+            ;;
+        3)  # Vivotek (media2)
+            read -rp "$(echo -e "${CYAN}  Profile/token [profile1]:${NC} ")" profile
+            profile="${profile:-profile1}"
+            path="/media2/stream.sdp?profile=${profile}"
+            ;;
+        4)  # Manual
+            read -rp "$(echo -e "${CYAN}  Caminho do stream [/]:${NC} ")" path
+            path="${path:-/}"
+            [[ "$path" != /* ]] && path="/${path}"
+            ;;
+        *)  # Intelbras (Dahua OEM) — padrão
+            read -rp "$(echo -e "${CYAN}  Canal [1]:${NC} ")" channel
+            channel="${channel:-1}"
+            echo -e "${CYAN}  Stream: ${NC}[1] Principal  [2] Secundário" >&2
+            read -rp "$(echo -e "${CYAN}  Stream [1/2] (padrão 1):${NC} ")" ans
+            [[ "$ans" == "2" ]] && subtype=1 || subtype=0
+            path="/cam/realmonitor?channel=${channel}&subtype=${subtype}"
+            ;;
+    esac
 
     read -rp "$(echo -e "${CYAN}  Usuário (Enter para nenhum):${NC} ")" user
 
@@ -912,10 +950,10 @@ show_camera() {
                 cat "$err_log" >&2
                 if grep -q "404 Not Found" "$err_log"; then
                     log_error "Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto."
-                    log_info  "Paths comuns para câmeras Intelbras:"
-                    log_info  "  /cam/realmonitor?channel=1&subtype=0  (principal)"
-                    log_info  "  /cam/realmonitor?channel=1&subtype=1  (secundário)"
-                    log_info  "  /live"
+                    log_info  "Paths comuns por fabricante:"
+                    log_info  "  Intelbras: /cam/realmonitor?channel=1&subtype=0 (principal) · subtype=1 (secundário)"
+                    log_info  "  Hikvision: /Streaming/Channels/101 (canal 1 principal) · 102 (secundário)"
+                    log_info  "  Vivotek:   /media2/stream.sdp?profile=profile1"
                     return 1
                 fi
                 if grep -q "401 Unauthorized" "$err_log"; then

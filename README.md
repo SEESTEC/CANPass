@@ -129,6 +129,20 @@ canpass --local --all      # MOSAICO local (grade nvcompositor → nv3dsink, sem
 > No modo `--all`, o path é **por câmera**: `/cam0`, `/cam1`, … no lugar de `/stream`
 > (ex.: `rtsp://<ip>:8554/cam0`, `http://<ip>:8889/cam2`).
 
+**Câmera IP (RTSP):** ao escolher a opção "+ Câmera IP" no menu, a entrevista pergunta o
+**modelo** e monta a URL RTSP conforme o fabricante (depois IP, porta, canal/stream e
+usuário/senha):
+
+| Modelo                  | Caminho montado                                           | Stream principal / secundário |
+|-------------------------|----------------------------------------------------------|-------------------------------|
+| **Intelbras** (Dahua OEM) | `/cam/realmonitor?channel=<N>&subtype=<0\|1>`            | `subtype=0` / `subtype=1`     |
+| **Hikvision**           | `/Streaming/Channels/<canal><stream>`                    | `101` (canal 1 main) / `102`  |
+| **Vivotek** (media2)    | `/media2/stream.sdp?profile=<token>`                     | token do profile (ex. `profile1`) |
+| **Outra / manual**      | caminho digitado livremente                              | —                             |
+
+A URL final fica `rtsp://usuário:senha@IP:porta<caminho>`. Se a câmera responder **404**,
+o `canpass` imprime os caminhos comuns dos três fabricantes para você reiniciar e corrigir.
+
 > **Latência alta?** Use o endpoint **WebRTC** (`:8889`) ou **RTSP** (VLC/ffplay), não o HLS —
 > o HLS tem segundos de buffer por natureza. Em Jetson, o stream CSI usa o encoder de
 > **hardware** (NVENC) por padrão; ajuste a nitidez com `CANPASS_CSI_BITRATE` e a resolução
