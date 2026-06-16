@@ -341,7 +341,7 @@ ${BOLD}Controles de imagem${NC} (valem p/ 'canpass-camera preview' e p/ o stream
     Vivotek:         CANPASS_VIVOTEK_BRIGHTNESS/_CONTRAST/_SATURATION/_SHARPNESS 0..100 · _WDR off|on · _EXTRA (cru)
 
   Ajuda detalhada:  canpass-camera --help · canpass-can --help · canpass-camera ctrls
-  Documentação:     doc/e-CAM82/README.md · doc/NileCAM81/CONTROLES.md · doc/CAN/README.md
+  Documentação:     doc/e-CAM82/README.md · doc/NileCAM81/README.md · doc/CAN/README.md
 ${BOLD}${CYAN}════════════════════════════════════════════════════════════════════════════════════${NC}"
 }
 

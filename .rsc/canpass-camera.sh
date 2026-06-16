@@ -5,7 +5,7 @@
 # nv3dsink), com resolução/FPS escolhidos pelo usuário a partir das tabelas de
 # "Maximum Frame Rate Supported" de cada câmera.
 #
-# CONTEXTO (ver doc/NileCAM81/COMPATIBILIDADE.md):
+# CONTEXTO (ver doc/NileCAM81/README.md):
 #   As duas câmeras usam o MESMO conector físico J509 e UM device tree por boot —
 #   logo NÃO rodam juntas; o que dá é ALTERNAR uma por boot. Isso exige ter os dois
 #   drivers instalados no flash 35.2.1. O build da NileCAM81 p/ L4T 35.2.1 (R02)
@@ -96,7 +96,7 @@ _resolve_dtb() {
     if [[ "$cam" == nilecam81 ]]; then
         log_error "O driver da NileCAM81 p/ L4T 35.2.1 está no repositório, mas não foi instalado."
         log_error "Instale com:  sudo bash install_drivers.sh   (opção 2 — NileCAM81 GMSL)"
-        log_error "Detalhes: doc/NileCAM81/COMPATIBILIDADE.md."
+        log_error "Detalhes: doc/NileCAM81/README.md."
     fi
     return 1
 }
@@ -272,7 +272,7 @@ EOF
 }
 
 # ─── Banner informativo NileCAM81 (controles V4L2 — ISP onboard) ─────────────
-# Espelha doc/NileCAM81/CONTROLES.md — mantenha os dois sincronizados. Valores
+# Espelha doc/NileCAM81/README.md — mantenha os dois sincronizados. Valores
 # levantados no hardware (v4l2-ctl --list-ctrls-menus, 2026-06-10). A NileCAM81
 # NÃO usa o Argus: os envs abaixo viram controles V4L2 (v4l2-ctl -c ...).
 _print_controls_banner_nilecam81() {
@@ -317,7 +317,7 @@ ${BOLD}Exposição & imagem${NC}  (env → controle V4L2 em /dev/video${SENSOR_I
   Nota: controles V4L2 PERSISTEM no driver (≠ Argus) — valem p/ o stream também.
   Lista completa c/ faixas:  v4l2-ctl -d /dev/video${SENSOR_ID} --list-ctrls-menus
   GUI da e-con:              /usr/local/ecam_tk1/bin/ecam_tk1_guvcview
-  Detalhes: doc/NileCAM81/CONTROLES.md
+  Detalhes: doc/NileCAM81/README.md
 EOF
     echo
 }
@@ -767,10 +767,10 @@ canpass-camera — alterna e faz preview da câmera do Orin (e-CAM82 ↔ NileCAM
 O 'preview' imprime um banner com Table 1, Flicker e os parâmetros de imagem, e
 aceita ajustes por ambiente (CANPASS_FLICKER, CANPASS_EXPTIME, CANPASS_GAIN, ...).
 Na e-CAM82 os envs viram propriedades Argus (ref.: doc/e-CAM82/README.md); na
-NileCAM81 viram controles V4L2 do ISP onboard (ref.: doc/NileCAM81/CONTROLES.md).
+NileCAM81 viram controles V4L2 do ISP onboard (ref.: doc/NileCAM81/README.md).
 
 As duas câmeras NÃO rodam juntas (conector J509 + DTB únicos): é alternar, um por boot.
-Detalhes: doc/NileCAM81/COMPATIBILIDADE.md
+Detalhes: doc/NileCAM81/README.md
 EOF
 }
 

@@ -89,7 +89,7 @@ Para câmeras CSI (Jetson) vai direto `nvarguscamerasrc → nv3dsink` — menor 
 > **NileCAM81 (YUV/ISP onboard):** o `canpass` detecta sozinho que a câmera entrega
 > UYVY e a roteia por **V4L2 direto** (`nvv4l2camerasrc`), sem Argus — vale para o
 > stream, o `--local`, o `--all` e o mosaico. Controles de imagem dela:
-> [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
+> [`doc/NileCAM81/README.md`](doc/NileCAM81/README.md).
 
 **Multi-câmera (`--all`)** — usa **todas** as câmeras CSI detectadas de uma vez
 (caso típico: várias NileCAM81 GMSL na desserializadora), sem menu de seleção:
@@ -133,12 +133,12 @@ canpass --local --all      # MOSAICO local (grade nvcompositor → nv3dsink, sem
 **modelo** e monta a URL RTSP conforme o fabricante (depois IP, porta, canal/stream e
 usuário/senha):
 
-| Modelo                  | Caminho montado                                           | Stream principal / secundário |
-|-------------------------|----------------------------------------------------------|-------------------------------|
-| **Intelbras** (Dahua OEM) | `/cam/realmonitor?channel=<N>&subtype=<0\|1>`            | `subtype=0` / `subtype=1`     |
-| **Hikvision**           | `/Streaming/Channels/<canal><stream>`                    | `101` (canal 1 main) / `102`  |
+| Modelo                  | Caminho montado                                          | Stream principal / secundário     |
+|-------------------------|----------------------------------------------------------|-----------------------------------|
+| **Intelbras** (Dahua OEM) | `/cam/realmonitor?channel=<N>&subtype=<0\|1>`          | `subtype=0` / `subtype=1`         |
+| **Hikvision**           | `/Streaming/Channels/<canal><stream>`                    | `101` (canal 1 main) / `102`      |
 | **Vivotek** (media2)    | `/media2/stream.sdp?profile=<token>`                     | token do profile (ex. `profile1`) |
-| **Outra / manual**      | caminho digitado livremente                              | —                             |
+| **Outra / manual**      | caminho digitado livremente                              | —                                 |
 
 A URL final fica `rtsp://usuário:senha@IP:porta<caminho>` (usuário e senha são
 **percent-encoded**, então senhas com `@`, `:`, `/`, `#` funcionam). Se a câmera responder
@@ -155,11 +155,11 @@ A faixa típica dos níveis é **0–100**; a **fonte da verdade** de cada model
 câmera (Hikvision `GET /ISAPI/Image/channels/1/capabilities`, Intelbras/Dahua
 `configManager.cgi?action=getConfig&name=VideoColor`, Vivotek `getparam.cgi?image_c0`).
 
-| Fabricante      | Variáveis (`CANPASS_<M>_…`)                                              | API usada                                  |
-|-----------------|--------------------------------------------------------------------------|--------------------------------------------|
-| **Hikvision**   | `HIK_BRIGHTNESS` `HIK_CONTRAST` `HIK_SATURATION` `HIK_HUE` `HIK_SHARPNESS` (0–100) · `HIK_WDR` (`off` ou `0–100`) | ISAPI `PUT /ISAPI/Image/channels/1/{color,sharpness,WDR}` |
+| Fabricante      | Variáveis (`CANPASS_<M>_…`)                                                                                               | API usada                                                     |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| **Hikvision**   | `HIK_BRIGHTNESS` `HIK_CONTRAST` `HIK_SATURATION` `HIK_HUE` `HIK_SHARPNESS` (0–100) · `HIK_WDR` (`off` ou `0–100`)         | ISAPI `PUT /ISAPI/Image/channels/1/{color,sharpness,WDR}`     |
 | **Intelbras**   | `INTELBRAS_BRIGHTNESS` `…_CONTRAST` `…_SATURATION` `…_HUE` `…_SHARPNESS` (0–100) · `…_WDR` (`off`/`on`) · `…_EXTRA` (cru) | Dahua `configManager.cgi?action=setConfig&VideoColor[0][0].*` |
-| **Vivotek**     | `VIVOTEK_BRIGHTNESS` `…_CONTRAST` `…_SATURATION` `…_SHARPNESS` (0–100) · `…_WDR` (`off`/`on`) · `…_EXTRA` (cru) | `setparam.cgi?image_c0_*` / `exposure_c0_enablewdrpro` |
+| **Vivotek**     | `VIVOTEK_BRIGHTNESS` `…_CONTRAST` `…_SATURATION` `…_SHARPNESS` (0–100) · `…_WDR` (`off`/`on`) · `…_EXTRA` (cru)           | `setparam.cgi?image_c0_*` / `exposure_c0_enablewdrpro`        |
 
 - Porta da API HTTP: `CANPASS_IPCAM_HTTP_PORT` (padrão `80`); autenticação negociada (`--anyauth`).
 - `*_EXTRA` é um escape para parâmetros crus específicos do modelo (anexado à query da API), ex.: `CANPASS_VIVOTEK_EXTRA='image_c0_gammacurve=2'`.
@@ -221,8 +221,8 @@ via `CANPASS_REC_DIR`) — o **mesmo diretório dos logs CAN**, para manter víd
 
 > **Pasta por sessão:** a cada partida o `canpass` cria, dentro do destino, uma subpasta
 > `canpass_dd-mm-aaaa_hh-mm-ss/` e guarda ali **as gravações e o log CAN daquela execução** —
-> assim cada sessão fica isolada, em vez de tudo solto em `canpass_rec/`. Ex.:
-> `~/canpass_rec/canpass_16-06-2026_14-30-00/{cont_*.mp4, can_*.log}`.
+> assim cada sessão fica isolada, em vez de tudo solto em `canpass_rec/`.
+> Ex.: `~/canpass_rec/canpass_16-06-2026_14-30-00/{cont_*.mp4, can_*.log}`.
 
 **Contínua** (`continuous` — padrão da entrevista): grava **sempre**, recomprimindo em H.264
 (x264 CRF 21 ≈ visualmente transparente, arquivos bem menores que a cópia do stream), em
@@ -253,28 +253,28 @@ contínua já reencoda (custo zero adicional); a por movimento passa a reencodar
 ou `CANPASS_REC_TIMESTAMP=0`) faz a gravação por movimento voltar a ser **cópia exata**
 (`-c copy`). Tamanho da fonte via `CANPASS_TS_FONTSIZE` (padrão `h/22`, escala com a altura).
 
-| Variável de ambiente        | Padrão          | Descrição                                                                       |
-|-----------------------------|-----------------|---------------------------------------------------------------------------------|
-| `CANPASS_REC_MODE`          | `motion`        | Modo de gravação: `continuous` ou `motion` (a entrevista define; padrão dela é `continuous`) |
-| `CANPASS_REC_DIR`           | `~/canpass_rec` | Diretório de destino das gravações (e dos logs CAN)                             |
-| `CANPASS_CONT_CRF`          | `21`            | CRF do x264 na gravação contínua (menor = mais qualidade/maior arquivo)         |
-| `CANPASS_CONT_SEGMENT_SECS` | `600`           | Duração de cada segmento da gravação contínua, em segundos                     |
-| `MOTION_THRESHOLD`          | `0.02`          | Fração de pixels alterados que caracteriza movimento (0.0–1.0)                  |
-| `MOTION_COOLDOWN_SECS`      | `30`            | Segundos sem movimento antes de encerrar a gravação                             |
-| `CANPASS_REC_TIMESTAMP`     | `1`             | `=1` queima o relógio `HH:MM:SS.mmm` (branco); `=0` desliga                      |
-| `CANPASS_TS_POSITION`       | `bl`            | Canto do timestamp: `bl` inf-esq · `br` inf-dir · `tl` sup-esq · `tr` sup-dir · `off` sem |
-| `CANPASS_MOTION_CRF`        | `18`            | CRF do reencode da gravação por movimento quando o timestamp está ligado        |
-| `CANPASS_TS_FONTSIZE`       | `h/22`          | Tamanho da fonte do timestamp (expressão ffmpeg; escala com a altura)           |
+| Variável de ambiente        | Padrão          | Descrição                                                                                                                                                                                 |
+|-----------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `CANPASS_REC_MODE`          | `motion`        | Modo de gravação: `continuous` ou `motion` (a entrevista define; padrão dela é `continuous`)                                                                                              |
+| `CANPASS_REC_DIR`           | `~/canpass_rec` | Diretório de destino das gravações (e dos logs CAN)                                                                                                                                       |
+| `CANPASS_CONT_CRF`          | `21`            | CRF do x264 na gravação contínua (menor = mais qualidade/maior arquivo)                                                                                                                   |
+| `CANPASS_CONT_SEGMENT_SECS` | `600`           | Duração de cada segmento da gravação contínua, em segundos                                                                                                                                |
+| `MOTION_THRESHOLD`          | `0.02`          | Fração de pixels alterados que caracteriza movimento (0.0–1.0)                                                                                                                            |
+| `MOTION_COOLDOWN_SECS`      | `30`            | Segundos sem movimento antes de encerrar a gravação                                                                                                                                       |
+| `CANPASS_REC_TIMESTAMP`     | `1`             | `=1` queima o relógio `HH:MM:SS.mmm` (branco); `=0` desliga                                                                                                                               |
+| `CANPASS_TS_POSITION`       | `bl`            | Canto do timestamp: `bl` inf-esq · `br` inf-dir · `tl` sup-esq · `tr` sup-dir · `off` sem                                                                                                 |
+| `CANPASS_MOTION_CRF`        | `18`            | CRF do reencode da gravação por movimento quando o timestamp está ligado                                                                                                                  |
+| `CANPASS_TS_FONTSIZE`       | `h/22`          | Tamanho da fonte do timestamp (expressão ffmpeg; escala com a altura)                                                                                                                     |
 | `CANPASS_CSI_RES`           | CSI/Argus `@30` · YUV/NileCAM81 `@60` | Resolução e FPS `WxH@FPS` (Jetson). Ex: `1280x720@30`. O default de FPS difere por caminho: Argus (e-CAM82) usa `1920x1080@30`, V4L2/ISP (NileCAM81) `1920x1080@60` |
-| `CANPASS_CSI_SENSORS`       | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1`                  |
-| `CANPASS_NO_CLOCK_BOOST`    | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI  |
-| `CANPASS_CSI_BITRATE`       | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido   |
-| `CANPASS_CSI_ENCODER`       | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264)       |
-| `CANPASS_MOSAIC_W`          | `1920`          | Largura da janela do mosaico (`canpass --local --all`)                          |
-| `CANPASS_MOSAIC_H`          | `1080`          | Altura da janela do mosaico (`canpass --local --all`)                           |
-| `CANPASS_NO_INTERVIEW`      | `0`             | `=1` pula a entrevista de configuração (usa env/padrões)                        |
-| `CANPASS_PROMPT_TIMEOUT`    | `30`            | Segundos de espera por resposta em cada pergunta da entrevista                  |
-| `CANPASS_NO_HELP`           | `0`             | `=1` oculta a referência de comandos na partida                                 |
+| `CANPASS_CSI_SENSORS`       | `0`             | IDs dos sensores CSI a listar, separados por espaço. Ex: `0 1`                                                                                                                            |
+| `CANPASS_NO_CLOCK_BOOST`    | _(desativado)_  | Defina como `1` para **não** maximizar os clocks do Jetson antes do stream CSI                                                                                                            |
+| `CANPASS_CSI_BITRATE`       | `8000000`       | Bitrate do encoder H.264 da câmera CSI, em bps. Ex: `20000000` para 4K nítido                                                                                                             |
+| `CANPASS_CSI_ENCODER`       | `auto`          | Encoder da câmera CSI: `auto`/`hw` (NVENC por hardware) ou `sw` (libx264)                                                                                                                 |
+| `CANPASS_MOSAIC_W`          | `1920`          | Largura da janela do mosaico (`canpass --local --all`)                                                                                                                                    |
+| `CANPASS_MOSAIC_H`          | `1080`          | Altura da janela do mosaico (`canpass --local --all`)                                                                                                                                     |
+| `CANPASS_NO_INTERVIEW`      | `0`             | `=1` pula a entrevista de configuração (usa env/padrões)                                                                                                                                  |
+| `CANPASS_PROMPT_TIMEOUT`    | `30`            | Segundos de espera por resposta em cada pergunta da entrevista                                                                                                                            |
+| `CANPASS_NO_HELP`           | `0`             | `=1` oculta a referência de comandos na partida                                                                                                                                           |
 
 ```bash
 MOTION_THRESHOLD=0.05 MOTION_COOLDOWN_SECS=30 canpass
@@ -362,15 +362,15 @@ canpass-camera <comando> [argumento]
 
 Sem argumentos, executa `status`.
 
-| Comando                    | Argumento               | O que faz                                                                                                                                                                                                                                                                                                                                                                                 |
-|----------------------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `status`                   | —                       | Mostra o `FDT` ativo no `extlinux.conf`, qual câmera ele representa e se `/dev/video0` está presente (câmera enumerada).                                                                                                                                                                                                                                                                  |
-| `list`                     | —                       | Lista os DTBs candidatos encontrados em `/boot` para cada câmera (padrões de busca: `imx485/e-cam82/ecam82` e `nilecam/ar0821/0821/max96712`).                                                                                                                                                                                                                                            |
-| `switch`                   | `ecam82` \| `nilecam81` | Troca o DTB ativo: faz **backup** do `extlinux.conf` (`.canpass.bak.<timestamp>`), edita/insere a linha `FDT`, confirma a edição (restaura o backup se falhar), imprime os **passos físicos** (trocar a base board no conector J509) e oferece reboot. Se o DTB da câmera pedida não existir em `/boot`, **aborta com instrução** — de propósito, para não deixar o Orin sem boot válido. |
+| Comando                    | Argumento                       | O que faz                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|----------------------------|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `status`                   | —                               | Mostra o `FDT` ativo no `extlinux.conf`, qual câmera ele representa e se `/dev/video0` está presente (câmera enumerada).                                                                                                                                                                                                                                                                                                                                        |
+| `list`                     | —                               | Lista os DTBs candidatos encontrados em `/boot` para cada câmera (padrões de busca: `imx485/e-cam82/ecam82` e `nilecam/ar0821/0821/max96712`).                                                                                                                                                                                                                                                                                                                  |
+| `switch`                   | `ecam82` \| `nilecam81`         | Troca o DTB ativo: faz **backup** do `extlinux.conf` (`.canpass.bak.<timestamp>`), edita/insere a linha `FDT`, confirma a edição (restaura o backup se falhar), imprime os **passos físicos** (trocar a base board no conector J509) e oferece reboot. Se o DTB da câmera pedida não existir em `/boot`, **aborta com instrução** — de propósito, para não deixar o Orin sem boot válido.                                                                       |
 | `preview`                  | `[ecam82\|nilecam81]` `[flags]` | Preview com **menu de resolução** e banner de controles; sem argumento, **infere a câmera ativa** pelo `FDT`. Sinks em **fallback automático**: `nv3dsink` (GPU; exige desktop local) → `xvimagesink` (XVideo) → `ximagesink` (X puro — funciona via SSH/VNC). Flags: `--local` (janela no monitor do Orin, `DISPLAY=:0` — útil via SSH) · `--nv3dsink`/`--xvimagesink`/`--ximagesink` (força um sink; env `CANPASS_PREVIEW_SINK=nv3d\|xv\|x`). Ctrl+C encerra. |
-| `ctrls` (ou `controls`)    | —                       | Estado dos **controles V4L2** da câmera ativa: valor atual vs padrão por controle, com `*` amarelo no que está fora do default, mais formato/fps em uso. Essencial na NileCAM81 (controles **persistem** no driver). Oculta os controles de infraestrutura do tegra-video.                                                                                                                |
-| `update`                   | —                       | `git pull --ff-only` no repositório-fonte + recopia os scripts (`canpass-camera`, `canpass-can`, `cam_view.sh`, `watchdog.sh`) para `/usr/bin`. Acha o repo via `CANPASS_SRC`, registro do install ou `~/CANPass`. Não mexe em sudoers/serviço — para a atualização completa use **`canpass update`**; para deps/docker/driver, `sudo bash install.sh`.                                   |
-| `help` (ou `-h`, `--help`) | —                       | Mostra o uso.                                                                                                                                                                                                                                                                                                                                                                             |
+| `ctrls` (ou `controls`)    | —                               | Estado dos **controles V4L2** da câmera ativa: valor atual vs padrão por controle, com `*` amarelo no que está fora do default, mais formato/fps em uso. Essencial na NileCAM81 (controles **persistem** no driver). Oculta os controles de infraestrutura do tegra-video.                                                                                                                                                                                      |
+| `update`                   | —                               | `git pull --ff-only` no repositório-fonte + recopia os scripts (`canpass-camera`, `canpass-can`, `cam_view.sh`, `watchdog.sh`) para `/usr/bin`. Acha o repo via `CANPASS_SRC`, registro do install ou `~/CANPass`. Não mexe em sudoers/serviço — para a atualização completa use **`canpass update`**; para deps/docker/driver, `sudo bash install.sh`.                                                                                                         |
+| `help` (ou `-h`, `--help`) | —                               | Mostra o uso.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 **Resoluções oferecidas no menu do `preview`** (Table 1 — Maximum Frame Rate, 4 lanes):
 
@@ -457,7 +457,7 @@ CANPASS_SHARPNESS=4 CANPASS_DENOISE=4 canpass-camera preview nilecam81 # mais de
 ```
 
 > Referência completa (lista real do driver, com regras de precedência):
-> [`doc/NileCAM81/CONTROLES.md`](doc/NileCAM81/CONTROLES.md).
+> [`doc/NileCAM81/README.md`](doc/NileCAM81/README.md).
 
 > As duas câmeras **não rodam juntas** (conector J509 e device tree únicos):
 > é alternar, uma por boot. O driver da NileCAM81 para **L4T 35.2.1** está no repo
@@ -465,7 +465,7 @@ CANPASS_SHARPNESS=4 CANPASS_DENOISE=4 canpass-camera preview nilecam81 # mais de
 > `sudo bash install_drivers.sh` (opção 2); enquanto o DTB dela não estiver em `/boot`,
 > o `switch nilecam81` aborta com instrução (de propósito, p/ não deixar o Orin sem boot).
 > O `canpass` (menu de câmeras) anuncia qual das duas está ativa no boot atual.
-> Análise em [`doc/NileCAM81/COMPATIBILIDADE.md`](doc/NileCAM81/COMPATIBILIDADE.md).
+> Hardware, instalação e controles em [`doc/NileCAM81/README.md`](doc/NileCAM81/README.md).
 
 ---
 
@@ -561,7 +561,7 @@ CANPass/
 │   │   └── e-CAM82_CUOAGX/                                        #   driver:
 │   │       └── e-CAM82_CUOAGX_JETSON_..._L4T35.2.1_..._R02_RC1/   # driver da e-CAM82 (IMX485, JP5) — LFS
 │   └── NileCAM81/                                                 # NileCAM81_CUOAGX (GMSL/AR0821) — câmera ALTERNATIVA
-│       ├── COMPATIBILIDADE.md · CONTROLES.md
+│       ├── README.md                                              #   hardware GMSL + instalação + controles V4L2
 │       ├── Common/ Hardware/ Software/ Software_R05_JP6/          # PDFs + CAD (STP/DXF, LFS)
 │       └── NileCAM81_CUOAGX/                                      # driver:
 │           └── JP5.1.0_L4T35.2.1/                                 # ★ build p/ o flash ATUAL (alternância s/ reflash) — LFS
