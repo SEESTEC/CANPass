@@ -317,6 +317,10 @@ ${BOLD}Controles de imagem${NC} (valem p/ 'canpass-camera preview' e p/ o stream
                     CANPASS_CONTRAST 0..10 · CANPASS_SATURATION 0..60 · CANPASS_GAMMA 40..500
                     CANPASS_SHARPNESS 0..7 · CANPASS_DENOISE 0..15 · CANPASS_HFLIP/_VFLIP 0|1
                     CANPASS_FPS 3..60 · CANPASS_FRAMESYNC 0..3 · CANPASS_TRIGGER 0|1 · CANPASS_EFFECT 0..4
+  Câmera IP (HTTP):  aplicados via API do fabricante na entrevista (precisa de curl) · porta CANPASS_IPCAM_HTTP_PORT (80)
+    Hikvision:       CANPASS_HIK_BRIGHTNESS/_CONTRAST/_SATURATION/_HUE/_SHARPNESS 0..100 · _WDR off|0..100
+    Intelbras:       CANPASS_INTELBRAS_BRIGHTNESS/_CONTRAST/_SATURATION/_HUE/_SHARPNESS 0..100 · _WDR off|on · _EXTRA (cru)
+    Vivotek:         CANPASS_VIVOTEK_BRIGHTNESS/_CONTRAST/_SATURATION/_SHARPNESS 0..100 · _WDR off|on · _EXTRA (cru)
 
   Ajuda detalhada:  canpass-camera --help · canpass-can --help · canpass-camera ctrls
   Documentação:     doc/e-CAM82/README.md · doc/NileCAM81/CONTROLES.md · doc/CAN/README.md

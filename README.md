@@ -140,8 +140,43 @@ usuário/senha):
 | **Vivotek** (media2)    | `/media2/stream.sdp?profile=<token>`                     | token do profile (ex. `profile1`) |
 | **Outra / manual**      | caminho digitado livremente                              | —                             |
 
-A URL final fica `rtsp://usuário:senha@IP:porta<caminho>`. Se a câmera responder **404**,
-o `canpass` imprime os caminhos comuns dos três fabricantes para você reiniciar e corrigir.
+A URL final fica `rtsp://usuário:senha@IP:porta<caminho>` (usuário e senha são
+**percent-encoded**, então senhas com `@`, `:`, `/`, `#` funcionam). Se a câmera responder
+**404**, o `canpass` imprime os caminhos comuns dos três fabricantes para você corrigir.
+
+#### Controles de imagem da câmera IP (brilho, WDR, etc.)
+
+Diferente das câmeras e-con (locais, ajustadas por `v4l2-ctl`/Argus), a câmera IP é
+**remota**: o RTSP só transporta o stream, sem canal de controle. Os ajustes vão pela
+**API HTTP do fabricante** (via `curl`, reaproveitando IP/usuário/senha da entrevista) —
+aplicados automaticamente na partida quando você define as variáveis abaixo. É
+**best-effort**: parâmetro/faixa que o modelo não suportar gera um aviso e o stream segue.
+A faixa típica dos níveis é **0–100**; a **fonte da verdade** de cada modelo é a própria
+câmera (Hikvision `GET /ISAPI/Image/channels/1/capabilities`, Intelbras/Dahua
+`configManager.cgi?action=getConfig&name=VideoColor`, Vivotek `getparam.cgi?image_c0`).
+
+| Fabricante      | Variáveis (`CANPASS_<M>_…`)                                              | API usada                                  |
+|-----------------|--------------------------------------------------------------------------|--------------------------------------------|
+| **Hikvision**   | `HIK_BRIGHTNESS` `HIK_CONTRAST` `HIK_SATURATION` `HIK_HUE` `HIK_SHARPNESS` (0–100) · `HIK_WDR` (`off` ou `0–100`) | ISAPI `PUT /ISAPI/Image/channels/1/{color,sharpness,WDR}` |
+| **Intelbras**   | `INTELBRAS_BRIGHTNESS` `…_CONTRAST` `…_SATURATION` `…_HUE` `…_SHARPNESS` (0–100) · `…_WDR` (`off`/`on`) · `…_EXTRA` (cru) | Dahua `configManager.cgi?action=setConfig&VideoColor[0][0].*` |
+| **Vivotek**     | `VIVOTEK_BRIGHTNESS` `…_CONTRAST` `…_SATURATION` `…_SHARPNESS` (0–100) · `…_WDR` (`off`/`on`) · `…_EXTRA` (cru) | `setparam.cgi?image_c0_*` / `exposure_c0_enablewdrpro` |
+
+- Porta da API HTTP: `CANPASS_IPCAM_HTTP_PORT` (padrão `80`); autenticação negociada (`--anyauth`).
+- `*_EXTRA` é um escape para parâmetros crus específicos do modelo (anexado à query da API), ex.: `CANPASS_VIVOTEK_EXTRA='image_c0_gammacurve=2'`.
+- Requer `curl` no Orin (dependência comum; instale com `apt-get install curl` se faltar).
+
+```bash
+# Hikvision: WDR ligado nível 60, brilho 55 (escolha "Hikvision" no menu da câmera IP)
+CANPASS_HIK_WDR=60 CANPASS_HIK_BRIGHTNESS=55 canpass
+# Intelbras: WDR on + saturação 60
+CANPASS_INTELBRAS_WDR=on CANPASS_INTELBRAS_SATURATION=60 canpass
+# Vivotek: brilho 70, nitidez 40, porta HTTP 8080
+CANPASS_IPCAM_HTTP_PORT=8080 CANPASS_VIVOTEK_BRIGHTNESS=70 CANPASS_VIVOTEK_SHARPNESS=40 canpass
+```
+
+> ⚠️ Os nomes/faixas acima são os **comuns** de cada API; modelos e firmwares variam.
+> Se um ajuste não “pegar”, confira na própria câmera (endpoints de capabilities/getConfig
+> acima) o nome e a faixa corretos e use `*_EXTRA` para o parâmetro exato.
 
 > **Latência alta?** Use o endpoint **WebRTC** (`:8889`) ou **RTSP** (VLC/ffplay), não o HLS —
 > o HLS tem segundos de buffer por natureza. Em Jetson, o stream CSI usa o encoder de

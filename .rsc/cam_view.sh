@@ -287,6 +287,125 @@ _urlencode() {
     printf '%s' "$out"
 }
 
+# ─── Controles de imagem da câmera IP (brilho/WDR/etc. via HTTP API) ─────────
+# Análogo aos controles V4L2/Argus das e-con, mas a câmera é REMOTA: os ajustes
+# vão pela API HTTP do fabricante (curl), não pelo RTSP (o RTSP só transporta o
+# stream). BEST-EFFORT: cada chamada que falhar avisa e SEGUE — parâmetros e
+# faixas variam por modelo/firmware; a fonte da verdade é a própria câmera:
+#   Hikvision: GET /ISAPI/Image/channels/1/capabilities
+#   Intelbras/Dahua: /cgi-bin/configManager.cgi?action=getConfig&name=VideoColor
+#   Vivotek: /cgi-bin/admin/getparam.cgi?image_c0
+# Reutiliza IP/usuário/senha da entrevista; porta HTTP da API = CANPASS_IPCAM_HTTP_PORT
+# (padrão 80). Faixa típica dos níveis = 0..100. Envs por fabricante:
+#   CANPASS_HIK_*       BRIGHTNESS CONTRAST SATURATION HUE SHARPNESS (0..100) · WDR (off|0..100)
+#   CANPASS_INTELBRAS_* BRIGHTNESS CONTRAST SATURATION HUE SHARPNESS (0..100) · WDR (off|on) · EXTRA (cru)
+#   CANPASS_VIVOTEK_*   BRIGHTNESS CONTRAST SATURATION SHARPNESS (0..100) · WDR (off|on) · EXTRA (cru)
+_ic_ip="" _ic_user="" _ic_pass="" _ic_hp="80" _ic_ch="1"
+_ic_ok()   { log_ok   "  $*"; }
+_ic_fail() { log_warn "  $*"; }
+
+# Hikvision — ISAPI PUT (XML). $1=recurso (color/sharpness/WDR) · $2=corpo XML.
+_ic_hik_put() {
+    local code
+    code=$(curl -sS -g --anyauth -u "${_ic_user}:${_ic_pass}" --max-time 6 \
+        -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/xml' \
+        --data "$2" "http://${_ic_ip}:${_ic_hp}/ISAPI/Image/channels/${_ic_ch}/$1" 2>/dev/null)
+    [[ "$code" =~ ^2 ]] && _ic_ok "Hikvision /$1 OK." || _ic_fail "Hikvision /$1 falhou (HTTP ${code:-sem resposta} — modelo/faixa? veja .../capabilities)."
+}
+_ic_apply_hik() {
+    local ns='version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema"' body=""
+    [[ -n "${CANPASS_HIK_BRIGHTNESS:-}" ]] && body+="<brightnessLevel>${CANPASS_HIK_BRIGHTNESS}</brightnessLevel>"
+    [[ -n "${CANPASS_HIK_CONTRAST:-}"   ]] && body+="<contrastLevel>${CANPASS_HIK_CONTRAST}</contrastLevel>"
+    [[ -n "${CANPASS_HIK_SATURATION:-}" ]] && body+="<saturationLevel>${CANPASS_HIK_SATURATION}</saturationLevel>"
+    [[ -n "${CANPASS_HIK_HUE:-}"        ]] && body+="<hueLevel>${CANPASS_HIK_HUE}</hueLevel>"
+    [[ -n "$body" ]] && _ic_hik_put color "<Color ${ns}>${body}</Color>"
+    [[ -n "${CANPASS_HIK_SHARPNESS:-}"  ]] && _ic_hik_put sharpness "<Sharpness ${ns}><SharpnessLevel>${CANPASS_HIK_SHARPNESS}</SharpnessLevel></Sharpness>"
+    if [[ -n "${CANPASS_HIK_WDR:-}" ]]; then
+        local w="${CANPASS_HIK_WDR}" mode lvl=""
+        case "${w,,}" in
+            off|close|false|no|0) mode=close ;;
+            on|open|true|yes)     mode=open ;;
+            *) mode=open; [[ "$w" =~ ^[0-9]+$ ]] && lvl="$w" ;;
+        esac
+        local wb="<mode>${mode}</mode>"; [[ -n "$lvl" ]] && wb+="<WDRLevel>${lvl}</WDRLevel>"
+        _ic_hik_put WDR "<WDR ${ns}>${wb}</WDR>"
+    fi
+}
+
+# Intelbras/Dahua — configManager.cgi setConfig. $1 = query começando com '&'.
+_ic_dahua_set() {
+    local code resp err=0; resp=$(mktemp /tmp/canpass_ipcam.XXXXXX)
+    code=$(curl -sS -g --anyauth -u "${_ic_user}:${_ic_pass}" --max-time 6 \
+        -o "$resp" -w '%{http_code}' \
+        "http://${_ic_ip}:${_ic_hp}/cgi-bin/configManager.cgi?action=setConfig$1" 2>/dev/null)
+    [[ "$code" =~ ^2 ]] || err=1
+    grep -qi 'error' "$resp" 2>/dev/null && err=1
+    rm -f "$resp"
+    (( err == 0 )) && _ic_ok "Intelbras/Dahua: ajustes aplicados." \
+        || _ic_fail "Intelbras/Dahua falhou (HTTP ${code:-sem resposta} — modelo/parâmetro? veja getConfig)."
+}
+_ic_apply_dahua() {
+    local q=""
+    [[ -n "${CANPASS_INTELBRAS_BRIGHTNESS:-}" ]] && q+="&VideoColor[0][0].Brightness=${CANPASS_INTELBRAS_BRIGHTNESS}"
+    [[ -n "${CANPASS_INTELBRAS_CONTRAST:-}"   ]] && q+="&VideoColor[0][0].Contrast=${CANPASS_INTELBRAS_CONTRAST}"
+    [[ -n "${CANPASS_INTELBRAS_SATURATION:-}" ]] && q+="&VideoColor[0][0].Saturation=${CANPASS_INTELBRAS_SATURATION}"
+    [[ -n "${CANPASS_INTELBRAS_HUE:-}"        ]] && q+="&VideoColor[0][0].Hue=${CANPASS_INTELBRAS_HUE}"
+    [[ -n "${CANPASS_INTELBRAS_SHARPNESS:-}"  ]] && q+="&VideoColor[0][0].Sharpness=${CANPASS_INTELBRAS_SHARPNESS}"
+    if [[ -n "${CANPASS_INTELBRAS_WDR:-}" ]]; then
+        case "${CANPASS_INTELBRAS_WDR,,}" in
+            off|close|false|no|0) q+="&VideoInOptions[0].BacklightMode=Off" ;;
+            *)                    q+="&VideoInOptions[0].BacklightMode=WDR" ;;
+        esac
+    fi
+    [[ -n "${CANPASS_INTELBRAS_EXTRA:-}" ]] && q+="&${CANPASS_INTELBRAS_EXTRA}"
+    [[ -n "$q" ]] && _ic_dahua_set "$q"
+}
+
+# Vivotek — setparam.cgi. $1 = query 'a=b&c=d'.
+_ic_vivotek_set() {
+    local code
+    code=$(curl -sS -g --anyauth -u "${_ic_user}:${_ic_pass}" --max-time 6 \
+        -o /dev/null -w '%{http_code}' \
+        "http://${_ic_ip}:${_ic_hp}/cgi-bin/admin/setparam.cgi?$1" 2>/dev/null)
+    [[ "$code" =~ ^2 ]] && _ic_ok "Vivotek: ajustes aplicados." || _ic_fail "Vivotek falhou (HTTP ${code:-sem resposta} — firmware/parâmetro? veja getparam)."
+}
+_ic_apply_vivotek() {
+    local q=""
+    [[ -n "${CANPASS_VIVOTEK_BRIGHTNESS:-}" ]] && q+="&image_c0_brightness=${CANPASS_VIVOTEK_BRIGHTNESS}"
+    [[ -n "${CANPASS_VIVOTEK_CONTRAST:-}"   ]] && q+="&image_c0_contrast=${CANPASS_VIVOTEK_CONTRAST}"
+    [[ -n "${CANPASS_VIVOTEK_SATURATION:-}" ]] && q+="&image_c0_saturation=${CANPASS_VIVOTEK_SATURATION}"
+    [[ -n "${CANPASS_VIVOTEK_SHARPNESS:-}"  ]] && q+="&image_c0_sharpness=${CANPASS_VIVOTEK_SHARPNESS}"
+    if [[ -n "${CANPASS_VIVOTEK_WDR:-}" ]]; then
+        case "${CANPASS_VIVOTEK_WDR,,}" in
+            off|false|no|0) q+="&exposure_c0_enablewdrpro=0" ;;
+            *)              q+="&exposure_c0_enablewdrpro=1" ;;
+        esac
+    fi
+    [[ -n "${CANPASS_VIVOTEK_EXTRA:-}" ]] && q+="&${CANPASS_VIVOTEK_EXTRA}"
+    [[ -n "$q" ]] && _ic_vivotek_set "${q#&}"
+}
+
+# Dispara os controles do fabricante se ALGUMA env do grupo estiver definida.
+# $1=modelo(1 Intelbras·2 Hik·3 Vivotek·4 manual) $2=ip $3=user $4=pass.
+_apply_ipcam_controls() {
+    local model="$1"
+    _ic_ip="$2"; _ic_user="$3"; _ic_pass="$4"
+    _ic_hp="${CANPASS_IPCAM_HTTP_PORT:-80}"; _ic_ch="${CANPASS_HIK_CHANNEL:-1}"
+    local prefix
+    case "$model" in 1) prefix=INTELBRAS ;; 2) prefix=HIK ;; 3) prefix=VIVOTEK ;; *) return 0 ;; esac
+    local any=0 k name
+    for k in BRIGHTNESS CONTRAST SATURATION HUE SHARPNESS WDR EXTRA; do
+        name="CANPASS_${prefix}_${k}"; [[ -n "${!name:-}" ]] && any=1
+    done
+    (( any )) || return 0
+    if ! command -v curl >/dev/null 2>&1; then
+        log_warn "  Controles de imagem definidos, mas 'curl' ausente — pulando (apt-get install curl)."
+        return 0
+    fi
+    log_info "  Aplicando controles de imagem (${prefix}) via HTTP API (porta ${_ic_hp})..."
+    case "$model" in 1) _ic_apply_dahua ;; 2) _ic_apply_hik ;; 3) _ic_apply_vivotek ;; esac
+}
+
 # Pergunta o MODELO e monta o caminho RTSP conforme o fabricante. Todos os prompts
 # vão p/ stderr (>&2) — o stdout carrega só "ip:<url>" capturado pelo chamador.
 # Caminhos por fabricante (verificados):
@@ -349,6 +468,10 @@ _prompt_ip_camera() {
     else
         url="rtsp://${ip}:${port}${path}"
     fi
+
+    # Controles de imagem (brilho/WDR/etc.) via HTTP API, se houver envs do grupo.
+    # Saída p/ stderr — o stdout carrega só "ip:<url>".
+    _apply_ipcam_controls "$model" "$ip" "${user:-}" "${pass:-}" >&2
 
     echo "ip:${url}"
 }
