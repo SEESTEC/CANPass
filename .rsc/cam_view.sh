@@ -271,6 +271,22 @@ _check_and_configure_subnet() {
 
 # ─── 3. Coleta dados de câmera IP e monta URL RTSP ───────────────────────────
 
+# Percent-encode (RFC 3986) p/ usuário/senha na URL RTSP — sem isto uma senha com
+# '@', ':', '/' ou '#' quebrava o parse (ex.: 'p@ss' virava userinfo ambíguo). Só
+# preserva os unreserved [A-Za-z0-9._~-]; o resto vira %XX. LC_ALL=C = byte a byte
+# (UTF-8 correto). O ffmpeg decodifica o percent-encoding ao abrir o RTSP.
+_urlencode() {
+    local LC_ALL=C s="$1" out="" i c
+    for (( i=0; i<${#s}; i++ )); do
+        c="${s:i:1}"
+        case "$c" in
+            [A-Za-z0-9._~-]) out+="$c" ;;
+            *) printf -v c '%%%02X' "'$c"; out+="$c" ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
 # Pergunta o MODELO e monta o caminho RTSP conforme o fabricante. Todos os prompts
 # vão p/ stderr (>&2) — o stdout carrega só "ip:<url>" capturado pelo chamador.
 # Caminhos por fabricante (verificados):
@@ -329,7 +345,7 @@ _prompt_ip_camera() {
     if [[ -n "$user" ]]; then
         read -rsp "$(echo -e "${CYAN}  Senha:${NC} ")" pass
         echo >&2
-        url="rtsp://${user}:${pass}@${ip}:${port}${path}"
+        url="rtsp://$(_urlencode "$user"):$(_urlencode "$pass")@${ip}:${port}${path}"
     else
         url="rtsp://${ip}:${port}${path}"
     fi
