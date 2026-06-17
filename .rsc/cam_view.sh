@@ -476,6 +476,22 @@ _prompt_ip_camera() {
     echo "ip:${url}"
 }
 
+# Entrevista para N câmeras IP (modo --all): pergunta a quantidade e roda
+# _prompt_ip_camera em loop, somando ao conjunto multi-câmera. Emite uma linha
+# "ip:<url>" por câmera no stdout; todos os prompts/mensagens vão p/ stderr
+# (o chamador captura só o stdout via mapfile).
+_prompt_ip_cameras_multi() {
+    local n i url
+    echo >&2
+    read -rp "$(echo -e "${CYAN}Adicionar câmeras IP ao modo --all? Quantas (Enter=0):${NC} ")" n
+    [[ "$n" =~ ^[0-9]+$ ]] || n=0
+    for (( i=1; i<=n; i++ )); do
+        echo -e "${CYAN}  ── Câmera IP ${i}/${n} ──${NC}" >&2
+        url=$(_prompt_ip_camera) || { log_warn "Câmera IP ${i} não configurada — pulando." >&2; continue; }
+        [[ -n "$url" ]] && echo "$url"
+    done
+}
+
 # ─── 3. Inicia container MediaMTX (servidor RTSP/WebRTC) ─────────────────────
 
 ensure_mediamtx() {
@@ -834,6 +850,76 @@ _yuv_stream_loop() {
     done
 }
 
+# ─── 5a-bis. Câmera IP (RTSP) → MediaMTX (compartilhado single/--all) ─────────
+# Republica o RTSP da câmera no MediaMTX, com probe inicial (diagnostica 401/404)
+# e loop de reconexão. $1 = id (sufixo de path/log) · $2 = RTSP de entrada da
+# câmera · $3 = URL RTSP de saída no MediaMTX.
+# Por padrão republica SEM reencode (-c copy): a câmera IP já entrega H.264/H.265,
+# então copiar poupa CPU — essencial para várias IPs ao mesmo tempo no --all.
+# CANPASS_IP_ENCODE=1 força reencode x264 (use se a câmera mandar codec que o
+# MediaMTX/gravador não aceitam em cópia).
+_ip_stream_loop() {
+    local id="$1" rtsp_in="$2" out_url="$3"
+    local err_log="/tmp/canpass_ip_${id}.log"
+    local -a IN=( -probesize 32768 -analyzeduration 0 -fflags nobuffer -flags low_delay )
+    local -a OUT
+    if [[ "${CANPASS_IP_ENCODE:-0}" == "1" ]]; then
+        OUT=( -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+              -g 2 -keyint_min 2 -sc_threshold 0 -flush_packets 1 )
+    else
+        OUT=( -c copy )   # republicação direta, sem reencode (poupa CPU)
+    fi
+
+    _ip_check_err() {
+        cat "$err_log" >&2
+        if grep -q "404 Not Found" "$err_log"; then
+            log_error "[cam${id}] Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto."
+            log_info  "Paths comuns por fabricante:"
+            log_info  "  Intelbras: /cam/realmonitor?channel=1&subtype=0 (principal) · subtype=1 (secundário)"
+            log_info  "  Hikvision: /Streaming/Channels/101 (canal 1 principal) · 102 (secundário)"
+            log_info  "  Vivotek:   /media2/stream.sdp?profile=profile1"
+            return 1
+        fi
+        if grep -q "401 Unauthorized" "$err_log"; then
+            log_error "[cam${id}] Câmera recusou autenticação (401) — verifique usuário e senha."
+            return 1
+        fi
+        return 0
+    }
+
+    # Probe: inicia o stream e aguarda 3s para confirmar que a câmera responde e
+    # que o MediaMTX já recebe dados antes de seguir.
+    log_info "[cam${id}] Conectando à câmera IP (aguarde)..."
+    : > "$err_log"
+    ffmpeg -loglevel error -rtsp_transport tcp "${IN[@]}" \
+        -i "$rtsp_in" "${OUT[@]}" -muxdelay 0 -muxpreload 0 \
+        -rtsp_transport tcp -f rtsp "$out_url" 2>"$err_log" &
+    local probe_pid=$!
+    sleep 3
+    if ! kill -0 "$probe_pid" 2>/dev/null; then
+        wait "$probe_pid" 2>/dev/null
+        _ip_check_err || return 1
+        log_error "[cam${id}] Câmera IP desconectou antes de iniciar o stream."
+        return 1
+    fi
+    kill "$probe_pid" 2>/dev/null
+    wait "$probe_pid" 2>/dev/null
+    log_ok "[cam${id}] Câmera IP conectada — stream disponível no MediaMTX."
+
+    # Loop de reconexão para quedas transitórias após o stream estar estável.
+    while true; do
+        : > "$err_log"
+        ffmpeg -loglevel error -rtsp_transport tcp "${IN[@]}" \
+            -i "$rtsp_in" "${OUT[@]}" -muxdelay 0 -muxpreload 0 \
+            -rtsp_transport tcp -f rtsp "$out_url" 2>"$err_log"
+        local rc=$?
+        _ip_check_err || return 1
+        (( rc >= 128 )) && return
+        log_warn "[cam${id}] Stream IP encerrado (código ${rc}) — reconectando em 2s..."
+        sleep 2
+    done
+}
+
 # ─── 5b. Gravação por detecção de movimento (modo 'motion') ──────────────────
 # Um dos dois modos de gravação (ver _record_loop). Lê o RTSP indicado, emite
 # scene-scores (filtro select) e controla um ffmpeg recorder (-c copy → MP4 =
@@ -1075,73 +1161,12 @@ show_camera() {
         # Pipeline + loop de reconexão compartilhados com o modo --all (seção 5a).
         _ffmpeg_loop() { _csi_stream_loop "$sensor_id" "$RTSP_URL"; }
     elif [[ "$dev" == ip:* ]]; then
-        # ── IP (RTSP): lê diretamente do stream da câmera ─────────────────────
+        # ── IP (RTSP): republica o stream da câmera (ver _ip_stream_loop) ─────
         local rtsp_in="${dev#ip:}"
         local display_url
         display_url=$(sed 's|rtsp://[^:]*:[^@]*@|rtsp://***:***@|' <<< "$rtsp_in")
         log_info "Stream IP: ${display_url}"
-
-        _ffmpeg_loop() {
-            local err_log
-            err_log=$(mktemp /tmp/canpass_ip_XXXXXX.log)
-
-            _ip_check_err() {
-                cat "$err_log" >&2
-                if grep -q "404 Not Found" "$err_log"; then
-                    log_error "Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto."
-                    log_info  "Paths comuns por fabricante:"
-                    log_info  "  Intelbras: /cam/realmonitor?channel=1&subtype=0 (principal) · subtype=1 (secundário)"
-                    log_info  "  Hikvision: /Streaming/Channels/101 (canal 1 principal) · 102 (secundário)"
-                    log_info  "  Vivotek:   /media2/stream.sdp?profile=profile1"
-                    return 1
-                fi
-                if grep -q "401 Unauthorized" "$err_log"; then
-                    log_error "Câmera recusou autenticação (401) — verifique usuário e senha."
-                    return 1
-                fi
-                return 0
-            }
-
-            # Probe: inicia o stream e aguarda 3s para confirmar que a câmera
-            # está respondendo e o MediaMTX já recebe dados antes de exibir os URLs.
-            log_info "Conectando à câmera IP (aguarde)..."
-            : > "$err_log"
-            ffmpeg -loglevel error \
-                -rtsp_transport tcp \
-                "${BASE[@]}" \
-                -i "$rtsp_in" \
-                "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>"$err_log" &
-            local probe_pid=$!
-            sleep 3
-            if ! kill -0 "$probe_pid" 2>/dev/null; then
-                wait "$probe_pid" 2>/dev/null
-                _ip_check_err || { rm -f "$err_log"; return 1; }
-                log_error "Câmera IP desconectou antes de iniciar o stream."
-                rm -f "$err_log"
-                return 1
-            fi
-            kill "$probe_pid" 2>/dev/null
-            wait "$probe_pid" 2>/dev/null
-            log_ok "Câmera IP conectada — stream disponível no MediaMTX."
-
-            # Loop de reconexão para quedas transitórias após o stream estar estável.
-            while true; do
-                : > "$err_log"
-                ffmpeg -loglevel error \
-                    -rtsp_transport tcp \
-                    "${BASE[@]}" \
-                    -i "$rtsp_in" \
-                    "${ENCODE[@]}" -muxdelay 0 -muxpreload 0 \
-                    -rtsp_transport tcp -f rtsp "$RTSP_URL" 2>"$err_log"
-                local rc=$?
-                _ip_check_err || { rm -f "$err_log"; return 1; }
-                (( rc >= 128 )) && { rm -f "$err_log"; return; }
-                log_warn "Stream IP encerrado (código ${rc}) — reconectando em 2s..."
-                sleep 2
-            done
-            rm -f "$err_log"
-        }
+        _ffmpeg_loop() { _ip_stream_loop "stream" "$rtsp_in" "$RTSP_URL"; }
     else
         # ── V4L2: proba formato de entrada funcional ──────────────────────────
         local working_args=""
@@ -1304,13 +1329,20 @@ show_all_cameras() {
     log_info "(ajuste com CANPASS_CSI_RES — 4 streams em 4K estouram o NVENC; 1080p é o equilíbrio)"
 
     local -a pids=() rec_pids=() play_pids=() sids=()
-    local cam sid
+    local cam sid ip_n=0
     for cam in "${cams[@]}"; do
-        sid="${cam#*:}"
-        sids+=("$sid")
-        if [[ "$cam" == yuv:* ]]; then
+        if [[ "$cam" == ip:* ]]; then
+            # IP não tem /dev/videoN — usa id sintético (ip0, ip1...) como token.
+            sid="ip${ip_n}"; ip_n=$((ip_n+1))
+            sids+=("$sid")
+            _ip_stream_loop "$sid" "${cam#ip:}" "rtsp://localhost:8554/cam${sid}" &
+        elif [[ "$cam" == yuv:* ]]; then
+            sid="${cam#*:}"
+            sids+=("$sid")
             _yuv_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
         else
+            sid="${cam#*:}"
+            sids+=("$sid")
             CANPASS_NO_DAEMON_RESTART=1 _csi_stream_loop "$sid" "rtsp://localhost:8554/cam${sid}" &
         fi
         pids+=($!)
@@ -1345,7 +1377,7 @@ show_all_cameras() {
             ok=$((ok+1))
             log_ok "cam${sid} publicando."
         else
-            log_warn "cam${sid} não confirmou em 30s — veja /tmp/canpass_csi_${sid}.log"
+            log_warn "cam${sid} não confirmou em 30s — veja /tmp/canpass_*_${sid}.log"
         fi
     done
     if (( ok == 0 )); then
@@ -1591,23 +1623,50 @@ main() {
 
     # ── Modo --all: todas as câmeras CSI/YUV de uma vez, sem menu ─────────────
     if (( all )); then
-        local -a csi_cams=()
+        local -a multi_cams=()
         local c
         for c in "${cameras[@]:-}"; do
-            [[ "$c" == csi:* || "$c" == yuv:* ]] && csi_cams+=("$c")
+            [[ "$c" == csi:* || "$c" == yuv:* ]] && multi_cams+=("$c")
         done
-        if [[ ${#csi_cams[@]} -eq 0 ]]; then
-            log_error "--all: nenhuma câmera CSI/YUV detectada (o modo multi é p/ CSI/GMSL)."
+
+        # Entrevista multi-IP: em terminal interativo, oferece somar N câmeras IP
+        # às locais (ex.: NileCAM81 + 2 IPs num só processo). Sem tty (boot/systemd)
+        # ou CANPASS_NO_INTERVIEW=1, pula — a config de IP exige interação.
+        if [[ -t 0 && "${CANPASS_NO_INTERVIEW:-0}" != "1" ]]; then
+            local -a ip_cams=()
+            mapfile -t ip_cams < <(_prompt_ip_cameras_multi)
+            (( ${#ip_cams[@]} > 0 )) && multi_cams+=("${ip_cams[@]}")
+        fi
+
+        if [[ ${#multi_cams[@]} -eq 0 ]]; then
+            log_error "--all: nenhuma câmera (nem CSI/YUV detectada, nem IP informada)."
             exit 1
         fi
-        echo
-        log_ok "--all: usando ${#csi_cams[@]} câmera(s) CSI: ${csi_cams[*]}"
-        echo
+
+        # Mosaico local: nvcompositor só compõe CSI/YUV — descarta IP com aviso.
         if [[ "$mode" == "local" ]]; then
-            show_local_all "${csi_cams[@]}"
+            local -a local_cams=()
+            for c in "${multi_cams[@]}"; do
+                [[ "$c" == ip:* ]] && { log_warn "Mosaico --local não inclui câmera IP — ignorando uma."; continue; }
+                local_cams+=("$c")
+            done
+            if [[ ${#local_cams[@]} -eq 0 ]]; then
+                log_error "--local --all: nenhuma câmera CSI/YUV para o mosaico (IP não é suportada aqui)."
+                exit 1
+            fi
+            echo
+            log_ok "--local --all: ${#local_cams[@]} câmera(s) no mosaico."
+            echo
+            show_local_all "${local_cams[@]}"
             exit 0   # preview manual: não deixa o watchdog reiniciar ao encerrar
         fi
-        show_all_cameras "$display" "${csi_cams[@]}"
+
+        local disp
+        disp=$(printf '%s\n' "${multi_cams[@]}" | sed 's|rtsp://[^:]*:[^@]*@|rtsp://***:***@|' | tr '\n' ' ')
+        echo
+        log_ok "--all: usando ${#multi_cams[@]} câmera(s): ${disp}"
+        echo
+        show_all_cameras "$display" "${multi_cams[@]}"
         return
     fi
 

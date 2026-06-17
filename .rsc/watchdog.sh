@@ -282,7 +282,8 @@ _show_reference() {
 ${BOLD}canpass${NC} — stream + gravação de vídeo + log CAN (este comando)
   canpass                  entrevista → stream RTSP/WebRTC/HLS + gravação + log CAN contínuo
   canpass --display        idem, + janela ffplay local do stream
-  canpass --all            todas as câmeras CSI/YUV: 1 stream por camN + gravação por câmera
+  canpass --all            multi-câmera: 1 stream por camN + gravação por câmera (CSI/YUV
+                           detectadas + entrevista p/ somar N câmeras IP no mesmo processo)
   canpass --all --display  idem, + uma janela ffplay por stream
   canpass --local          preview direto no monitor do Orin (sem rede/gravação/entrevista/CAN)
   canpass --local --all    mosaico local com todas as câmeras (nvcompositor)
@@ -314,6 +315,7 @@ ${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
   Stream:    CANPASS_CSI_RES \"WxH@FPS\" (CSI/Argus 1920x1080@30 · YUV/NileCAM81 @60) · CANPASS_CSI_BITRATE (8000000)
              CANPASS_CSI_ENCODER auto|hw|sw · CANPASS_CSI_SENSORS \"0 1...\" (fallback s/ /dev/video)
              CANPASS_NO_CLOCK_BOOST=1 · CANPASS_MOSAIC_W/CANPASS_MOSAIC_H (mosaico --local --all)
+             CANPASS_IP_ENCODE=1 (reencoda IP em x264; padrão republica -c copy, sem reencode)
   Gravação:  CANPASS_REC_MODE continuous|motion · CANPASS_REC_DIR (~/canpass_rec)
              CANPASS_CONT_CRF (21) · CANPASS_CONT_SEGMENT_SECS (600)
              MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30) · CANPASS_MOTION_CRF (18)
