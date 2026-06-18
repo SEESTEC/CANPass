@@ -864,12 +864,15 @@ _ip_stream_loop() {
     local tag="${4-[cam${id}] }"   # unset → prefixo padrão; "" explícito → sem prefixo (single)
     local err_log="/tmp/canpass_ip_${id}.log"
     local -a IN=( -probesize 32768 -analyzeduration 0 -fflags nobuffer -flags low_delay )
+    # SÓ vídeo (-map 0:v): câmeras IP costumam mandar áudio pcm_mulaw + stream de
+    # dados (ONVIF). Em -c copy, pcm_mulaw NÃO entra em MP4 ("codec not supported
+    # in container") e zera a gravação; o projeto é vídeo + CAN, áudio não importa.
     local -a OUT
     if [[ "${CANPASS_IP_ENCODE:-0}" == "1" ]]; then
-        OUT=( -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+        OUT=( -map 0:v -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
               -g 2 -keyint_min 2 -sc_threshold 0 -flush_packets 1 )
     else
-        OUT=( -c copy )   # republicação direta, sem reencode (poupa CPU)
+        OUT=( -map 0:v -c copy )   # republicação direta, sem reencode (poupa CPU)
     fi
 
     _ip_check_err() {
