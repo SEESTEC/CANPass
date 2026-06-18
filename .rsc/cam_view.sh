@@ -853,13 +853,15 @@ _yuv_stream_loop() {
 # ─── 5a-bis. Câmera IP (RTSP) → MediaMTX (compartilhado single/--all) ─────────
 # Republica o RTSP da câmera no MediaMTX, com probe inicial (diagnostica 401/404)
 # e loop de reconexão. $1 = id (sufixo de path/log) · $2 = RTSP de entrada da
-# câmera · $3 = URL RTSP de saída no MediaMTX.
+# câmera · $3 = URL RTSP de saída no MediaMTX · $4 = prefixo das mensagens
+# (default "[camID] "; o single passa "" p/ log limpo, sem prefixo).
 # Por padrão republica SEM reencode (-c copy): a câmera IP já entrega H.264/H.265,
 # então copiar poupa CPU — essencial para várias IPs ao mesmo tempo no --all.
 # CANPASS_IP_ENCODE=1 força reencode x264 (use se a câmera mandar codec que o
 # MediaMTX/gravador não aceitam em cópia).
 _ip_stream_loop() {
     local id="$1" rtsp_in="$2" out_url="$3"
+    local tag="${4-[cam${id}] }"   # unset → prefixo padrão; "" explícito → sem prefixo (single)
     local err_log="/tmp/canpass_ip_${id}.log"
     local -a IN=( -probesize 32768 -analyzeduration 0 -fflags nobuffer -flags low_delay )
     local -a OUT
@@ -873,15 +875,15 @@ _ip_stream_loop() {
     _ip_check_err() {
         cat "$err_log" >&2
         if grep -q "404 Not Found" "$err_log"; then
-            log_error "[cam${id}] Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto."
+            log_error "${tag}Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto (opção [4] manual)."
             log_info  "Paths comuns por fabricante:"
             log_info  "  Intelbras: /cam/realmonitor?channel=1&subtype=0 (principal) · subtype=1 (secundário)"
             log_info  "  Hikvision: /Streaming/Channels/101 (canal 1 principal) · 102 (secundário)"
-            log_info  "  Vivotek:   /media2/stream.sdp?profile=profile1"
+            log_info  "  Vivotek:   /live.sdp · /live1s1.sdp (antigas) · /media2/stream.sdp?profile=profile1 (ONVIF Media2)"
             return 1
         fi
         if grep -q "401 Unauthorized" "$err_log"; then
-            log_error "[cam${id}] Câmera recusou autenticação (401) — verifique usuário e senha."
+            log_error "${tag}Câmera recusou autenticação (401) — verifique usuário e senha."
             return 1
         fi
         return 0
@@ -889,7 +891,7 @@ _ip_stream_loop() {
 
     # Probe: inicia o stream e aguarda 3s para confirmar que a câmera responde e
     # que o MediaMTX já recebe dados antes de seguir.
-    log_info "[cam${id}] Conectando à câmera IP (aguarde)..."
+    log_info "${tag}Conectando à câmera IP (aguarde)..."
     : > "$err_log"
     ffmpeg -loglevel error -rtsp_transport tcp "${IN[@]}" \
         -i "$rtsp_in" "${OUT[@]}" -muxdelay 0 -muxpreload 0 \
@@ -899,12 +901,12 @@ _ip_stream_loop() {
     if ! kill -0 "$probe_pid" 2>/dev/null; then
         wait "$probe_pid" 2>/dev/null
         _ip_check_err || return 1
-        log_error "[cam${id}] Câmera IP desconectou antes de iniciar o stream."
+        log_error "${tag}Câmera IP desconectou antes de iniciar o stream."
         return 1
     fi
     kill "$probe_pid" 2>/dev/null
     wait "$probe_pid" 2>/dev/null
-    log_ok "[cam${id}] Câmera IP conectada — stream disponível no MediaMTX."
+    log_ok "${tag}Câmera IP conectada — stream disponível no MediaMTX."
 
     # Loop de reconexão para quedas transitórias após o stream estar estável.
     while true; do
@@ -915,7 +917,7 @@ _ip_stream_loop() {
         local rc=$?
         _ip_check_err || return 1
         (( rc >= 128 )) && return
-        log_warn "[cam${id}] Stream IP encerrado (código ${rc}) — reconectando em 2s..."
+        log_warn "${tag}Stream IP encerrado (código ${rc}) — reconectando em 2s..."
         sleep 2
     done
 }
@@ -1166,7 +1168,7 @@ show_camera() {
         local display_url
         display_url=$(sed 's|rtsp://[^:]*:[^@]*@|rtsp://***:***@|' <<< "$rtsp_in")
         log_info "Stream IP: ${display_url}"
-        _ffmpeg_loop() { _ip_stream_loop "stream" "$rtsp_in" "$RTSP_URL"; }
+        _ffmpeg_loop() { _ip_stream_loop "stream" "$rtsp_in" "$RTSP_URL" ""; }
     else
         # ── V4L2: proba formato de entrada funcional ──────────────────────────
         local working_args=""
