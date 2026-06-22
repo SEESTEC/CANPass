@@ -162,7 +162,7 @@ _supervised_candump() {
     local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
     local stall="${CANPASS_CAN_STALL_SECS:-6}"   # s sem frame novo antes de reciclar
 
-    local dynamic=0 logdir="" nospace=0
+    local dynamic=0 logdir="" prev_logdir="" nospace=0
     [[ "$out" == "dir:" ]] && dynamic=1
 
     local cdpid=""
@@ -186,7 +186,13 @@ _supervised_candump() {
                 nospace=1; sleep 10; continue
             fi
             (( nospace == 1 )) && { log_ok "Espaço liberado — retomando o log CAN em ${logdir}."; nospace=0; consec=0; }
-            out="${logdir}/can_$(date +%Y%m%d_%H%M%S).log"
+            # Abre um arquivo NOVO só quando a pasta MUDA (disco externo↔interno) ou
+            # ainda não há arquivo. Sem isto, cada reciclagem por bus mudo (~7s) criava
+            # um can_<ts>.log novo de 0 byte → centenas de arquivos vazios em campo.
+            if [[ "$logdir" != "$prev_logdir" || "$out" == "dir:" ]]; then
+                out="${logdir}/can_$(date +%Y%m%d_%H%M%S).log"
+                prev_logdir="$logdir"
+            fi
         fi
         if ! ifc=$(_find_canable); then
             log_warn "CANable ausente (replug?). Aguardando reaparecer..."
