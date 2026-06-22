@@ -104,12 +104,18 @@ _choose_storage() {
     (( ${#opts_dir[@]} == 1 )) && log_info "(nenhum dispositivo externo montado foi detectado)"
 
     local n=$(( ${#opts_dir[@]} - 1 ))
+    # Padrão de CAMPO: o PRIMEIRO disco externo (índice 1), se houver — a eMMC do
+    # Orin é pequena e viaja com a máquina. Sem externo, cai no interno (0). Vale
+    # tanto p/ Enter quanto p/ timeout (boot desatendido).
+    local default_choice=0
+    (( n >= 1 )) && default_choice=1
+    local default_label; default_label=$([[ "$default_choice" == 0 ]] && echo "interno" || echo "1º externo")
     local choice
     while true; do
-        choice=$(_ask "Onde salvar? [0-${n}] (padrão 0):" "0")
+        choice=$(_ask "Onde salvar? [0-${n}] (padrão ${default_choice} = ${default_label}):" "$default_choice")
         [[ "$choice" =~ ^[0-9]+$ && "$choice" -le "$n" ]] && break
         log_warn "Opção inválida."
-        (( _interview_timed_out )) && { choice=0; break; }
+        (( _interview_timed_out )) && { choice=$default_choice; break; }
     done
 
     local dir="${opts_dir[$choice]}"
