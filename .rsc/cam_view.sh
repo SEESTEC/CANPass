@@ -975,7 +975,14 @@ _ip_stream_loop() {
     local id="$1" rtsp_in="$2" out_url="$3"
     local tag="${4-[cam${id}] }"   # unset → prefixo padrão; "" explícito → sem prefixo (single)
     local err_log="/tmp/canpass_ip_${id}.log"
-    local -a IN=( -probesize 32768 -analyzeduration 0 -fflags nobuffer -flags low_delay )
+    # -stimeout: timeout de I/O do socket TCP (µs). SEM ele, num blip de rede da
+    # câmera (visto em campo: Hik/Vivotek "No route to host" intermitente) o ffmpeg
+    # FICA PENDURADO conectado-mas-sem-dados, o MediaMTX expira o path (404) e a
+    # gravação congela p/ sempre. Com timeout, o ffmpeg SAI no stall → o loop de
+    # reconexão abaixo religa e a gravação volta sozinha. Padrão 5 s.
+    local stimeout_us="${CANPASS_IP_STIMEOUT_US:-5000000}"
+    local -a IN=( -probesize 32768 -analyzeduration 0 -fflags nobuffer -flags low_delay
+                  -stimeout "$stimeout_us" )
     # SÓ vídeo (-map 0:v): câmeras IP costumam mandar áudio pcm_mulaw + stream de
     # dados (ONVIF). Em -c copy, pcm_mulaw NÃO entra em MP4 ("codec not supported
     # in container") e zera a gravação; o projeto é vídeo + CAN, áudio não importa.

@@ -407,6 +407,11 @@ main() {
     install_apt_package can-utils candump   # canpass-can (CANable/J1939)
     install_apt_package curl curl           # controles de imagem de câmera IP (HTTP API)
     install_apt_package chrony chronyc      # Orin como servidor NTP (horário unificado de campo)
+    # fake-hwclock: best-effort (binário em /usr/sbin quebra o command -v do
+    # install_apt_package). setup_ntp_server o habilita se presente.
+    $SUDO_CMD apt-get install -y fake-hwclock 2>/dev/null \
+        && log_ok "fake-hwclock instalado (boota na última hora se o RTC não tem bateria)." \
+        || log_warn "fake-hwclock não instalado (sem rede?) — hora offline dependerá só do RTC."
     install_docker
     install_jetson_gstreamer
     setup_jetson_sudoers
