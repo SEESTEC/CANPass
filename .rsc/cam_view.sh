@@ -1037,6 +1037,54 @@ _ip_stream_loop() {
     done
 }
 
+# ─── FIELD: disco externo como destino padrão de gravação ────────────────────
+# Em campo o vídeo deve cair num disco REMOVÍVEL (pendrive/SSD USB), não na eMMC
+# do Orin (pequena e que viaja junto com a máquina). _find_external_mount procura
+# o PRIMEIRO disco externo montado e gravável; _resolve_rec_dir devolve o destino
+# final. Precedência: CANPASS_REC_DIR explícito > primeiro disco externo > local
+# (~/canpass_rec). Sem disco externo NÃO trava a gravação — cai no local.
+# Externo = removível OU hotplug (USB), montado, gravável e FORA do disco da raiz.
+# Desligue a busca com CANPASS_REC_EXTERNAL=0.
+_find_external_mount() {
+    [[ "${CANPASS_REC_EXTERNAL:-1}" == "1" ]] || return 1
+    command -v lsblk >/dev/null 2>&1 || return 1
+
+    # Disco-pai da raiz (a NUNCA usar) — p/ excluir todas as suas partições.
+    local root_src root_disk
+    root_src=$(findmnt -no SOURCE / 2>/dev/null)
+    root_disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -1)
+    [[ -z "$root_disk" ]] && root_disk=$(basename "${root_src:-}" 2>/dev/null)
+
+    local line NAME MOUNTPOINT RM HOTPLUG TYPE PKNAME
+    while IFS= read -r line; do
+        NAME=""; MOUNTPOINT=""; RM=""; HOTPLUG=""; TYPE=""; PKNAME=""
+        eval "$line" 2>/dev/null || continue
+        [[ "$TYPE" == "part" || "$TYPE" == "disk" ]] || continue
+        [[ -n "$MOUNTPOINT" ]] || continue                       # precisa estar montado
+        case "$MOUNTPOINT" in                                    # ignora montagens de sistema
+            /|/boot|/boot/*|/home|/var|/var/*|/usr|/usr/*|/efi|/snap/*) continue;;
+        esac
+        # exclui qualquer partição do disco da raiz
+        [[ -n "$root_disk" && ( "$NAME" == "$root_disk" || "$PKNAME" == "$root_disk" ) ]] && continue
+        [[ "$RM" == "1" || "$HOTPLUG" == "1" ]] || continue      # só disco externo de verdade
+        [[ -w "$MOUNTPOINT" ]] || continue                       # precisa ser gravável
+        echo "$MOUNTPOINT"; return 0
+    done < <(lsblk -P -o NAME,MOUNTPOINT,RM,HOTPLUG,TYPE,PKNAME 2>/dev/null)
+    return 1
+}
+
+# Resolve o diretório de gravação aplicando a precedência acima.
+_resolve_rec_dir() {
+    if [[ -n "${CANPASS_REC_DIR:-}" ]]; then
+        echo "$CANPASS_REC_DIR"; return 0
+    fi
+    local ext
+    if ext=$(_find_external_mount); then
+        echo "${ext%/}/canpass_rec"; return 0
+    fi
+    echo "${HOME}/canpass_rec"
+}
+
 # ─── 5b. Gravação por detecção de movimento (modo 'motion') ──────────────────
 # Um dos dois modos de gravação (ver _record_loop). Lê o RTSP indicado, emite
 # scene-scores (filtro select) e controla um ffmpeg recorder (-c copy → MP4 =
@@ -1044,7 +1092,7 @@ _ip_stream_loop() {
 # arquivo/log ("" no modo single — nomes inalterados; "camN_" no --all). Com '&'.
 _motion_loop() {
     local src_url="$1" prefix="${2:-}"
-    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    local rec_dir; rec_dir="$(_resolve_rec_dir)"
     mkdir -p "$rec_dir"
     local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
 
@@ -1155,7 +1203,7 @@ _motion_loop() {
 # $1 = URL RTSP · $2 = prefixo ("" single / "camN_" no --all). Chame com '&'.
 _continuous_loop() {
     local src_url="$1" prefix="${2:-}"
-    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    local rec_dir; rec_dir="$(_resolve_rec_dir)"
     mkdir -p "$rec_dir"
     local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
     local crf="${CANPASS_CONT_CRF:-21}"
@@ -1337,7 +1385,7 @@ show_camera() {
     # de estados → ffmpeg recorder (-c copy → MP4, cópia exata).
     # 'continuous': ffmpeg único reencodando (x264 CRF) em segmentos MP4.
 
-    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    local rec_dir; rec_dir="$(_resolve_rec_dir)"
     mkdir -p "$rec_dir"
 
     # Gravador compartilhado com o modo --all (seções 5b/5b-bis); prefixo
@@ -1465,7 +1513,7 @@ show_all_cameras() {
         pids+=($!)
     done
 
-    local rec_dir="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
+    local rec_dir; rec_dir="$(_resolve_rec_dir)"
     for sid in "${sids[@]}"; do
         _record_loop "rtsp://localhost:8554/cam${sid}" "cam${sid}_" &
         rec_pids+=($!)
