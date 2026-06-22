@@ -372,7 +372,7 @@ _check_and_configure_subnet() {
     [[ -z "$jetson_ip" ]] && { log_warn "  Nenhum IP informado — continuando sem reconfigurar."; return 0; }
 
     log_info "Adicionando ${jetson_ip}/24 em ${chosen_iface}..."
-    if sudo ip addr add "${jetson_ip}/24" dev "${chosen_iface}" 2>/dev/null; then
+    if sudo -n ip addr add "${jetson_ip}/24" dev "${chosen_iface}" 2>/dev/null; then
         log_ok "IP ${jetson_ip}/24 configurado em ${chosen_iface}. Será removido ao encerrar o canpass."
         _TEMP_IP_ADDR="${jetson_ip}/24"
         _TEMP_IP_IFACE="${chosen_iface}"
@@ -1444,7 +1444,7 @@ show_camera() {
         _kill_tree "${loop_pid:-}"
         _kill_tree "${motion_rec_pid:-}"
         if [[ -n "$_TEMP_IP_ADDR" && -n "$_TEMP_IP_IFACE" ]]; then
-            sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null \
+            sudo -n ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null \
                 && log_info "IP temporário ${_TEMP_IP_ADDR} removido de ${_TEMP_IP_IFACE}."
         fi
     }
@@ -1638,7 +1638,7 @@ show_local() {
 
     _local_cleanup() {
         if [[ -n "${_TEMP_IP_ADDR:-}" && -n "${_TEMP_IP_IFACE:-}" ]]; then
-            sudo ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null
+            sudo -n ip addr del "$_TEMP_IP_ADDR" dev "$_TEMP_IP_IFACE" 2>/dev/null
         fi
     }
     trap _local_cleanup EXIT INT TERM

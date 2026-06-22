@@ -297,15 +297,14 @@ _start_can_logger() {
     fi
     CAN_BIN="$bin"   # guarda p/ o _stop_can_logger derrubar a interface ao sair
 
-    # Subir a interface usa sudo; valida a credencial AGORA para o processo em
-    # background não morrer pedindo senha (o install.sh cria regra NOPASSWD p/ ip).
-    if [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
-        if [[ -t 0 ]]; then
-            log_info "O log CAN precisa de sudo para subir a interface — informe a senha se pedida."
-            sudo -v || log_warn "Sem sudo — o log CAN pode falhar ao subir a interface."
-        else
-            log_warn "Sem sudo NOPASSWD — o log CAN pode falhar ao subir a interface."
-        fi
+    # Subir a interface CAN usa sudo (NOPASSWD p/ 'ip' configurado pelo install.sh).
+    # NUNCA bloquear pedindo senha aqui: no boot via systemd há um tty1 ANEXADO mas
+    # ninguém p/ digitar — um 'sudo -v' interativo PENDURA o serviço inteiro (visto
+    # em campo: watchdog preso em 'sudo -v', nada gravava). Apenas verifica o
+    # NOPASSWD com um comando whitelistado ('ip', inofensivo) e SEGUE: se faltar, o
+    # canpass-can avisa/re-tenta; com a regra correta o log sobe sem senha.
+    if [[ $EUID -ne 0 ]] && ! sudo -n ip -V >/dev/null 2>&1; then
+        log_warn "Sem sudo NOPASSWD p/ 'ip' — o log CAN pode falhar ao subir a interface. Rode 'canpass update'."
     fi
 
     : > "$CAN_CONSOLE_LOG"

@@ -62,7 +62,7 @@ _find_canable() {
 # sobe a hierarquia /sys a partir da net device até achar um power/control USB e grava 'on'.
 _disable_usb_autosuspend() {
     local ifc="$1" d sudo=""
-    [[ $EUID -ne 0 ]] && sudo="sudo"
+    [[ $EUID -ne 0 ]] && sudo="sudo -n"   # -n: nunca pendurar pedindo senha (tty1 do systemd)
     d=$(readlink -f "/sys/class/net/$ifc/device" 2>/dev/null) || return 0
     while [[ "$d" == /sys/* && "$d" != "/sys" ]]; do
         if [[ -f "$d/power/control" ]]; then
@@ -77,7 +77,7 @@ _disable_usb_autosuspend() {
 # restart-ms 100: auto-recupera de bus-off. Também desliga o autosuspend do USB.
 _bring_up() {
     local ifc="$1" br="$2"
-    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo -n"   # -n: nunca pendurar pedindo senha (tty1 do systemd)
     local -a mode=(listen-only on)
     [[ "${CANPASS_CAN_ACTIVE:-0}" == "1" ]] && mode=(listen-only off)
     _disable_usb_autosuspend "$ifc"
@@ -349,7 +349,7 @@ cmd_selftest() {
     command -v candump >/dev/null && command -v cansend >/dev/null \
         || { log_error "can-utils incompleto — instale: sudo apt-get install can-utils"; return 1; }
     command -v timeout >/dev/null || { log_error "'timeout' (coreutils) ausente."; return 1; }
-    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo -n"   # -n: nunca pendurar pedindo senha (tty1 do systemd)
 
     log_warn "O teste usa modo LOOPBACK (não listen-only) e envia 1 frame de teste."
     log_warn "Por segurança, DESCONECTE o adaptador do barramento do veículo antes."
@@ -401,7 +401,7 @@ cmd_status() {
 cmd_down() {
     local ifc
     ifc=$(_find_canable) || { log_error "CANable não encontrado."; return 1; }
-    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo"
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo -n"   # -n: nunca pendurar pedindo senha (tty1 do systemd)
     $sudo ip link set "$ifc" down && log_ok "${ifc} DOWN."
 }
 
