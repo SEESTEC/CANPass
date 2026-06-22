@@ -190,16 +190,22 @@ setup_ntp_server() {
     $SUDO_CMD cp "$tmp" "$conf" && rm -f "$tmp"
 
     # Habilita + reinicia o serviço (o nome varia entre distros: chrony | chronyd).
-    local svc
-    for svc in chrony chronyd; do
-        if $SUDO_CMD systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
-            $SUDO_CMD systemctl enable "$svc" >/dev/null 2>&1
-            $SUDO_CMD systemctl restart "$svc" >/dev/null 2>&1
-            log_ok "Servidor NTP ativo (${svc}) — servindo ${NTP_ALLOW_SUBNET}; câmeras usam o IP do Orin como NTP."
-            return 0
-        fi
+    # 'systemctl cat' é o teste de existência confiável (o list-unit-files|grep
+    # falhava em algumas versões e o bloco acima ficava sem ser aplicado).
+    local svc="" s
+    for s in chrony chronyd; do
+        if $SUDO_CMD systemctl cat "${s}.service" >/dev/null 2>&1; then svc="$s"; break; fi
     done
-    log_warn "Serviço chrony não encontrado p/ habilitar — verifique manualmente (systemctl status chrony)."
+    if [[ -z "$svc" ]]; then
+        log_warn "Serviço chrony não encontrado p/ habilitar — verifique manualmente (systemctl status chrony)."
+        return 0
+    fi
+    $SUDO_CMD systemctl enable "$svc" >/dev/null 2>&1
+    if $SUDO_CMD systemctl restart "$svc" >/dev/null 2>&1; then
+        log_ok "Servidor NTP ativo (${svc}) — servindo ${NTP_ALLOW_SUBNET}; câmeras usam o IP do Orin como NTP."
+    else
+        log_warn "chrony configurado mas não reiniciou — 'sudo systemctl restart ${svc}' e verifique 'chronyc sources'."
+    fi
 }
 
 # ─── 1d. Driver de câmera e-CAM82 (apenas Jetson/Tegra) ──────────────────────
