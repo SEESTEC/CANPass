@@ -216,14 +216,19 @@ setup_ntp_server() {
     # a hora atual AGORA (se há internet no setup, já é a hora certa) e liga o
     # fake-hwclock como rede de segurança: sem bateria no RTC, o Orin passa a
     # bootar na ÚLTIMA hora conhecida em vez do default de fábrica (visto: 2024).
-    if [[ -e /dev/rtc0 || -e /dev/rtc ]]; then
-        if $SUDO_CMD hwclock --systohc 2>/dev/null; then
-            log_ok "RTC de hardware semeado com a hora atual ($($SUDO_CMD hwclock -r 2>/dev/null | head -1))."
-        else
-            log_warn "Não consegui escrever no RTC (hwclock --systohc) — verifique 'sudo hwclock -r'."
-        fi
+    # Semeia TODOS os RTCs presentes (o Jetson expõe rtc0=tegra e rtc1=PMIC; o
+    # /dev/rtc pode apontar p/ o sem bateria). Escrever a hora boa em ambos
+    # maximiza a chance de o RTC que o kernel lê no boot estar correto.
+    local rtc seeded=0
+    for rtc in /dev/rtc0 /dev/rtc1 /dev/rtc; do
+        [[ -e "$rtc" ]] || continue
+        $SUDO_CMD hwclock --systohc -f "$rtc" 2>/dev/null && seeded=1
+    done
+    if (( seeded )); then
+        log_ok "RTC(s) de hardware semeados com a hora atual (rtc0: $($SUDO_CMD hwclock -r -f /dev/rtc0 2>/dev/null | head -1))."
+        log_warn "Se algum RTC voltar a 1969/2024 após power-off, é falta de BATERIA de backup no carrier — sem ela a hora real offline depende do fake-hwclock + seed no deploy."
     else
-        log_warn "Sem /dev/rtc — Orin sem RTC de hardware exposto; a hora real offline dependerá do fake-hwclock + seed no deploy."
+        log_warn "Sem /dev/rtc gravável — a hora real offline dependerá do fake-hwclock + seed no deploy."
     fi
     if $SUDO_CMD systemctl cat fake-hwclock.service >/dev/null 2>&1; then
         $SUDO_CMD systemctl enable --now fake-hwclock >/dev/null 2>&1 \

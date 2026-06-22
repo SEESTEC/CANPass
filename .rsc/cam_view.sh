@@ -1866,6 +1866,7 @@ main() {
             (( _added > 0 )) && log_info "--all: ${_added} câmera(s) IP de CANPASS_IP_URLS (perfil de campo)."
         fi
 
+
         if [[ ${#multi_cams[@]} -eq 0 ]]; then
             log_error "--all: nenhuma câmera (nem CSI/YUV detectada, nem IP informada)."
             exit 1
