@@ -102,12 +102,13 @@ setup_jetson_sudoers() {
     local sudoers_file="/etc/sudoers.d/canpass-nvargus"
 
     # Resolve caminhos (variam entre layouts L4T); só inclui o que existe.
-    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin
+    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin reboot_bin
     systemctl_bin="$(command -v systemctl || echo /bin/systemctl)"
     nvpmodel_bin="$(command -v nvpmodel || true)"
     jetson_clocks_bin="$(command -v jetson_clocks || true)"
     ip_bin="$(command -v ip || echo /usr/sbin/ip)"
     modprobe_bin="$(command -v modprobe || echo /usr/sbin/modprobe)"
+    reboot_bin="$(command -v reboot || echo /sbin/reboot)"
 
     # cam_view.sh, no caminho CSI, reinicia o nvargus-daemon e maximiza os clocks
     # (nvpmodel/jetson_clocks + max-isp-vi-clks.sh da e-con) sem senha, via sudo -n.
@@ -121,6 +122,9 @@ setup_jetson_sudoers() {
     # Recuperação da NileCAM81 travada (MCU em -121): cam_view.sh recarrega o
     # ar0821 sem reboot — precisa de modprobe sem senha (roda sem tty).
     cmds+=("${modprobe_bin} -r ar0821" "${modprobe_bin} ar0821")
+    # FIELD: recuperação automática quando a câmera não enumera no boot — cam_view.sh
+    # reinicia o Orin (reset garantido do link GMSL). Sem tty → precisa NOPASSWD.
+    cmds+=("${systemctl_bin} reboot" "${reboot_bin}")
 
     local joined
     joined=$(IFS=,; echo "${cmds[*]}")

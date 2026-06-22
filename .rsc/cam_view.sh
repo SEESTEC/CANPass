@@ -58,6 +58,118 @@ _cam_recover_ar0821() {
     return 1
 }
 
+# ─── FIELD: reboot automático quando a câmera do projeto não enumera ──────────
+# Build de CAMPO (CAT D11T teleoperado — desliga geral e acesso físico difícil).
+# A NileCAM81 é GMSL e fica presa ao boot via device tree: se o link não subiu na
+# partida (MCU travado, 12 V/coax intermitente após o power-cycle do veículo), o
+# /dev/video* não aparece e NÃO há hot-plug. Aqui, ao detectar que a câmera do
+# projeto está ATIVA no boot mas não enumerou, tentamos re-probar o GMSL e, se
+# persistir, REINICIAMOS o Orin — o reset garantido do link.
+#
+# Proteção contra loop de reboot (essencial num alvo remoto): teto de N reboots
+# numa janela de tempo; estourado o teto, DESISTE e segue rodando (preserva
+# SSH/NoMachine p/ diagnóstico — cabo solto não vira reboot eterno). O contador
+# é persistido em disco (sobrevive ao reboot) e ZERA assim que a câmera volta.
+# Operador pode cancelar um reboot em curso: `touch /tmp/canpass_no_reboot`.
+#
+# Ajustáveis: CANPASS_REBOOT_ON_NO_CAM=0 desliga · CANPASS_MAX_REBOOTS (5) ·
+# CANPASS_REBOOT_WINDOW_SECS (1800) · CANPASS_REBOOT_GRACE_SECS (60) ·
+# CANPASS_STATE_DIR (~/.canpass).
+_field_reboot_state_dir() { echo "${CANPASS_STATE_DIR:-${HOME}/.canpass}"; }
+
+# Dispara o reboot de campo respeitando teto/janela/carência. $1 = nome da câmera.
+_field_do_reboot() {
+    local active="$1"
+    local state_dir; state_dir="$(_field_reboot_state_dir)"
+    local cnt_file="${state_dir}/reboot_count"
+    mkdir -p "$state_dir" 2>/dev/null
+    local max="${CANPASS_MAX_REBOOTS:-5}"
+    local window="${CANPASS_REBOOT_WINDOW_SECS:-1800}"
+    local grace="${CANPASS_REBOOT_GRACE_SECS:-60}"
+    local now count last
+    now=$(date +%s); count=0; last=0
+    if [[ -f "$cnt_file" ]]; then
+        read -r count last < "$cnt_file" 2>/dev/null
+        [[ "$count" =~ ^[0-9]+$ ]] || count=0
+        [[ "$last"  =~ ^[0-9]+$ ]] || last=0
+    fi
+    # Fora da janela → recomeça a contagem (falha isolada não consome o orçamento antigo).
+    (( now - last > window )) && count=0
+
+    if (( count >= max )); then
+        log_error "FIELD: ${count} reboots em ${window}s sem recuperar a ${active%% *} — DESISTINDO do reboot p/ manter o acesso remoto (SSH/NoMachine). Verifique coax FAKRA / 12 V / base board. Nova tentativa após a janela expirar."
+        return 0
+    fi
+    if [[ -f /tmp/canpass_no_reboot ]]; then
+        log_warn "FIELD: /tmp/canpass_no_reboot presente — reboot CANCELADO por operador."
+        return 0
+    fi
+
+    log_error "FIELD: câmera não recuperada — REBOOT ${count}/${max} em ${grace}s. Cancele com 'touch /tmp/canpass_no_reboot' ou Ctrl+C."
+    local t="$grace"
+    while (( t > 0 )); do
+        if [[ -f /tmp/canpass_no_reboot ]]; then
+            log_warn "FIELD: reboot cancelado por /tmp/canpass_no_reboot."
+            return 0
+        fi
+        sleep 1; ((t--))
+    done
+
+    # Só consome o orçamento ao efetivar o reboot (cancelamento não conta).
+    echo "$((count+1)) ${now}" > "$cnt_file"
+    log_error "FIELD: reiniciando o Orin agora (reboot $((count+1))/${max})."
+    sync
+    sudo -n systemctl reboot 2>/dev/null || sudo -n reboot 2>/dev/null \
+        || sudo -n /sbin/reboot 2>/dev/null \
+        || log_error "FIELD: 'reboot' falhou (sem NOPASSWD? rode 'canpass update')."
+    sleep 30   # dá tempo do shutdown disparar antes de qualquer continuação
+}
+
+# Decide recuperação quando a câmera do projeto está ativa no boot mas sumiu.
+# $@ = câmeras detectadas. Retorna: 0 = nada a fazer (câmera presente / desligado);
+# 2 = re-probou o GMSL ou abortou o reboot → o chamador deve re-detectar.
+_recover_or_reboot_no_cam() {
+    [[ "${CANPASS_REBOOT_ON_NO_CAM:-1}" == "1" ]] || return 0
+    local active; active="$(_active_csi_camera)"
+    [[ -n "$active" ]] || return 0           # sem câmera de projeto no boot (não-Jetson / sem DTB)
+
+    local cam found=0
+    for cam in "$@"; do
+        [[ "$cam" == csi:* || "$cam" == yuv:* ]] && { found=1; break; }
+    done
+
+    local cnt_file; cnt_file="$(_field_reboot_state_dir)/reboot_count"
+    if (( found )); then
+        if [[ -f "$cnt_file" ]]; then
+            rm -f "$cnt_file"
+            log_ok "FIELD: ${active%% *} enumerou — contador de reboot zerado."
+        fi
+        return 0
+    fi
+
+    log_warn "FIELD: câmera do projeto (${active}) está ATIVA no boot, mas NÃO enumerou em /dev/video*."
+
+    # 1) Tenta re-probar o link GMSL sem reboot (barato comparado a reiniciar).
+    if [[ "${CANPASS_NO_CAM_RECOVER:-0}" != "1" ]] && lsmod 2>/dev/null | grep -Eq '^ar0821|^max96712'; then
+        log_warn "FIELD: re-probando o link GMSL (modprobe -r/modprobe ar0821) antes de considerar reboot..."
+        if sudo -n modprobe -r ar0821 2>/dev/null && sudo -n modprobe ar0821 2>/dev/null; then
+            local t=0; until compgen -G "/dev/video*" >/dev/null || (( t >= 12 )); do sleep 1; ((t++)); done
+            if compgen -G "/dev/video*" >/dev/null; then
+                log_ok "FIELD: GMSL re-probado — /dev/video* de volta sem reboot."
+            else
+                log_warn "FIELD: re-probe do ar0821 não trouxe a câmera — partindo p/ reboot."
+                _field_do_reboot "$active"
+            fi
+            return 2   # caller re-detecta de qualquer forma
+        fi
+        log_warn "FIELD: re-probe falhou (sem NOPASSWD p/ modprobe?)."
+    fi
+
+    # 2) Reboot (com teto/janela/carência).
+    _field_do_reboot "$active"
+    return 2   # só chega aqui se o reboot foi abortado/esgotado → caller re-detecta
+}
+
 # ─── Timestamp queimado na gravação (overlay drawtext) ───────────────────────
 # Carimba a hora do relógio do sistema em HH:MM:SS.mmm (mesmo formato legível do
 # canpass-can log, sem a data), texto branco. Como queimar texto exige modificar
@@ -1611,6 +1723,15 @@ main() {
     if [[ -n "$active_cam" ]]; then
         log_info "Câmera do projeto ativa neste boot: ${BOLD}${active_cam}${NC}"
         log_info "(para alternar e-CAM82 ↔ NileCAM81:  canpass-camera switch)"
+    fi
+
+    # FIELD: câmera do projeto ativa no boot mas sem enumerar → re-proba o GMSL e,
+    # persistindo, reinicia o Orin (com teto de reboots p/ não travar o acesso remoto).
+    local cam_recover_rc
+    _recover_or_reboot_no_cam "${cameras[@]:-}"; cam_recover_rc=$?
+    if (( cam_recover_rc == 2 )); then
+        log_info "Re-detectando câmeras após recuperação..."
+        mapfile -t cameras < <(detect_cameras)
     fi
 
     if [[ ${#cameras[@]} -eq 0 ]]; then
