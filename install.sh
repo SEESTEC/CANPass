@@ -182,9 +182,13 @@ setup_ntp_server() {
     {
         echo "# >>> CANPASS NTP (gerenciado pelo install.sh — não editar à mão) >>>"
         echo "# Serve o relógio do Orin como NTP p/ a sub-rede de campo, mesmo SEM"
-        echo "# upstream/internet (local stratum). Câmeras IP apontam o NTP p/ o Orin."
+        echo "# upstream/internet (local stratum) — assim câmeras + CAN + vídeo ficam"
+        echo "# com a MESMA base de tempo (uniforme). Câmeras IP apontam o NTP p/ o Orin."
         echo "allow ${NTP_ALLOW_SUBNET}"
         echo "local stratum 10"
+        echo "# rtcsync: mantém o RTC de hardware disciplinado (~11 min) — com bateria"
+        echo "# de backup no carrier, a hora REAL sobrevive ao power-off offline."
+        echo "rtcsync"
         echo "# <<< CANPASS NTP (gerenciado pelo install.sh — não editar à mão) <<<"
     } >> "$tmp"
     $SUDO_CMD cp "$tmp" "$conf" && rm -f "$tmp"
@@ -205,6 +209,26 @@ setup_ntp_server() {
         log_ok "Servidor NTP ativo (${svc}) — servindo ${NTP_ALLOW_SUBNET}; câmeras usam o IP do Orin como NTP."
     else
         log_warn "chrony configurado mas não reiniciou — 'sudo systemctl restart ${svc}' e verifique 'chronyc sources'."
+    fi
+
+    # ── Persistência da hora REAL offline ────────────────────────────────────
+    # Sem internet, a hora real entre power-offs depende do RTC. Semeia o RTC com
+    # a hora atual AGORA (se há internet no setup, já é a hora certa) e liga o
+    # fake-hwclock como rede de segurança: sem bateria no RTC, o Orin passa a
+    # bootar na ÚLTIMA hora conhecida em vez do default de fábrica (visto: 2024).
+    if [[ -e /dev/rtc0 || -e /dev/rtc ]]; then
+        if $SUDO_CMD hwclock --systohc 2>/dev/null; then
+            log_ok "RTC de hardware semeado com a hora atual ($($SUDO_CMD hwclock -r 2>/dev/null | head -1))."
+        else
+            log_warn "Não consegui escrever no RTC (hwclock --systohc) — verifique 'sudo hwclock -r'."
+        fi
+    else
+        log_warn "Sem /dev/rtc — Orin sem RTC de hardware exposto; a hora real offline dependerá do fake-hwclock + seed no deploy."
+    fi
+    if $SUDO_CMD systemctl cat fake-hwclock.service >/dev/null 2>&1; then
+        $SUDO_CMD systemctl enable --now fake-hwclock >/dev/null 2>&1 \
+            && log_ok "fake-hwclock ativo (boota na última hora conhecida se o RTC perder energia)." \
+            || log_warn "fake-hwclock presente mas não ativou — 'sudo systemctl enable --now fake-hwclock'."
     fi
 }
 
