@@ -24,7 +24,19 @@ FIELD_ENV="/usr/local/share/canpass/canpass-field.env"
 # (câmeras IP sincronizam aqui) e roda no fuso de Brasília — assim vídeo, log CAN
 # e OSD das câmeras compartilham a MESMA base de tempo. Ajustáveis via ambiente.
 TIMEZONE="${CANPASS_TZ:-America/Sao_Paulo}"
-NTP_ALLOW_SUBNET="${CANPASS_NTP_SUBNET:-192.168.20.0/24}"
+# Sub-rede que o servidor NTP atende: por padrão AUTODETECTADA (a da rota default
+# do Orin) — assim segue o Orin se ele mudar de rede/IP em campo. Override fixo:
+# CANPASS_NTP_SUBNET=10.105.4.0/24 (resolvido em setup_ntp_server, não aqui).
+
+# Sub-rede conectada da interface da rota default (ex.: 10.105.4.0/24). Vazio se
+# não houver rota default → cai na 1ª sub-rede conectada não-link-local.
+_detect_primary_subnet() {
+    local iface sub
+    iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
+    [[ -n "$iface" ]] && sub=$(ip -4 route show dev "$iface" scope link proto kernel 2>/dev/null | awk '{print $1; exit}')
+    [[ -z "$sub" ]] && sub=$(ip -4 route show scope link proto kernel 2>/dev/null | awk '$1 !~ /^169\.254/ && $1 ~ /\// {print $1; exit}')
+    echo "$sub"
+}
 
 # Preserva o usuário real mesmo quando executado via sudo
 CALLING_USER="${SUDO_USER:-$USER}"
@@ -155,6 +167,10 @@ setup_jetson_sudoers() {
 # (o apt roda só no install completo, na etapa de dependências); se o chrony não
 # estiver presente, apenas avisa — assim o 'canpass update' offline não quebra.
 setup_ntp_server() {
+    # Sub-rede a atender: override fixo (CANPASS_NTP_SUBNET) > autodetectada > default.
+    local subnet="${CANPASS_NTP_SUBNET:-$(_detect_primary_subnet)}"
+    [[ -z "$subnet" ]] && subnet="192.168.20.0/24"
+
     # Fuso horário (não depende de rede).
     if command -v timedatectl >/dev/null 2>&1; then
         if $SUDO_CMD timedatectl set-timezone "$TIMEZONE" 2>/dev/null; then
@@ -184,7 +200,7 @@ setup_ntp_server() {
         echo "# Serve o relógio do Orin como NTP p/ a sub-rede de campo, mesmo SEM"
         echo "# upstream/internet (local stratum) — assim câmeras + CAN + vídeo ficam"
         echo "# com a MESMA base de tempo (uniforme). Câmeras IP apontam o NTP p/ o Orin."
-        echo "allow ${NTP_ALLOW_SUBNET}"
+        echo "allow ${subnet}"
         echo "local stratum 10"
         echo "# rtcsync: mantém o RTC de hardware disciplinado (~11 min) — com bateria"
         echo "# de backup no carrier, a hora REAL sobrevive ao power-off offline."
@@ -206,7 +222,7 @@ setup_ntp_server() {
     fi
     $SUDO_CMD systemctl enable "$svc" >/dev/null 2>&1
     if $SUDO_CMD systemctl restart "$svc" >/dev/null 2>&1; then
-        log_ok "Servidor NTP ativo (${svc}) — servindo ${NTP_ALLOW_SUBNET}; câmeras usam o IP do Orin como NTP."
+        log_ok "Servidor NTP ativo (${svc}) — servindo ${subnet}; câmeras usam o IP do Orin como NTP."
     else
         log_warn "chrony configurado mas não reiniciou — 'sudo systemctl restart ${svc}' e verifique 'chronyc sources'."
     fi
@@ -302,12 +318,19 @@ install_scripts() {
         log_ok "Repo-fonte registrado para 'canpass-camera update': ${SCRIPT_DIR}"
     fi
 
-    # Perfil de CAMPO: instala o canpass-field.env onde o serviço systemd o lê.
-    # Define câmeras IP do projeto + gravação contínua + ts sup-esq + CAN 250k etc.
+    # Perfil de CAMPO: o serviço systemd lê ${FIELD_ENV}. Esse arquivo é EDITÁVEL
+    # em campo (IPs/senhas das câmeras, sub-rede) e NÃO deve ser sobrescrito pelo
+    # 'canpass update' — então só é criado se NÃO existir; a referência do repo vai
+    # sempre p/ ${FIELD_ENV}.example. Edite o instalado, nunca o do repo (.rsc/).
     if [[ -f "${SCRIPT_DIR}/.rsc/canpass-field.env" ]]; then
         $SUDO_CMD install -d /usr/local/share/canpass
-        $SUDO_CMD install -m 644 "${SCRIPT_DIR}/.rsc/canpass-field.env" "$FIELD_ENV"
-        log_ok "Perfil de campo instalado em ${FIELD_ENV}."
+        $SUDO_CMD install -m 644 "${SCRIPT_DIR}/.rsc/canpass-field.env" "${FIELD_ENV}.example"
+        if [[ -f "$FIELD_ENV" ]]; then
+            log_ok "Perfil de campo PRESERVADO (${FIELD_ENV}); referência em ${FIELD_ENV}.example."
+        else
+            $SUDO_CMD install -m 644 "${SCRIPT_DIR}/.rsc/canpass-field.env" "$FIELD_ENV"
+            log_ok "Perfil de campo instalado em ${FIELD_ENV} (edite-o p/ ajustar câmeras)."
+        fi
     fi
 }
 
