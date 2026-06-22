@@ -251,11 +251,20 @@ EOF
 
     $SUDO_CMD systemctl daemon-reload
     log_ok "Serviço '${SERVICE_NAME}' criado em ${SERVICE_FILE}."
+
+    # Habilita no boot automaticamente — o produto de campo deve subir sozinho
+    # quando o Orin liga, sem depender de login/terminal.
+    if $SUDO_CMD systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1; then
+        log_ok "Serviço '${SERVICE_NAME}' habilitado no boot."
+    else
+        log_warn "Falha ao habilitar '${SERVICE_NAME}' no boot — habilite manualmente: sudo systemctl enable ${SERVICE_NAME}"
+    fi
+
     log_info "Comandos úteis:"
-    log_info "  sudo systemctl start   ${SERVICE_NAME}   # inicia agora"
-    log_info "  sudo systemctl enable  ${SERVICE_NAME}   # habilita no boot"
-    log_info "  sudo systemctl status  ${SERVICE_NAME}   # verifica estado"
-    log_info "  sudo systemctl stop    ${SERVICE_NAME}   # encerra"
+    log_info "  sudo systemctl start    ${SERVICE_NAME}   # inicia agora"
+    log_info "  sudo systemctl disable  ${SERVICE_NAME}   # desabilita no boot"
+    log_info "  sudo systemctl status   ${SERVICE_NAME}   # verifica estado"
+    log_info "  sudo systemctl stop     ${SERVICE_NAME}   # encerra"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -308,7 +317,8 @@ main() {
     echo
     log_ok "Instalação concluída!"
     echo -e "${CYAN}────────────────────────────────────────${NC}"
-    log_info "Para usar: source ~/.bashrc && canpass"
+    log_info "O serviço sobe sozinho no próximo boot do Orin."
+    log_info "Para usar agora: source ~/.bashrc && canpass"
     if [[ $NEED_REBOOT -eq 1 ]]; then
         log_warn "REINICIE o Orin para ativar o driver da câmera:  sudo reboot"
     fi
