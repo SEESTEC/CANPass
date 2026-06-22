@@ -121,11 +121,38 @@ cmd_up() {
 }
 
 # ─── Loop supervisionado (compartilhado por dump/ascii/sniff/log) ────────────
+# Diretório do log CAN AGORA, com fallback + guarda de espaço — espelha o
+# _rec_dir_now do cam_view p/ vídeo + log CAN ficarem JUNTOS na mesma pasta de
+# sessão e seguirem o MESMO disco. Preferido: CANPASS_CAN_LOGDIR ou CANPASS_REC_DIR
+# (pasta de sessão no destino); fallback: CANPASS_REC_DIR_FALLBACK (interno).
+# Sem nenhum destino com a margem livre (CANPASS_MIN_FREE_MB, padrão 8192 = 8 GB)
+# ecoa VAZIO → o log PAUSA (não enche o disco do Orin). Avisos vão p/ stderr.
+_can_logdir_now() {
+    local min_mb="${CANPASS_MIN_FREE_MB:-8192}"
+    local pref="${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
+    local fb="${CANPASS_REC_DIR_FALLBACK:-$HOME/canpass_rec}"
+    local d free_mb
+    for d in "$pref" "$fb"; do
+        [[ -n "$d" ]] || continue
+        mkdir -p "$d" 2>/dev/null || continue
+        [[ -w "$d" ]] || continue
+        free_mb=$(df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
+        [[ "$free_mb" =~ ^[0-9]+$ ]] || continue
+        (( free_mb >= min_mb )) && { echo "$d"; return 0; }
+    done
+    echo ""   # vazio = sem espaço → pausa
+}
+
 # Mantém um candump vivo contra os 3 modos de falha já vistos em campo:
 #   • candump morre (interface caiu/reenumerou)   → re-detecta pelo driver e religa
 #   • CANable some do USB (replug)                → aguarda reaparecer
 #   • rx_packets parado por CANPASS_CAN_STALL_SECS s (RX travado do gs_usb) → down/up
-# $1 = bitrate · $2 = destino da saída ('-' = terminal; senão arquivo/FIFO, append)
+# $1 = bitrate · $2 = destino da saída:
+#        '-'      = terminal
+#        'dir:'   = modo LOG dinâmico — resolve a pasta a cada (re)início via
+#                   _can_logdir_now (fallback + guarda de espaço) e reabre um
+#                   can_<ts>.log novo quando o disco muda; PAUSA se faltar espaço
+#        <arquivo> = caminho fixo (append)
 # $3.. = args do candump (sem a interface). Não retorna — Ctrl+C/TERM encerra.
 _supervised_candump() {
     local br="$1" out="$2"; shift 2
@@ -135,10 +162,13 @@ _supervised_candump() {
     local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
     local stall="${CANPASS_CAN_STALL_SECS:-6}"   # s sem frame novo antes de reciclar
 
+    local dynamic=0 logdir="" nospace=0
+    [[ "$out" == "dir:" ]] && dynamic=1
+
     local cdpid=""
     _sup_cleanup() {
         [[ -n "$cdpid" ]] && kill "$cdpid" 2>/dev/null
-        echo; [[ -f "$out" ]] && log_info "Captura encerrada: ${out}"
+        echo; [[ -n "$out" && "$out" != "-" && "$out" != "dir:" && -f "$out" ]] && log_info "Captura encerrada: ${out}"
         exit 0
     }
     trap _sup_cleanup INT TERM
@@ -147,6 +177,17 @@ _supervised_candump() {
     # avisa na 1ª, depois só a cada 10 (bus mudo geraria um aviso a cada ~7 s).
     local ifc rxfile last cur stale tick consec=0 dest
     while true; do
+        # Modo LOG dinâmico: resolve a pasta de destino AGORA (segue o vídeo);
+        # sem espaço → pausa (não inicia candump).
+        if (( dynamic )); then
+            logdir="$(_can_logdir_now)"
+            if [[ -z "$logdir" ]]; then
+                (( nospace == 0 )) && log_warn "Sem armazenamento com a margem de ${CANPASS_MIN_FREE_MB:-8192}MB livres — log CAN PAUSADO até liberar/repor disco."
+                nospace=1; sleep 10; continue
+            fi
+            (( nospace == 1 )) && { log_ok "Espaço liberado — retomando o log CAN em ${logdir}."; nospace=0; consec=0; }
+            out="${logdir}/can_$(date +%Y%m%d_%H%M%S).log"
+        fi
         if ! ifc=$(_find_canable); then
             log_warn "CANable ausente (replug?). Aguardando reaparecer..."
             sleep 2; continue
@@ -178,6 +219,15 @@ _supervised_candump() {
             # tique de vida só nos modos cuja saída não é o terminal (log/sniff) —
             # no dump/ascii os próprios frames mostram que está vivo.
             [[ "$out" != "-" ]] && (( tick % 15 == 0 )) && log_info "vivo $(date +%H:%M:%S) — ${last} frames recebidos"
+            # Modo dinâmico: se a pasta de destino mudou (disco externo sumiu/voltou)
+            # ou ficou sem espaço, encerra este candump p/ reabrir no destino certo.
+            if (( dynamic )) && (( tick % 10 == 0 )); then
+                local nd; nd="$(_can_logdir_now)"
+                if [[ "$nd" != "$logdir" ]]; then
+                    log_warn "Destino do log CAN mudou (${logdir:-∅} → ${nd:-∅}) — reabrindo o log."
+                    kill "$cdpid" 2>/dev/null; cdpid=""; break
+                fi
+            fi
             if (( stale >= stall )); then
                 consec=$((consec+1))
                 if (( consec == 1 )); then
@@ -223,9 +273,6 @@ cmd_ascii() {
 cmd_log() {
     local br="${1:-$DEFAULT_BITRATE}"
     command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
-    local dir="${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
-    mkdir -p "$dir" || { log_error "Não consegui criar ${dir}."; return 1; }
-    local out="${dir}/can_$(date +%Y%m%d_%H%M%S).log"
 
     # Formato: epoch (-L, replayável por canplayer) por padrão; legível (-tA, data+hora)
     # com CANPASS_CAN_LOG_HUMAN=1. CANPASS_CAN_LOG_ASCII=1 acrescenta a coluna de
@@ -240,15 +287,19 @@ cmd_log() {
     elif [[ "$ascii" == "1" ]]; then
         dargs=(-ta -a); note="epoch + ASCII (NÃO replayável — p/ replay use o modo normal)"
     else
-        dargs=(-L);     note="epoch, replayável:  canplayer -I ${out##*/}"
+        dargs=(-L);     note="epoch, replayável:  canplayer -I can_<ts>.log"
     fi
-    log_ok "Gravando em ${out}"
+
+    # Destino DINÂMICO: pasta de sessão da gravação (vídeo + CAN juntos), com
+    # fallback p/ o interno se o disco externo sumir e PAUSA se faltar espaço
+    # (margem CANPASS_MIN_FREE_MB, padrão 8 GB) — resolvido a cada (re)início.
+    log_ok "Log CAN → pasta de sessão da gravação (vídeo + CAN juntos)."
     log_info "Formato: ${note}"
+    log_info "Fallback p/ interno se o disco externo sumir · PAUSA se livre < ${CANPASS_MIN_FREE_MB:-8192}MB."
     log_info "Watchdog de FLUXO: recicla a interface se ficar ${CANPASS_CAN_STALL_SECS:-6}s sem frame."
-    log_info "Frames vão pro arquivo; acompanhe: tail -f ${out}"
     log_info "Ctrl+C encerra."
 
-    _supervised_candump "$br" "$out" "${dargs[@]}"
+    _supervised_candump "$br" "dir:" "${dargs[@]}"
 }
 
 # Monitor de bytes que mudam — funciona com IDs ESTENDIDOS (29-bit / J1939), ao

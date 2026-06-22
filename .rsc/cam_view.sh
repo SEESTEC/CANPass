@@ -1085,6 +1085,45 @@ _resolve_rec_dir() {
     echo "${HOME}/canpass_rec"
 }
 
+# FALLBACK + GUARDA DE ESPAÇO de campo: devolve um destino gravável AGORA E com
+# margem de espaço. Tenta o preferido (_resolve_rec_dir — disco externo /
+# CANPASS_REC_DIR); se não dá p/ escrever (disco externo removido a quente) OU
+# está sem a margem livre, cai no CANPASS_REC_DIR_FALLBACK (interno). Se NENHUM
+# destino tem a margem (CANPASS_MIN_FREE_MB, padrão 8192 = 8 GB livres p/ o Orin),
+# ecoa VAZIO → o gravador PAUSA (não enche o disco). Os gravadores chamam isto a
+# cada (re)início → migra sozinho entre externo↔interno e retoma quando libera.
+# Saída capturada via $(); avisos vão p/ stderr p/ não poluir o caminho.
+_rec_dir_now() {
+    local tag="${1:-}"
+    local min_mb="${CANPASS_MIN_FREE_MB:-8192}"
+    local flag="/tmp/canpass_rec_fallback" sflag="/tmp/canpass_rec_nospace"
+    local pref fb d free_mb
+    pref="$(_resolve_rec_dir)"
+    fb="${CANPASS_REC_DIR_FALLBACK:-${HOME}/canpass_rec}"
+    for d in "$pref" "$fb"; do
+        [[ -n "$d" ]] || continue
+        mkdir -p "$d" 2>/dev/null || continue
+        touch "${d}/.canpass_wtest" 2>/dev/null || continue
+        rm -f "${d}/.canpass_wtest"
+        free_mb=$(df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
+        [[ "$free_mb" =~ ^[0-9]+$ ]] || continue
+        (( free_mb >= min_mb )) || continue
+        [[ -f "$sflag" ]] && rm -f "$sflag"
+        if [[ "$d" == "$pref" ]]; then
+            [[ -f "$flag" ]] && { log_ok "${tag}Destino ${d} de volta — retomando a gravação nele." >&2; rm -f "$flag"; }
+        else
+            [[ -f "$flag" ]] || { log_warn "${tag}Destino ${pref} indisponível/cheio — gravando no fallback ${fb}." >&2; : > "$flag"; }
+        fi
+        echo "$d"; return 0
+    done
+    # Nenhum destino gravável com a margem → pausa a gravação (protege o Orin).
+    if [[ ! -f "$sflag" ]]; then
+        log_warn "${tag}Sem armazenamento com a margem de ${min_mb}MB livres — gravação PAUSADA até liberar/repor disco." >&2
+        : > "$sflag"
+    fi
+    echo ""
+}
+
 # ─── 5b. Gravação por detecção de movimento (modo 'motion') ──────────────────
 # Um dos dois modos de gravação (ver _record_loop). Lê o RTSP indicado, emite
 # scene-scores (filtro select) e controla um ffmpeg recorder (-c copy → MP4 =
@@ -1092,9 +1131,8 @@ _resolve_rec_dir() {
 # arquivo/log ("" no modo single — nomes inalterados; "camN_" no --all). Com '&'.
 _motion_loop() {
     local src_url="$1" prefix="${2:-}"
-    local rec_dir; rec_dir="$(_resolve_rec_dir)"
-    mkdir -p "$rec_dir"
     local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
+    local rec_dir; rec_dir="$(_rec_dir_now "$tag")"
 
     local motion_active=0
     local last_motion_epoch=0
@@ -1151,6 +1189,8 @@ _motion_loop() {
     while true; do
         motion_active=0
         last_motion_epoch=0
+        rec_dir="$(_rec_dir_now "$tag")"   # re-resolve: migra p/ o fallback se o disco externo sumir
+        [[ -z "$rec_dir" ]] && { sleep 15; continue; }   # sem espaço → pausa a gravação
 
         # Lê scores de cena do ffmpeg — produz saída apenas quando há movimento.
         # read -t COOLDOWN: expira se nenhum frame de movimento chegar no intervalo.
@@ -1203,8 +1243,6 @@ _motion_loop() {
 # $1 = URL RTSP · $2 = prefixo ("" single / "camN_" no --all). Chame com '&'.
 _continuous_loop() {
     local src_url="$1" prefix="${2:-}"
-    local rec_dir; rec_dir="$(_resolve_rec_dir)"
-    mkdir -p "$rec_dir"
     local tag=""; [[ -n "$prefix" ]] && tag="[${prefix%_}] "
     local crf="${CANPASS_CONT_CRF:-21}"
     local seg="${CANPASS_CONT_SEGMENT_SECS:-600}"
@@ -1215,9 +1253,12 @@ _continuous_loop() {
     local fpid=""
     trap '[[ -n "$fpid" ]] && kill "$fpid" 2>/dev/null; exit 0' INT TERM
 
+    local rec_dir; rec_dir="$(_rec_dir_now "$tag")"
     log_info "${tag}Gravação contínua: x264 CRF ${crf}, segmentos de $(( seg / 60 )) min → ${rec_dir}"
     [[ -n "$ts_vf" ]] && log_info "${tag}Timestamp na gravação ativo (HH:MM:SS.mmm, canto $(_ts_position_label))."
     while true; do
+        rec_dir="$(_rec_dir_now "$tag")"   # re-resolve a cada ciclo: migra p/ o fallback se o disco externo sumir
+        [[ -z "$rec_dir" ]] && { sleep 15; continue; }   # sem espaço → pausa a gravação
         # espera o stream publicar no MediaMTX (evita spam de reconexão do ffmpeg)
         until ffprobe -v quiet -rtsp_transport tcp -i "$src_url" >/dev/null 2>&1; do
             sleep 2
@@ -1385,8 +1426,7 @@ show_camera() {
     # de estados → ffmpeg recorder (-c copy → MP4, cópia exata).
     # 'continuous': ffmpeg único reencodando (x264 CRF) em segmentos MP4.
 
-    local rec_dir; rec_dir="$(_resolve_rec_dir)"
-    mkdir -p "$rec_dir"
+    local rec_dir; rec_dir="$(_rec_dir_now)"; [[ -z "$rec_dir" ]] && rec_dir="(pausado: sem espaço livre)"
 
     # Gravador compartilhado com o modo --all (seções 5b/5b-bis); prefixo
     # vazio mantém os nomes de arquivo do modo single inalterados.
@@ -1513,7 +1553,7 @@ show_all_cameras() {
         pids+=($!)
     done
 
-    local rec_dir; rec_dir="$(_resolve_rec_dir)"
+    local rec_dir; rec_dir="$(_rec_dir_now)"; [[ -z "$rec_dir" ]] && rec_dir="(pausado: sem espaço livre)"
     for sid in "${sids[@]}"; do
         _record_loop "rtsp://localhost:8554/cam${sid}" "cam${sid}_" &
         rec_pids+=($!)
@@ -1810,6 +1850,20 @@ main() {
             local -a ip_cams=()
             mapfile -t ip_cams < <(_prompt_ip_cameras_multi)
             (( ${#ip_cams[@]} > 0 )) && multi_cams+=("${ip_cams[@]}")
+        fi
+
+        # Câmeras IP por AMBIENTE (boot/systemd — perfil de campo, sem tty):
+        # CANPASS_IP_URLS = lista de URLs RTSP separadas por espaço, ';' ou nova-linha.
+        # Cada uma vira 'ip:<url>' e soma às locais (NileCAM81 + 2 IPs num só processo).
+        if [[ -n "${CANPASS_IP_URLS:-}" ]]; then
+            local _ipurl _added=0 _norm
+            _norm="$(printf '%s' "$CANPASS_IP_URLS" | tr ';\n\t' '   ')"
+            for _ipurl in $_norm; do
+                [[ -n "$_ipurl" ]] || continue
+                [[ "$_ipurl" == ip:* ]] || _ipurl="ip:${_ipurl}"
+                multi_cams+=("$_ipurl"); _added=$((_added+1))
+            done
+            (( _added > 0 )) && log_info "--all: ${_added} câmera(s) IP de CANPASS_IP_URLS (perfil de campo)."
         fi
 
         if [[ ${#multi_cams[@]} -eq 0 ]]; then

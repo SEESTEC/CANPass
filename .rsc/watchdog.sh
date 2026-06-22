@@ -42,6 +42,7 @@ is_intentional_exit() {
 # ─── Entrevista de configuração ──────────────────────────────────────────────
 
 _interview_timed_out=0
+_interview_did_storage=0   # 1 = a entrevista interativa já escolheu o destino
 
 # Pergunta com timeout: $1 = prompt · $2 = resposta padrão (Enter/timeout/sem tty).
 # Após o primeiro timeout, as perguntas seguintes assumem o padrão direto —
@@ -127,7 +128,50 @@ _choose_storage() {
         rm -f "${dir}/.canpass_wtest"
     fi
     export CANPASS_REC_DIR="$dir"
+    # Fallback p/ o cam_view: se um disco externo escolhido sumir durante a
+    # gravação, ele migra p/ o interno sem parar (ver _rec_dir_now no cam_view).
+    export CANPASS_REC_DIR_FALLBACK="$internal"
     log_ok "Gravações e logs CAN serão salvos em: ${dir}"
+}
+
+# Destino de gravação SEM entrevista (boot desatendido / CANPASS_NO_INTERVIEW=1).
+# Escolhe o PRIMEIRO disco externo gravável; senão, o interno. Sempre define o
+# fallback interno. Respeita um CANPASS_REC_DIR já exportado no ambiente.
+_auto_storage() {
+    local internal="${HOME}/canpass_rec"
+    export CANPASS_REC_DIR_FALLBACK="$internal"
+
+    if [[ -n "${CANPASS_REC_DIR:-}" ]]; then
+        log_ok "Destino de gravação (definido no ambiente): ${CANPASS_REC_DIR}"
+        return 0
+    fi
+
+    if [[ "${CANPASS_REC_EXTERNAL:-1}" == "1" ]]; then
+        local mp _s _t _m cand first=""
+        while IFS=$'\t' read -r mp _s _t _m; do
+            [[ -n "$mp" ]] || continue
+            cand="${mp%/}/canpass_rec"
+            if mkdir -p "$cand" 2>/dev/null && touch "${cand}/.wtest" 2>/dev/null; then
+                rm -f "${cand}/.wtest"; first="$cand"; break
+            fi
+        done < <(_list_external_mounts)
+        if [[ -n "$first" ]]; then
+            export CANPASS_REC_DIR="$first"
+            log_ok "Destino de gravação: disco externo → ${first}"
+            return 0
+        fi
+        log_warn "Nenhum disco externo gravável detectado — usando interno: ${internal}"
+    fi
+    export CANPASS_REC_DIR="$internal"
+    mkdir -p "$internal" 2>/dev/null
+}
+
+# Define o destino de gravação valendo p/ AMBOS os caminhos. Se a entrevista
+# interativa já escolheu (menu), não repergunta; caso contrário (boot
+# desatendido / CANPASS_NO_INTERVIEW=1), resolve automático (1º disco externo).
+_setup_storage() {
+    (( _interview_did_storage )) && return 0
+    _auto_storage
 }
 
 # Cria uma pasta de SESSÃO (canpass_dd-mm-aaaa_hh-mm-ss) dentro do destino escolhido
@@ -136,15 +180,22 @@ _choose_storage() {
 # tanto p/ a entrevista quanto p/ o modo não-interativo (systemd). Exportado, é
 # herdado pelo cam_view.sh e pelo canpass-can.
 _setup_session_dir() {
-    local base session
+    local base session stamp
+    stamp="canpass_$(date +%d-%m-%Y_%H-%M-%S)"
     base="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
-    session="${base%/}/canpass_$(date +%d-%m-%Y_%H-%M-%S)"
+    session="${base%/}/${stamp}"
     if mkdir -p "$session" 2>/dev/null; then
         export CANPASS_REC_DIR="$session"
         log_ok "Sessão: arquivos desta execução em ${session}"
     else
         log_warn "Não consegui criar a pasta de sessão em ${base} — salvando direto em ${base}."
         export CANPASS_REC_DIR="$base"
+    fi
+    # Mesma sessão (mesmo carimbo) no destino de fallback interno, p/ os arquivos
+    # ficarem juntos caso o cam_view migre p/ o interno (disco externo removido).
+    if [[ -n "${CANPASS_REC_DIR_FALLBACK:-}" ]]; then
+        local fb="${CANPASS_REC_DIR_FALLBACK%/}/${stamp}"
+        mkdir -p "$fb" 2>/dev/null && export CANPASS_REC_DIR_FALLBACK="$fb"
     fi
 }
 
@@ -213,6 +264,7 @@ _setup_interview() {
     # 5. Armazenamento (interno + dispositivos externos montados)
     echo
     _choose_storage
+    _interview_did_storage=1
 
     local ts_label
     case "$CANPASS_TS_POSITION" in
@@ -322,7 +374,10 @@ ${BOLD}Parâmetros configuráveis (variáveis de ambiente)${NC}
              CANPASS_CSI_ENCODER auto|hw|sw · CANPASS_CSI_SENSORS \"0 1...\" (fallback s/ /dev/video)
              CANPASS_NO_CLOCK_BOOST=1 · CANPASS_MOSAIC_W/CANPASS_MOSAIC_H (mosaico --local --all)
              CANPASS_IP_ENCODE=1 (reencoda IP em x264; padrão republica -c copy, sem reencode)
+             CANPASS_IP_URLS \"rtsp://a rtsp://b\" (soma câmeras IP ao --all sem entrevista; boot/campo)
   Gravação:  CANPASS_REC_MODE continuous|motion · CANPASS_REC_DIR (~/canpass_rec)
+             CANPASS_REC_EXTERNAL=1 (padrão: grava no 1º disco externo) · CANPASS_REC_DIR_FALLBACK (interno)
+             CANPASS_MIN_FREE_MB (8192 = 8 GB) — abaixo disso o vídeo E o log CAN PAUSAM (protege o Orin)
              CANPASS_CONT_CRF (21) · CANPASS_CONT_SEGMENT_SECS (600)
              MOTION_THRESHOLD (0.02) · MOTION_COOLDOWN_SECS (30) · CANPASS_MOTION_CRF (18)
              CANPASS_REC_TIMESTAMP=1 (relógio HH:MM:SS.mmm queimado) · CANPASS_TS_FONTSIZE (h/22)
@@ -398,6 +453,7 @@ for _a in "$@"; do [[ "$_a" == "--local" ]] && _preview=1; done
 
 if (( ! _preview )); then
     _setup_interview
+    _setup_storage       # destino externo c/ fallback interno (vale c/ ou sem entrevista)
     _setup_session_dir
     _start_can_logger
 fi

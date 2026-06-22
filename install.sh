@@ -18,6 +18,13 @@ INSTALL_DIR="/usr/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="canpass"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+FIELD_ENV="/usr/local/share/canpass/canpass-field.env"
+
+# NTP/fuso de campo: o Orin serve o próprio relógio como NTP p/ a sub-rede
+# (câmeras IP sincronizam aqui) e roda no fuso de Brasília — assim vídeo, log CAN
+# e OSD das câmeras compartilham a MESMA base de tempo. Ajustáveis via ambiente.
+TIMEZONE="${CANPASS_TZ:-America/Sao_Paulo}"
+NTP_ALLOW_SUBNET="${CANPASS_NTP_SUBNET:-192.168.20.0/24}"
 
 # Preserva o usuário real mesmo quando executado via sudo
 CALLING_USER="${SUDO_USER:-$USER}"
@@ -141,6 +148,60 @@ setup_jetson_sudoers() {
     fi
 }
 
+# ─── 1c-bis. Servidor NTP + fuso de Brasília ─────────────────────────────────
+# Unifica o horário do sistema (vídeo + log CAN usam o relógio do Orin) e serve
+# esse horário como NTP p/ as câmeras IP da sub-rede — em campo NÃO há internet,
+# então o chrony serve o PRÓPRIO relógio (local stratum). NÃO instala pacote aqui
+# (o apt roda só no install completo, na etapa de dependências); se o chrony não
+# estiver presente, apenas avisa — assim o 'canpass update' offline não quebra.
+setup_ntp_server() {
+    # Fuso horário (não depende de rede).
+    if command -v timedatectl >/dev/null 2>&1; then
+        if $SUDO_CMD timedatectl set-timezone "$TIMEZONE" 2>/dev/null; then
+            log_ok "Fuso horário do Orin: ${TIMEZONE}."
+        else
+            log_warn "Não consegui definir o fuso ${TIMEZONE} (timedatectl)."
+        fi
+    fi
+
+    if ! command -v chronyc >/dev/null 2>&1 && [[ ! -x /usr/sbin/chronyd && ! -x /usr/bin/chronyd ]]; then
+        log_warn "chrony ausente — Orin NÃO será servidor NTP. (rode o install.sh completo c/ rede)"
+        return 0
+    fi
+
+    local conf="/etc/chrony/chrony.conf"
+    [[ -f "$conf" ]] || conf="/etc/chrony.conf"
+    if [[ ! -f "$conf" ]]; then
+        log_warn "chrony.conf não encontrado — Orin não configurado como servidor NTP."
+        return 0
+    fi
+
+    # Bloco gerenciado idempotente: remove o antigo e reescreve.
+    local tmp; tmp=$(mktemp)
+    $SUDO_CMD sed '/# >>> CANPASS NTP/,/# <<< CANPASS NTP/d' "$conf" 2>/dev/null > "$tmp"
+    {
+        echo "# >>> CANPASS NTP (gerenciado pelo install.sh — não editar à mão) >>>"
+        echo "# Serve o relógio do Orin como NTP p/ a sub-rede de campo, mesmo SEM"
+        echo "# upstream/internet (local stratum). Câmeras IP apontam o NTP p/ o Orin."
+        echo "allow ${NTP_ALLOW_SUBNET}"
+        echo "local stratum 10"
+        echo "# <<< CANPASS NTP (gerenciado pelo install.sh — não editar à mão) <<<"
+    } >> "$tmp"
+    $SUDO_CMD cp "$tmp" "$conf" && rm -f "$tmp"
+
+    # Habilita + reinicia o serviço (o nome varia entre distros: chrony | chronyd).
+    local svc
+    for svc in chrony chronyd; do
+        if $SUDO_CMD systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
+            $SUDO_CMD systemctl enable "$svc" >/dev/null 2>&1
+            $SUDO_CMD systemctl restart "$svc" >/dev/null 2>&1
+            log_ok "Servidor NTP ativo (${svc}) — servindo ${NTP_ALLOW_SUBNET}; câmeras usam o IP do Orin como NTP."
+            return 0
+        fi
+    done
+    log_warn "Serviço chrony não encontrado p/ habilitar — verifique manualmente (systemctl status chrony)."
+}
+
 # ─── 1d. Driver de câmera e-CAM82 (apenas Jetson/Tegra) ──────────────────────
 # Instala automaticamente o driver CORRETO (IMX485) de forma não-interativa.
 # Pula se não for Jetson ou se a câmera já enumera (/dev/video0 presente).
@@ -205,6 +266,14 @@ install_scripts() {
         echo "${SCRIPT_DIR}" | $SUDO_CMD tee /usr/local/share/canpass/src_dir >/dev/null
         log_ok "Repo-fonte registrado para 'canpass-camera update': ${SCRIPT_DIR}"
     fi
+
+    # Perfil de CAMPO: instala o canpass-field.env onde o serviço systemd o lê.
+    # Define câmeras IP do projeto + gravação contínua + ts sup-esq + CAN 250k etc.
+    if [[ -f "${SCRIPT_DIR}/.rsc/canpass-field.env" ]]; then
+        $SUDO_CMD install -d /usr/local/share/canpass
+        $SUDO_CMD install -m 644 "${SCRIPT_DIR}/.rsc/canpass-field.env" "$FIELD_ENV"
+        log_ok "Perfil de campo instalado em ${FIELD_ENV}."
+    fi
 }
 
 # ─── 3. Alias ────────────────────────────────────────────────────────────────
@@ -230,14 +299,20 @@ setup_systemd_service() {
     $SUDO_CMD tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=CANPass Camera Watchdog
-After=docker.service network.target
+# network-online: as câmeras IP do perfil de campo precisam da rede de pé no boot
+# (mesmo com retry no cam_view, evita falhas iniciais e o chrony NTP sobe antes).
+After=docker.service network-online.target chrony.service
+Wants=network-online.target
 Requires=docker.service
 
 [Service]
 Type=simple
 User=${CALLING_USER}
+# Perfil de CAMPO: câmeras IP do projeto + gravação contínua + ts sup-esq +
+# CAN 250k humano + sem entrevista. '-' = não falha se o arquivo não existir.
+EnvironmentFile=-${FIELD_ENV}
 ExecStartPre=-/bin/systemctl restart nvargus-daemon
-ExecStart=${INSTALL_DIR}/watchdog.sh
+ExecStart=${INSTALL_DIR}/watchdog.sh --all
 Restart=on-failure
 RestartSec=3
 SuccessExitStatus=0 130 143
@@ -274,8 +349,9 @@ main() {
     # recopia scripts e reaplica sudoers/alias/serviço, SEM apt/docker/driver
     # (não depende de rede nem dispara instalação de driver em campo).
     if [[ "${1:-}" == "--update" || "${1:-}" == "update" ]]; then
-        log_step "Atualização — scripts, sudoers, alias e serviço (sem deps/driver)"
+        log_step "Atualização — scripts, sudoers, NTP, alias e serviço (sem deps/driver)"
         setup_jetson_sudoers
+        setup_ntp_server       # fuso + config NTP (não instala pacote; offline-safe)
         install_scripts
         setup_alias
         setup_systemd_service
@@ -295,9 +371,11 @@ main() {
     install_apt_package v4l-utils v4l2-ctl
     install_apt_package can-utils candump   # canpass-can (CANable/J1939)
     install_apt_package curl curl           # controles de imagem de câmera IP (HTTP API)
+    install_apt_package chrony chronyc      # Orin como servidor NTP (horário unificado de campo)
     install_docker
     install_jetson_gstreamer
     setup_jetson_sudoers
+    setup_ntp_server        # fuso de Brasília + Orin como servidor NTP da sub-rede
 
     log_step "2/5 — Instalando driver de câmera (Jetson)"
     install_ecam82_driver
