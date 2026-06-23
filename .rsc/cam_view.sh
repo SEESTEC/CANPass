@@ -951,7 +951,15 @@ _yuv_stream_loop() {
             (( wedge_count++ ))
             log_warn "[cam${vnode}] Stream YUV não negocia — câmera travada? (gst=${gst_rc} ffmpeg=${ffmpeg_rc}, falha ${wedge_count}; log: ${ylog})"
             (( wedge_count == 2 )) && _cam_recover_ar0821 "$vnode"   # tenta destravar sem reboot
-            (( wedge_count >= 4 )) && log_warn "[cam${vnode}] Câmera segue sem negociar — REBOOT é o reset garantido do MCU (-121)."
+            # 4+ falhas e o reload do ar0821 não resolveu → o nó /dev/video existe
+            # mas o MCU não negocia (-121): detect_cameras vê a câmera como "presente"
+            # e o reboot de boot NÃO dispara. Escalamos aqui p/ o reboot de campo —
+            # mesma proteção de teto/janela/carência e só reinicia se for a câmera do
+            # projeto. É o único reset garantido do MCU travado.
+            (( wedge_count >= 4 )) && {
+                log_warn "[cam${vnode}] Câmera segue sem negociar — escalando p/ REBOOT de campo (reset garantido do MCU -121)."
+                _field_do_reboot "$(_active_csi_camera)"
+            }
             local backoff=$(( wedge_count * 3 )); (( backoff > 30 )) && backoff=30
             sleep "$backoff"   # backoff progressivo: para de martelar o MCU
         else

@@ -267,6 +267,33 @@ setup_ntp_server() {
         $SUDO_CMD systemctl enable --now fake-hwclock >/dev/null 2>&1 \
             && log_ok "fake-hwclock ativo (boota na última hora conhecida se o RTC perder energia)." \
             || log_warn "fake-hwclock presente mas não ativou — 'sudo systemctl enable --now fake-hwclock'."
+
+        # Save FREQUENTE do fake-hwclock. O cron.hourly padrão só grava a cada hora,
+        # então um corte de energia SEM shutdown limpo (campo: alimentação cortada)
+        # perde até ~1 h da "última hora conhecida". Sem bateria de RTC essa é a única
+        # referência offline — gravá-la a cada 5 min limita a perda evitável a 5 min
+        # (o gap inevitável continua sendo o tempo DESLIGADO; isso exige bateria no RTC).
+        $SUDO_CMD tee /etc/systemd/system/canpass-fakehwclock-save.service >/dev/null <<'FHCEOF'
+[Unit]
+Description=CANPass — salva a hora atual no fake-hwclock (referência offline fresca)
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'fake-hwclock save 2>/dev/null || true'
+FHCEOF
+        $SUDO_CMD tee /etc/systemd/system/canpass-fakehwclock-save.timer >/dev/null <<'FHTEOF'
+[Unit]
+Description=CANPass — grava o fake-hwclock a cada 5 min (limita a perda em power-off sujo)
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+[Install]
+WantedBy=timers.target
+FHTEOF
+        $SUDO_CMD systemctl daemon-reload
+        $SUDO_CMD systemctl enable --now canpass-fakehwclock-save.timer >/dev/null 2>&1 \
+            && log_ok "fake-hwclock salvo a cada 5 min (limita a perda em corte de energia sujo)." \
+            || log_warn "Timer canpass-fakehwclock-save não ativou — verifique 'systemctl status canpass-fakehwclock-save.timer'."
     fi
 
     # ── Restauração da hora no BOOT (canpass-clock.service) ───────────────────
