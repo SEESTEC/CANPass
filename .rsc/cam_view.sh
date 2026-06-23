@@ -994,53 +994,67 @@ _ip_stream_loop() {
         OUT=( -map 0:v -c copy )   # republicação direta, sem reencode (poupa CPU)
     fi
 
-    _ip_check_err() {
-        cat "$err_log" >&2
+    # Erros DEFINITIVOS de configuração (não adianta repetir): path/credencial.
+    # Retorna 1 (desiste) só nesses; qualquer outra falha é TRANSITÓRIA e o loop
+    # abaixo segue tentando. ANTES um simples "No route to host" no boot (rede/alias
+    # ainda subindo, ou a câmera ainda bootando) fazia o probe desistir P/ SEMPRE —
+    # a câmera nunca era republicada e o gravador girava à toa sem nada p/ gravar.
+    _ip_fatal_err() {
         if grep -q "404 Not Found" "$err_log"; then
+            cat "$err_log" >&2
             log_error "${tag}Path RTSP não encontrado na câmera (404). Reinicie e informe o path correto (opção [4] manual)."
             log_info  "Paths comuns por fabricante:"
             log_info  "  Intelbras: /cam/realmonitor?channel=1&subtype=0 (principal) · subtype=1 (secundário)"
             log_info  "  Hikvision: /Streaming/Channels/101 (canal 1 principal) · 102 (secundário)"
-            log_info  "  Vivotek:   /live.sdp · /live1s1.sdp (antigas) · /media2/stream.sdp?profile=profile1 (ONVIF Media2)"
-            return 1
+            log_info  "  Vivotek:   /live.sdp · /live1s2.sdp · /media2/stream.sdp?profile=profile1 (ONVIF Media2)"
+            return 0
         fi
         if grep -q "401 Unauthorized" "$err_log"; then
+            cat "$err_log" >&2
             log_error "${tag}Câmera recusou autenticação (401) — verifique usuário e senha."
-            return 1
+            return 0
         fi
-        return 0
+        return 1
     }
 
-    # Probe: inicia o stream e aguarda 3s para confirmar que a câmera responde e
-    # que o MediaMTX já recebe dados antes de seguir.
+    # Loop ÚNICO de conexão+reconexão: NUNCA desiste por falha transitória (câmera
+    # ausente no boot, blip de rede). Republica continuamente; o gravador associado
+    # passa a capturar assim que o stream aparece no MediaMTX. Backoff cresce só
+    # enquanto a câmera está inacessível (2→4→…→15s) e ZERA quando ela conecta.
     log_info "${tag}Conectando à câmera IP (aguarde)..."
-    : > "$err_log"
-    ffmpeg -loglevel error -rtsp_transport tcp "${IN[@]}" \
-        -i "$rtsp_in" "${OUT[@]}" -muxdelay 0 -muxpreload 0 \
-        -rtsp_transport tcp -f rtsp "$out_url" 2>"$err_log" &
-    local probe_pid=$!
-    sleep 3
-    if ! kill -0 "$probe_pid" 2>/dev/null; then
-        wait "$probe_pid" 2>/dev/null
-        _ip_check_err || return 1
-        log_error "${tag}Câmera IP desconectou antes de iniciar o stream."
-        return 1
-    fi
-    kill "$probe_pid" 2>/dev/null
-    wait "$probe_pid" 2>/dev/null
-    log_ok "${tag}Câmera IP conectada — stream disponível no MediaMTX."
-
-    # Loop de reconexão para quedas transitórias após o stream estar estável.
+    local announced=0 backoff=2
     while true; do
         : > "$err_log"
         ffmpeg -loglevel error -rtsp_transport tcp "${IN[@]}" \
             -i "$rtsp_in" "${OUT[@]}" -muxdelay 0 -muxpreload 0 \
-            -rtsp_transport tcp -f rtsp "$out_url" 2>"$err_log"
-        local rc=$?
-        _ip_check_err || return 1
-        (( rc >= 128 )) && return
-        log_warn "${tag}Stream IP encerrado (código ${rc}) — reconectando em 2s..."
-        sleep 2
+            -rtsp_transport tcp -f rtsp "$out_url" 2>"$err_log" &
+        local fpid=$! i alive=1
+        # Observa ~4s p/ saber se conectou (sem matar — segue publicando se vivo).
+        for i in 1 2 3 4; do
+            sleep 1
+            kill -0 "$fpid" 2>/dev/null || { alive=0; break; }
+        done
+        if (( alive )); then
+            if (( announced == 0 )); then
+                log_ok "${tag}Câmera IP conectada — stream disponível no MediaMTX."
+                announced=1
+            fi
+            backoff=2
+            wait "$fpid"; local rc=$?
+        else
+            wait "$fpid"; local rc=$?
+        fi
+        _ip_fatal_err && return 1
+        (( rc >= 128 )) && return            # encerrado por sinal (cleanup do chamador)
+        if (( alive )); then
+            log_warn "${tag}Stream IP caiu (código ${rc}) — reconectando em 2s..."
+            sleep 2
+        else
+            cat "$err_log" >&2
+            log_warn "${tag}Câmera IP inacessível — nova tentativa em ${backoff}s (câmera ligada? rede?)."
+            sleep "$backoff"
+            (( backoff = backoff < 15 ? backoff * 2 : 15 ))
+        fi
     done
 }
 

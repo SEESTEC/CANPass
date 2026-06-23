@@ -24,18 +24,22 @@ FIELD_ENV="/usr/local/share/canpass/canpass-field.env"
 # (câmeras IP sincronizam aqui) e roda no fuso de Brasília — assim vídeo, log CAN
 # e OSD das câmeras compartilham a MESMA base de tempo. Ajustáveis via ambiente.
 TIMEZONE="${CANPASS_TZ:-America/Sao_Paulo}"
-# Sub-rede que o servidor NTP atende: por padrão AUTODETECTADA (a da rota default
-# do Orin) — assim segue o Orin se ele mudar de rede/IP em campo. Override fixo:
-# CANPASS_NTP_SUBNET=10.105.4.0/24 (resolvido em setup_ntp_server, não aqui).
+# Sub-redes que o servidor NTP atende: por padrão TODAS as sub-redes conectadas
+# (uma 'allow' por interface), não só a da rota default. O Orin de campo é
+# multi-homed (ex.: eth0 = LAN das câmeras 192.168.20.x + wlan0 = internet/NTP
+# upstream 192.168.x): autodetectar SÓ a rota default pegava a wlan0 e as câmeras
+# do eth0 ficavam sem servidor de hora. Override fixo: CANPASS_NTP_SUBNET=...
+# (resolvido em setup_ntp_server, não aqui).
 
-# Sub-rede conectada da interface da rota default (ex.: 10.105.4.0/24). Vazio se
-# não houver rota default → cai na 1ª sub-rede conectada não-link-local.
-_detect_primary_subnet() {
-    local iface sub
-    iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
-    [[ -n "$iface" ]] && sub=$(ip -4 route show dev "$iface" scope link proto kernel 2>/dev/null | awk '{print $1; exit}')
-    [[ -z "$sub" ]] && sub=$(ip -4 route show scope link proto kernel 2>/dev/null | awk '$1 !~ /^169\.254/ && $1 ~ /\// {print $1; exit}')
-    echo "$sub"
+# Lista as sub-redes IPv4 conectadas (rotas scope-link do kernel), uma por linha,
+# excluindo loopback, docker/bridges/veth e link-local (169.254). Ex. de saída:
+#   10.105.4.0/24
+#   192.168.20.0/24
+_connected_subnets() {
+    ip -4 route show scope link proto kernel 2>/dev/null | awk '
+        { net=$1; dev=""; for (i=1;i<=NF;i++) if ($i=="dev") dev=$(i+1) }
+        net ~ /\// && net !~ /^169\.254/ && dev !~ /^(lo|docker|br-|veth)/ { print net }
+    ' | sort -u
 }
 
 # Preserva o usuário real mesmo quando executado via sudo
@@ -121,13 +125,14 @@ setup_jetson_sudoers() {
     local sudoers_file="/etc/sudoers.d/canpass-nvargus"
 
     # Resolve caminhos (variam entre layouts L4T); só inclui o que existe.
-    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin reboot_bin
+    local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin reboot_bin tee_bin
     systemctl_bin="$(command -v systemctl || echo /bin/systemctl)"
     nvpmodel_bin="$(command -v nvpmodel || true)"
     jetson_clocks_bin="$(command -v jetson_clocks || true)"
     ip_bin="$(command -v ip || echo /usr/sbin/ip)"
     modprobe_bin="$(command -v modprobe || echo /usr/sbin/modprobe)"
     reboot_bin="$(command -v reboot || echo /sbin/reboot)"
+    tee_bin="$(command -v tee || echo /usr/bin/tee)"
 
     # cam_view.sh, no caminho CSI, reinicia o nvargus-daemon e maximiza os clocks
     # (nvpmodel/jetson_clocks + max-isp-vi-clks.sh da e-con) sem senha, via sudo -n.
@@ -144,6 +149,12 @@ setup_jetson_sudoers() {
     # FIELD: recuperação automática quando a câmera não enumera no boot — cam_view.sh
     # reinicia o Orin (reset garantido do link GMSL). Sem tty → precisa NOPASSWD.
     cmds+=("${systemctl_bin} reboot" "${reboot_bin}")
+    # CAN: canpass-can desliga o autosuspend de USB do CANable escrevendo 'on' em
+    # .../power/control (causa comum de "parou de receber"). Roda em BACKGROUND
+    # (sem tty) → sem NOPASSWD aparecia "a password is required" no journal e o
+    # autosuspend nunca era desligado. O caminho varia com a topologia USB → curinga
+    # (sudoers usa fnmatch sem FNM_PATHNAME, então '*' cobre as barras do /sys).
+    cmds+=("${tee_bin} /sys/devices/*/power/control")
 
     local joined
     joined=$(IFS=,; echo "${cmds[*]}")
@@ -167,9 +178,15 @@ setup_jetson_sudoers() {
 # (o apt roda só no install completo, na etapa de dependências); se o chrony não
 # estiver presente, apenas avisa — assim o 'canpass update' offline não quebra.
 setup_ntp_server() {
-    # Sub-rede a atender: override fixo (CANPASS_NTP_SUBNET) > autodetectada > default.
-    local subnet="${CANPASS_NTP_SUBNET:-$(_detect_primary_subnet)}"
-    [[ -z "$subnet" ]] && subnet="192.168.20.0/24"
+    # Sub-redes a atender: override fixo (CANPASS_NTP_SUBNET) > TODAS as conectadas
+    # > default. O override aceita várias separadas por espaço/vírgula.
+    local -a subnets=()
+    if [[ -n "${CANPASS_NTP_SUBNET:-}" ]]; then
+        local _s; for _s in ${CANPASS_NTP_SUBNET//,/ }; do subnets+=("$_s"); done
+    else
+        mapfile -t subnets < <(_connected_subnets)
+    fi
+    [[ ${#subnets[@]} -eq 0 ]] && subnets=("192.168.20.0/24")
 
     # Fuso horário (não depende de rede).
     if command -v timedatectl >/dev/null 2>&1; then
@@ -200,7 +217,7 @@ setup_ntp_server() {
         echo "# Serve o relógio do Orin como NTP p/ a sub-rede de campo, mesmo SEM"
         echo "# upstream/internet (local stratum) — assim câmeras + CAN + vídeo ficam"
         echo "# com a MESMA base de tempo (uniforme). Câmeras IP apontam o NTP p/ o Orin."
-        echo "allow ${subnet}"
+        local _sn; for _sn in "${subnets[@]}"; do echo "allow ${_sn}"; done
         echo "local stratum 10"
         echo "# rtcsync: mantém o RTC de hardware disciplinado (~11 min) — com bateria"
         echo "# de backup no carrier, a hora REAL sobrevive ao power-off offline."
@@ -222,7 +239,7 @@ setup_ntp_server() {
     fi
     $SUDO_CMD systemctl enable "$svc" >/dev/null 2>&1
     if $SUDO_CMD systemctl restart "$svc" >/dev/null 2>&1; then
-        log_ok "Servidor NTP ativo (${svc}) — servindo ${subnet}; câmeras usam o IP do Orin como NTP."
+        log_ok "Servidor NTP ativo (${svc}) — servindo ${subnets[*]}; câmeras usam o IP do Orin como NTP."
     else
         log_warn "chrony configurado mas não reiniciou — 'sudo systemctl restart ${svc}' e verifique 'chronyc sources'."
     fi
@@ -250,6 +267,62 @@ setup_ntp_server() {
         $SUDO_CMD systemctl enable --now fake-hwclock >/dev/null 2>&1 \
             && log_ok "fake-hwclock ativo (boota na última hora conhecida se o RTC perder energia)." \
             || log_warn "fake-hwclock presente mas não ativou — 'sudo systemctl enable --now fake-hwclock'."
+    fi
+
+    # ── Restauração da hora no BOOT (canpass-clock.service) ───────────────────
+    # PROBLEMA visto em campo: offline, a data ficava MUITO errada. No AGX Orin o
+    # kernel seta o relógio do sistema a partir do rtc1 (tegra_rtc, hctosys=1) —
+    # que NÃO tem bateria de backup — e IGNORA o rtc0 (nvvrs-pseq-rtc/PMIC), que é
+    # o que pode ter bateria no carrier. Resultado: pós-power-off lia 1969/2024.
+    # Solução: um oneshot que roda ANTES do chrony e escolhe a hora MAIS RECENTE e
+    # plausível entre os RTCs e o relógio atual (que o fake-hwclock já adiantou),
+    # aplica no sistema e regrava em TODOS os RTCs. Com bateria no PMIC recupera a
+    # hora REAL; sem bateria cai na última hora do fake-hwclock (melhor que 1969).
+    local clk_bin="/usr/local/sbin/canpass-clock-restore.sh"
+    $SUDO_CMD install -d /usr/local/sbin
+    $SUDO_CMD tee "$clk_bin" >/dev/null <<'CLKEOF'
+#!/bin/bash
+# canpass-clock-restore — escolhe a hora mais recente e plausível (RTC c/ bateria >
+# fake-hwclock) no boot e propaga p/ todos os RTCs. O tempo só anda p/ frente, então
+# "mais recente válida" é a melhor estimativa de 'agora' quando offline.
+set -u
+FLOOR=$(date -d '2025-01-01 00:00:00' +%s 2>/dev/null || echo 1735707600)  # piso de sanidade
+CEIL=$(date -d  '2099-01-01 00:00:00' +%s 2>/dev/null || echo 4070926800)  # teto anti-lixo
+best=$(date +%s); src="sistema/fake-hwclock"
+for r in /dev/rtc0 /dev/rtc1; do
+    [[ -e "$r" ]] || continue
+    t=$(hwclock -r -f "$r" 2>/dev/null) || continue
+    e=$(date -d "$t" +%s 2>/dev/null) || continue
+    [[ "$e" =~ ^[0-9]+$ ]] || continue
+    (( e > FLOOR && e < CEIL && e > best )) && { best=$e; src="$r"; }
+done
+date -s "@$best" >/dev/null 2>&1
+for r in /dev/rtc0 /dev/rtc1; do [[ -e "$r" ]] && hwclock --systohc -f "$r" 2>/dev/null; done
+logger -t canpass-clock "hora restaurada de ${src}: $(date '+%F %T %z')"
+exit 0
+CLKEOF
+    $SUDO_CMD chmod 755 "$clk_bin"
+    $SUDO_CMD tee /etc/systemd/system/canpass-clock.service >/dev/null <<EOF
+[Unit]
+Description=CANPass — restaura a hora real offline (RTC c/ bateria > fake-hwclock)
+# Roda DEPOIS do fake-hwclock (que provê o piso) e ANTES do chrony (que serve a
+# hora às câmeras) — assim, offline, o NTP já entrega a hora corrigida.
+After=fake-hwclock.service
+Before=chrony.service chronyd.service ${SERVICE_NAME}.service
+
+[Service]
+Type=oneshot
+ExecStart=${clk_bin}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    $SUDO_CMD systemctl daemon-reload
+    if $SUDO_CMD systemctl enable --now canpass-clock.service >/dev/null 2>&1; then
+        log_ok "canpass-clock.service ativo — restaura a hora no boot (RTC c/ bateria > fake-hwclock)."
+    else
+        log_warn "canpass-clock.service não ativou — verifique 'systemctl status canpass-clock'."
     fi
 }
 

@@ -250,7 +250,17 @@ _supervised_candump() {
             log_warn "candump saiu (interface caiu/reenumerou?). Re-detectando..."
             cdpid=""
         fi
-        sleep 1
+        # Backoff quando o bus está só MUDO: cada reciclagem sem frame fazia um ciclo
+        # down/up (3 sudo) a cada ~7s — em bancada/chave desligada isso inundava o
+        # journal e os logs de sudo por horas, sem ganho. Com várias reciclagens
+        # seguidas vazias (consec), espaça a próxima tentativa até ~30s. RX de volta
+        # zera 'consec' (acima) → reconecta na hora; reenumeração (consec 0) idem.
+        if (( consec > 1 )); then
+            local backoff=$(( consec * 3 )); (( backoff > 30 )) && backoff=30
+            sleep "$backoff"
+        else
+            sleep 1
+        fi
     done
 }
 
