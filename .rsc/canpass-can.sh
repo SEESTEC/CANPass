@@ -401,7 +401,8 @@ _td_decode() {
 _cantime_iface() {
     local br="$1" ifc
     ifc=$(_find_canable) || return 1
-    if [[ "$(ip -br link show "$ifc" 2>/dev/null | awk '{print $2}')" != "UP" ]]; then
+    # "já está UP" pela flag administrativa IFF_UP (operstate de CAN varia: UP/UNKNOWN).
+    if ! ip -o link show "$ifc" 2>/dev/null | grep -qw UP; then
         _bring_up "$ifc" "$br" || return 1
     fi
     echo "$ifc"
