@@ -278,7 +278,10 @@ setup_ntp_server() {
 Description=CANPass — salva a hora atual no fake-hwclock (referência offline fresca)
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'fake-hwclock save 2>/dev/null || true'
+# Salva no fake-hwclock E disciplina TODOS os RTCs com a hora atual. Disciplinar o
+# rtc0 (PMIC) é insurance: SE o carrier tiver QUALQUER retenção nele, o boot seguinte
+# já o encontra fresco (o canpass-clock-restore prefere o RTC mais recente plausível).
+ExecStart=/bin/sh -c 'fake-hwclock save 2>/dev/null; for r in /dev/rtc0 /dev/rtc1; do [ -e "$r" ] && hwclock --systohc -f "$r" 2>/dev/null; done; true'
 FHCEOF
         $SUDO_CMD tee /etc/systemd/system/canpass-fakehwclock-save.timer >/dev/null <<'FHTEOF'
 [Unit]
@@ -350,6 +353,35 @@ EOF
         log_ok "canpass-clock.service ativo — restaura a hora no boot (RTC c/ bateria > fake-hwclock)."
     else
         log_warn "canpass-clock.service não ativou — verifique 'systemctl status canpass-clock'."
+    fi
+
+    # ── Hora real pelo CAN no BOOT (canpass-cantime-boot.service) ─────────────
+    # Sem internet/bateria/GPS, a ÚNICA fonte de hora real no campo é o próprio
+    # J1939: muitas máquinas transmitem o PGN 65254 (Time/Date). Este oneshot roda
+    # ANTES da gravação e, se a máquina estiver ligada e transmitir, ajusta a hora
+    # UMA vez (nunca durante a sessão — isso quebraria a sincronia vídeo↔CAN). Em
+    # operação, o offset vivo vai p/ clock_offset.csv via o monitor que o watchdog
+    # sobe junto do log CAN. No-op (não trava o boot) se não houver CAN/frame.
+    if [[ -x "${INSTALL_DIR}/canpass-can" ]]; then
+        $SUDO_CMD tee /etc/systemd/system/canpass-cantime-boot.service >/dev/null <<EOF
+[Unit]
+Description=CANPass — ajusta a hora pela hora do J1939 (PGN 65254) ANTES da gravação
+After=canpass-clock.service
+Before=${SERVICE_NAME}.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-${FIELD_ENV}
+ExecStart=${INSTALL_DIR}/canpass-can cantime-boot
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        $SUDO_CMD systemctl daemon-reload
+        $SUDO_CMD systemctl enable canpass-cantime-boot.service >/dev/null 2>&1 \
+            && log_ok "canpass-cantime-boot ativo — busca a hora real no CAN (PGN 65254) antes de gravar." \
+            || log_warn "canpass-cantime-boot não habilitou — verifique 'systemctl status canpass-cantime-boot'."
     fi
 }
 

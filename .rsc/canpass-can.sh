@@ -10,6 +10,7 @@
 #   canpass-can up [bitrate]      sobe a interface do CANable (listen-only) — padrão 250000
 #   canpass-can dump [bitrate]    up + candump (Ctrl+C encerra). J1939/Caterpillar: IDs 29-bit
 #   canpass-can selftest [bitrate] loopback interno: prova o adaptador sem depender do bus
+#   canpass-can cantime [bitrate] ajusta o RELÓGIO pela hora do J1939 (PGN 65254 Time/Date)
 #   canpass-can status            estado e contadores (erro/RX/TX) da interface
 #   canpass-can down              derruba a interface
 #
@@ -26,6 +27,9 @@
 #   CANPASS_CAN_ACTIVE     =1 sobe SEM listen-only (permite enviar; cuidado em veículo)
 #   CANPASS_CAN_LOG_HUMAN  =1 'log' com data+hora legível em vez de epoch (não replayável)
 #   CANPASS_CAN_LOG_ASCII  =1 'log' com coluna ASCII (candump -a; não replayável)
+#   CANPASS_CAN_TD_UTC     =1 'cantime' trata a hora do PGN 65254 como UTC (padrão: LOCAL)
+#   CANPASS_CAN_TD_THRESH  só ajusta o relógio se divergir mais que N s (padrão 3)
+#   CANPASS_CAN_TD_FILTER  filtro candump do PGN Time/Date (padrão 80FEE600:83FFFF00)
 
 set -uo pipefail
 
@@ -354,6 +358,121 @@ cmd_sniff() {
     _supervised_candump "$br" "$fifo"
 }
 
+# ─── cantime: hora REAL a partir do J1939 Time/Date (PGN 65254) ──────────────
+# A ÚNICA fonte de hora real no CAMPO sem internet/bateria de RTC/GPS: máquinas
+# J1939 transmitem o PGN 65254 (Time/Date, SPN 959-964) com a chave ligada.
+#
+# REGRA DE OURO (pedido do campo): NUNCA pular o relógio no meio de uma sessão —
+# vídeo e CAN compartilham o MESMO epoch do sistema, que anda monotônico enquanto
+# ligado; um salto quebraria a sincronia da análise pós-teste. Por isso há 2 modos:
+#   • cantime-boot : ajusta o relógio UMA vez no BOOT, ANTES da gravação começar.
+#   • cantime      : durante a operação, só REGISTRA o offset 'relógio do Orin ↔
+#                    hora real' num sidecar na pasta da sessão — não toca no relógio.
+# Na análise: hora_real = epoch_do_arquivo + offset (offset ~constante na sessão).
+#
+# Decodificação do PGN 65254 (8 bytes):
+#   b0 Segundos (0,25 s/bit)→b0/4   b3 Mês (1-12)   b4 Dia (0,25/bit)→b4/4
+#   b1 Minutos  (1/bit)             b2 Horas (1/bit) b5 Ano (offset 1985)→b5+1985
+# (b6/b7 = offset local; ignorados — hora tratada como LOCAL; CANPASS_CAN_TD_UTC=1 = UTC.)
+_chrony_has_real() {
+    command -v chronyc >/dev/null || return 1
+    local refid
+    refid=$(chronyc -n tracking 2>/dev/null | awk -F'[:[:space:]]+' '/Reference ID/{print $4}')
+    [[ -n "$refid" && ! "$refid" =~ ^7F7F && "$refid" != "00000000" ]]
+}
+
+# Decodifica um frame do PGN 65254 já partido em campos do candump.
+# Args: len b0 b1 b2 b3 b4 b5. Ecoa "epoch<TAB>YYYY-MM-DD HH:MM:SS" se válido; senão exit 1.
+_td_decode() {
+    local len="$1" b0="$2" b1="$3" b2="$4" b3="$5" b4="$6" b5="$7"
+    [[ "$len" == "[8]" ]] || return 1
+    [[ "$b0" =~ ^[0-9A-Fa-f]{2}$ && "$b5" =~ ^[0-9A-Fa-f]{2}$ ]] || return 1
+    local sec=$(( 16#$b0 / 4 )) mi=$(( 16#$b1 )) h=$(( 16#$b2 ))
+    local mo=$(( 16#$b3 )) day=$(( 16#$b4 / 4 )) year=$(( 16#$b5 + 1985 ))
+    (( year>=2024 && year<=2099 && mo>=1 && mo<=12 && day>=1 && day<=31 && h<=23 && mi<=59 && sec<=59 )) || return 1
+    local stamp ep; stamp=$(printf '%04d-%02d-%02d %02d:%02d:%02d' "$year" "$mo" "$day" "$h" "$mi" "$sec")
+    if [[ "${CANPASS_CAN_TD_UTC:-0}" == "1" ]]; then ep=$(date -u -d "$stamp" +%s 2>/dev/null); else ep=$(date -d "$stamp" +%s 2>/dev/null); fi
+    [[ "$ep" =~ ^[0-9]+$ ]] || return 1
+    printf '%s\t%s\n' "$ep" "$stamp"
+}
+
+# Sobe o CANable se ainda não estiver UP (coexiste com o 'log' contínuo: vários
+# candump no mesmo socket SocketCAN convivem). Ecoa a interface; exit 1 se falhar.
+_cantime_iface() {
+    local br="$1" ifc
+    ifc=$(_find_canable) || return 1
+    if [[ "$(ip -br link show "$ifc" 2>/dev/null | awk '{print $2}')" != "UP" ]]; then
+        _bring_up "$ifc" "$br" || return 1
+    fi
+    echo "$ifc"
+}
+
+# cantime-boot: ajusta o relógio UMA vez no boot (antes da gravação). Espera até
+# CANPASS_CAN_TD_BOOT_WAIT s por um frame; se a hora do CAN divergir > thresh e o
+# chrony não tiver fonte real, seta o sistema + grava os RTCs e sai. Sempre exit 0
+# (no-op se não houver CAN/frame — não trava o boot nem a gravação).
+cmd_cantime_boot() {
+    local br="${1:-$DEFAULT_BITRATE}"
+    command -v candump >/dev/null || { log_info "cantime-boot: can-utils ausente — sem ajuste por CAN."; return 0; }
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo -n"
+    local filt="${CANPASS_CAN_TD_FILTER:-80FEE600:83FFFF00}"
+    local thresh="${CANPASS_CAN_TD_THRESH:-3}" wait="${CANPASS_CAN_TD_BOOT_WAIT:-15}"
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+    if _chrony_has_real; then log_info "cantime-boot: chrony já tem fonte real (internet) — sem ajuste por CAN."; return 0; fi
+    local ifc; ifc=$(_cantime_iface "$br") || { log_info "cantime-boot: CANable ausente/baixo — sem ajuste por CAN."; return 0; }
+    log_info "cantime-boot: aguardando até ${wait}s pela hora do J1939 (PGN 65254) em ${ifc}..."
+    local line out ep stamp now diff
+    while IFS= read -r line; do
+        set -- $line   # $1=ifc $2=id $3=[8] $4..$11=bytes
+        out=$(_td_decode "$3" "$4" "$5" "$6" "$7" "$8" "${9}") || continue
+        ep=${out%%$'\t'*}; stamp=${out#*$'\t'}
+        now=$(date +%s); diff=$(( ep>now ? ep-now : now-ep ))
+        if (( diff > thresh )); then
+            $sudo date -s "@$ep" >/dev/null 2>&1
+            local r; for r in /dev/rtc0 /dev/rtc1; do [[ -e "$r" ]] && $sudo hwclock --systohc -f "$r" 2>/dev/null; done
+            logger -t canpass-cantime "BOOT: relógio ajustado pelo CAN (PGN65254) p/ ${stamp} (Δ${diff}s)"
+            log_ok "cantime-boot: relógio ajustado pelo CAN p/ $(date '+%F %T %z')."
+        else
+            log_ok "cantime-boot: relógio já bate com o CAN (Δ${diff}s) — nada a fazer."
+        fi
+        return 0
+    done < <(timeout "$wait" $SB candump "${ifc},${filt}" 2>/dev/null)
+    log_info "cantime-boot: sem hora no CAN em ${wait}s — mantém a hora atual (o offset é registrado depois, em operação)."
+    return 0
+}
+
+# cantime (monitor): durante a operação, NÃO mexe no relógio. A cada frame de hora
+# do CAN, registra no sidecar 'clock_offset.csv' da pasta de sessão (a mesma do
+# vídeo+CAN) o par hora_real ↔ epoch do Orin, p/ a análise reancorar a linha do
+# tempo. Throttle de CANPASS_CAN_TD_LOG_SECS (padrão 30s).
+cmd_cantime() {
+    local br="${1:-$DEFAULT_BITRATE}"
+    command -v candump >/dev/null || { log_error "candump ausente — instale: sudo apt-get install can-utils"; return 1; }
+    local filt="${CANPASS_CAN_TD_FILTER:-80FEE600:83FFFF00}"
+    local period="${CANPASS_CAN_TD_LOG_SECS:-30}"
+    local SB=""; command -v stdbuf >/dev/null && SB="stdbuf -oL"
+
+    log_info "Hora via CAN (offset): registra 'epoch do Orin ↔ hora real' do PGN 65254 — NÃO altera o relógio (preserva a sincronia vídeo↔CAN)."
+    local ifc last_log=0
+    while true; do
+        ifc=$(_cantime_iface "$br") || { sleep 3; continue; }
+        $SB candump "${ifc},${filt}" 2>/dev/null | while read -r _if id len b0 b1 b2 b3 b4 b5 b6 b7; do
+            local out ep stamp now off dir f
+            out=$(_td_decode "$len" "$b0" "$b1" "$b2" "$b3" "$b4" "$b5") || continue
+            ep=${out%%$'\t'*}; stamp=${out#*$'\t'}
+            now=$(date +%s)
+            (( now - last_log >= period )) || continue
+            dir="$(_can_logdir_now)"; [[ -n "$dir" ]] || continue   # sem disco/espaço → não grava
+            f="${dir}/clock_offset.csv"
+            [[ -f "$f" ]] || echo "iso_real,real_epoch,orin_epoch,offset_s,source" > "$f"
+            off=$(( ep - now ))
+            echo "${stamp},${ep},${now},${off},can_pgn65254" >> "$f"
+            last_log=$now
+        done
+        sleep 2   # candump saiu (iface caiu/reenumerou) — re-detecta
+    done
+}
+
 # ─── selftest (loopback interno) ─────────────────────────────────────────────
 # Prova o caminho controlador→driver gs_usb→USB sem depender do barramento: sobe
 # em LOOPBACK (o controlador ecoa o próprio frame), envia 1 frame e espera ele
@@ -431,6 +550,8 @@ canpass-can — sniffer do CANable (USB/gs_usb) no Orin, resolvendo a interface 
   canpass-can ascii [bitrate] sobe + candump -a (hex + coluna ASCII — frames de texto)
   canpass-can sniff [bitrate] sobe + monitora bytes que MUDAM (29-bit/J1939 — achar eixo do joystick)
   canpass-can selftest [br]   LOOPBACK interno: prova o adaptador sem depender do barramento
+  canpass-can cantime [br]    monitor: registra offset 'Orin↔hora real' (PGN 65254) SEM mexer no relógio
+  canpass-can cantime-boot[br] boot: ajusta o relógio UMA vez pela hora do J1939 (antes da gravação)
   canpass-can up    [bitrate] só sobe a interface
   canpass-can status          estado e contadores (diagnóstico de bitrate)
   canpass-can down            derruba a interface
@@ -452,6 +573,8 @@ main() {
         ascii|text)     cmd_ascii "$@" ;;
         sniff)          cmd_sniff "$@" ;;
         selftest|test)  cmd_selftest "$@" ;;
+        cantime|clock)  cmd_cantime "$@" ;;
+        cantime-boot)   cmd_cantime_boot "$@" ;;
         status)         cmd_status "$@" ;;
         down)           cmd_down "$@" ;;
         -h|--help|help) usage ;;

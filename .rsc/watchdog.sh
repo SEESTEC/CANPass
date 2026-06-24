@@ -26,6 +26,7 @@ RESTART_DELAY_SECS=3
 PROMPT_TIMEOUT="${CANPASS_PROMPT_TIMEOUT:-30}"
 CAN_CONSOLE_LOG="/tmp/canpass_can_console.log"
 CAN_LOG_PID=""
+CANTIME_PID=""   # monitor de offset 'Orin↔hora real' (PGN 65254) — não mexe no relógio
 CAN_BIN=""   # caminho resolvido do canpass-can (p/ derrubar a iface no encerramento)
 
 # Códigos que indicam encerramento intencional pelo usuário
@@ -312,9 +313,20 @@ _start_can_logger() {
     CAN_LOG_PID=$!
     log_ok "Log CAN contínuo iniciado (PID ${CAN_LOG_PID}) — can_*.log em ${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
     log_info "Console do log CAN: tail -f ${CAN_CONSOLE_LOG}"
+
+    # Monitor de hora do CAN: se a máquina transmitir o PGN 65254 (Time/Date),
+    # registra na pasta da sessão (clock_offset.csv) o par 'epoch do Orin ↔ hora
+    # real' — NÃO mexe no relógio (preserva a sincronia vídeo↔CAN). Herda o mesmo
+    # CANPASS_REC_DIR, então o sidecar fica junto do vídeo+can_*.log desta sessão.
+    "$bin" cantime "${CANPASS_CAN_BITRATE:-250000}" >>"$CAN_CONSOLE_LOG" 2>&1 &
+    CANTIME_PID=$!
+    log_ok "Monitor de hora-CAN iniciado (PID ${CANTIME_PID}) — clock_offset.csv quando a máquina enviar PGN 65254."
 }
 
 _stop_can_logger() {
+    if [[ -n "$CANTIME_PID" ]]; then
+        kill "$CANTIME_PID" 2>/dev/null; wait "$CANTIME_PID" 2>/dev/null; CANTIME_PID=""
+    fi
     [[ -n "$CAN_LOG_PID" ]] || return 0
     kill "$CAN_LOG_PID" 2>/dev/null
     wait "$CAN_LOG_PID" 2>/dev/null
