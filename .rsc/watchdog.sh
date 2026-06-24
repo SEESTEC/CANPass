@@ -83,6 +83,24 @@ _list_external_mounts() {
     done < <(lsblk -P -p -o NAME,PKNAME,TYPE,SIZE,MOUNTPOINT,TRAN,MODEL 2>/dev/null)
 }
 
+# Probe de escrita NÃO-BLOQUEANTE. Um disco USB em falha (UAS reset / I/O error)
+# deixa mkdir/touch presos em D-state — e isso TRAVAVA o watchdog inteiro no boot
+# (visto em campo 2026-06-24: 'mkdir -p' no HD morto pendurado por minutos, NADA
+# gravava, nem vídeo nem CAN). Roda o teste em subshell e o ABANDONA após
+# CANPASS_FS_PROBE_SECS s → trata o disco como indisponível e cai no interno.
+# Não usa 'timeout' direto porque ele também espera o filho em D-state; matar o
+# subshell (interrompível) destrava o watchdog e segue (o mkdir órfão some quando
+# o device finalmente dá erro de I/O).
+_probe_writable() {
+    local dir="$1" t="${CANPASS_FS_PROBE_SECS:-6}" p w=0
+    ( mkdir -p "$dir" && : > "${dir}/.canpass_wtest" && rm -f "${dir}/.canpass_wtest" ) & p=$!
+    while kill -0 "$p" 2>/dev/null; do
+        sleep 1; w=$((w+1))
+        (( w >= t )) && { kill -9 "$p" 2>/dev/null; return 1; }
+    done
+    wait "$p" 2>/dev/null
+}
+
 # Mostra interno + externos detectados, deixa escolher e valida escrita.
 # Exporta CANPASS_REC_DIR — vídeo E log CAN vão para lá (canpass-can usa
 # CANPASS_REC_DIR como fallback de CANPASS_CAN_LOGDIR).
@@ -121,12 +139,10 @@ _choose_storage() {
     done
 
     local dir="${opts_dir[$choice]}"
-    if ! mkdir -p "$dir" 2>/dev/null || ! touch "${dir}/.canpass_wtest" 2>/dev/null; then
-        log_warn "Sem permissão de escrita em ${dir} — usando interno: ${internal}"
+    if ! _probe_writable "$dir"; then
+        log_warn "${dir} não respondeu/sem escrita (disco morto ou removido?) — usando interno: ${internal}"
         dir="$internal"
         mkdir -p "$dir"
-    else
-        rm -f "${dir}/.canpass_wtest"
     fi
     export CANPASS_REC_DIR="$dir"
     # Fallback p/ o cam_view: se um disco externo escolhido sumir durante a
@@ -152,9 +168,8 @@ _auto_storage() {
         while IFS=$'\t' read -r mp _s _t _m; do
             [[ -n "$mp" ]] || continue
             cand="${mp%/}/canpass_rec"
-            if mkdir -p "$cand" 2>/dev/null && touch "${cand}/.wtest" 2>/dev/null; then
-                rm -f "${cand}/.wtest"; first="$cand"; break
-            fi
+            if _probe_writable "$cand"; then first="$cand"; break; fi
+            log_warn "Disco externo ${mp} não respondeu à escrita em ${CANPASS_FS_PROBE_SECS:-6}s (UAS/I-O?) — ignorando."
         done < <(_list_external_mounts)
         if [[ -n "$first" ]]; then
             export CANPASS_REC_DIR="$first"
@@ -185,9 +200,15 @@ _setup_session_dir() {
     stamp="canpass_$(date +%d-%m-%Y_%H-%M-%S)"
     base="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     session="${base%/}/${stamp}"
-    if mkdir -p "$session" 2>/dev/null; then
+    if _probe_writable "$session"; then
         export CANPASS_REC_DIR="$session"
         log_ok "Sessão: arquivos desta execução em ${session}"
+    elif [[ -n "${CANPASS_REC_DIR_FALLBACK:-}" ]]; then
+        # base externa não respondeu — cai na sessão interna (não trava o boot).
+        local fbs="${CANPASS_REC_DIR_FALLBACK%/}/${stamp}"
+        mkdir -p "$fbs" 2>/dev/null
+        export CANPASS_REC_DIR="$fbs"
+        log_warn "Destino ${base} não respondeu — sessão no interno: ${fbs}"
     else
         log_warn "Não consegui criar a pasta de sessão em ${base} — salvando direto em ${base}."
         export CANPASS_REC_DIR="$base"

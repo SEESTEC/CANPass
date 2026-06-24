@@ -131,6 +131,19 @@ cmd_up() {
 # (pasta de sessão no destino); fallback: CANPASS_REC_DIR_FALLBACK (interno).
 # Sem nenhum destino com a margem livre (CANPASS_MIN_FREE_MB, padrão 8192 = 8 GB)
 # ecoa VAZIO → o log PAUSA (não enche o disco do Orin). Avisos vão p/ stderr.
+# Probe de escrita NÃO-BLOQUEANTE (mesmo motivo do watchdog/cam_view): um disco USB
+# em falha (UAS reset / I/O error) deixa mkdir/touch presos em D-state. Roda em
+# subshell e ABANDONA após CANPASS_FS_PROBE_SECS s → destino tratado como indisponível.
+_probe_writable() {
+    local dir="$1" t="${CANPASS_FS_PROBE_SECS:-6}" p w=0
+    ( mkdir -p "$dir" && : > "${dir}/.canpass_wtest" && rm -f "${dir}/.canpass_wtest" ) & p=$!
+    while kill -0 "$p" 2>/dev/null; do
+        sleep 1; w=$((w+1))
+        (( w >= t )) && { kill -9 "$p" 2>/dev/null; return 1; }
+    done
+    wait "$p" 2>/dev/null
+}
+
 _can_logdir_now() {
     local min_mb="${CANPASS_MIN_FREE_MB:-8192}"
     local pref="${CANPASS_CAN_LOGDIR:-${CANPASS_REC_DIR:-$HOME/canpass_rec}}"
@@ -138,9 +151,10 @@ _can_logdir_now() {
     local d free_mb
     for d in "$pref" "$fb"; do
         [[ -n "$d" ]] || continue
-        mkdir -p "$d" 2>/dev/null || continue
-        [[ -w "$d" ]] || continue
-        free_mb=$(df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
+        # Probe NÃO-BLOQUEANTE: disco USB em falha (UAS/I-O) deixa mkdir em D-state e
+        # penduraria o log/monitor. Abandona após CANPASS_FS_PROBE_SECS s → fallback.
+        _probe_writable "$d" || continue
+        free_mb=$(timeout 5 df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
         [[ "$free_mb" =~ ^[0-9]+$ ]] || continue
         (( free_mb >= min_mb )) && { echo "$d"; return 0; }
     done

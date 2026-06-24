@@ -1122,6 +1122,20 @@ _resolve_rec_dir() {
 # ecoa VAZIO → o gravador PAUSA (não enche o disco). Os gravadores chamam isto a
 # cada (re)início → migra sozinho entre externo↔interno e retoma quando libera.
 # Saída capturada via $(); avisos vão p/ stderr p/ não poluir o caminho.
+# Probe de escrita NÃO-BLOQUEANTE (mesmo motivo do watchdog): um disco USB em falha
+# (UAS reset / I/O error) deixa mkdir/touch presos em D-state; aqui isso penduraria
+# o gravador a cada re-resolução de destino. Roda em subshell e ABANDONA após
+# CANPASS_FS_PROBE_SECS s → o destino é tratado como indisponível e migra p/ o fallback.
+_probe_writable() {
+    local dir="$1" t="${CANPASS_FS_PROBE_SECS:-6}" p w=0
+    ( mkdir -p "$dir" && : > "${dir}/.canpass_wtest" && rm -f "${dir}/.canpass_wtest" ) & p=$!
+    while kill -0 "$p" 2>/dev/null; do
+        sleep 1; w=$((w+1))
+        (( w >= t )) && { kill -9 "$p" 2>/dev/null; return 1; }
+    done
+    wait "$p" 2>/dev/null
+}
+
 _rec_dir_now() {
     local tag="${1:-}"
     local min_mb="${CANPASS_MIN_FREE_MB:-8192}"
@@ -1131,10 +1145,8 @@ _rec_dir_now() {
     fb="${CANPASS_REC_DIR_FALLBACK:-${HOME}/canpass_rec}"
     for d in "$pref" "$fb"; do
         [[ -n "$d" ]] || continue
-        mkdir -p "$d" 2>/dev/null || continue
-        touch "${d}/.canpass_wtest" 2>/dev/null || continue
-        rm -f "${d}/.canpass_wtest"
-        free_mb=$(df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
+        _probe_writable "$d" || continue
+        free_mb=$(timeout 5 df -Pm "$d" 2>/dev/null | awk 'NR==2{print $4}')
         [[ "$free_mb" =~ ^[0-9]+$ ]] || continue
         (( free_mb >= min_mb )) || continue
         [[ -f "$sflag" ]] && rm -f "$sflag"
