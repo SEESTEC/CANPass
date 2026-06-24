@@ -24,6 +24,13 @@ FIELD_ENV="/usr/local/share/canpass/canpass-field.env"
 # (câmeras IP sincronizam aqui) e roda no fuso de Brasília — assim vídeo, log CAN
 # e OSD das câmeras compartilham a MESMA base de tempo. Ajustáveis via ambiente.
 TIMEZONE="${CANPASS_TZ:-America/Sao_Paulo}"
+# NTP UPSTREAM (cliente): por padrão usa os pools públicos do chrony (internet).
+# Em rede SEM saída p/ internet mas COM um servidor de hora interno (NTP corporativo,
+# roteador que serve NTP, ou um PC da bancada), aponte aqui — assim o Orin SINCRONIZA
+# a hora real como um PC normal, mesmo sem internet pública. Vários separados por
+# espaço/vírgula. Ex.: CANPASS_NTP_UPSTREAM="10.105.4.1 192.168.1.190".
+# Vazio = mantém os pools default do chrony.conf (só funcionam com internet pública).
+NTP_UPSTREAM="${CANPASS_NTP_UPSTREAM:-}"
 # Sub-redes que o servidor NTP atende: por padrão TODAS as sub-redes conectadas
 # (uma 'allow' por interface), não só a da rota default. O Orin de campo é
 # multi-homed (ex.: eth0 = LAN das câmeras 192.168.20.x + wlan0 = internet/NTP
@@ -254,8 +261,20 @@ setup_ntp_server() {
         echo "# Serve o relógio do Orin como NTP p/ a sub-rede de campo, mesmo SEM"
         echo "# upstream/internet (local stratum) — assim câmeras + CAN + vídeo ficam"
         echo "# com a MESMA base de tempo (uniforme). Câmeras IP apontam o NTP p/ o Orin."
+        # CLIENTE: se houver um servidor de hora alcançável (CANPASS_NTP_UPSTREAM —
+        # NTP interno/roteador/PC da bancada, ou os pools públicos com internet), o
+        # Orin sincroniza a hora REAL como um PC normal e corrige o relógio sozinho.
+        # 'prefer' = prioriza o upstream sobre o 'local stratum 10' (o relógio próprio).
+        if [[ -n "$NTP_UPSTREAM" ]]; then
+            local _us; for _us in ${NTP_UPSTREAM//,/ }; do echo "server ${_us} iburst prefer"; done
+        fi
         local _sn; for _sn in "${subnets[@]}"; do echo "allow ${_sn}"; done
         echo "local stratum 10"
+        # makestep: no boot, se a hora estiver MUITO errada (RTC sem bateria → preso
+        # na última hora), SALTA p/ a correta de uma vez nas primeiras atualizações,
+        # em vez de corrigir a passo de tartaruga. Limitado às 3 primeiras p/ NUNCA
+        # pular o relógio DURANTE a gravação (preserva a sincronia vídeo↔CAN).
+        echo "makestep 1.0 3"
         echo "# rtcsync: mantém o RTC de hardware disciplinado (~11 min) — com bateria"
         echo "# de backup no carrier, a hora REAL sobrevive ao power-off offline."
         echo "rtcsync"
@@ -279,6 +298,26 @@ setup_ntp_server() {
         log_ok "Servidor NTP ativo (${svc}) — servindo ${subnets[*]}; câmeras usam o IP do Orin como NTP."
     else
         log_warn "chrony configurado mas não reiniciou — 'sudo systemctl restart ${svc}' e verifique 'chronyc sources'."
+    fi
+
+    # ── Correção IMEDIATA da hora durante o próprio 'canpass update' ──────────
+    # Se houver QUALQUER fonte NTP alcançável agora (upstream interno ou internet),
+    # força a sincronia já — assim o Orin sai do update com a hora certa, sem esperar
+    # o próximo boot. Sem fonte (campo/bancada isolada) é inócuo: o makestep não tem
+    # o que aplicar e a hora segue como está. O re-seed do RTC abaixo então grava a
+    # hora JÁ corrigida (antes, semeava a hora errada por rodar antes da sincronia).
+    if command -v chronyc >/dev/null 2>&1; then
+        $SUDO_CMD chronyc -a online   >/dev/null 2>&1 || true
+        $SUDO_CMD chronyc -a 'burst 4/4' >/dev/null 2>&1 || true
+        sleep 5
+        if $SUDO_CMD chronyc -a makestep >/dev/null 2>&1; then
+            local _refid; _refid=$($SUDO_CMD chronyc -n tracking 2>/dev/null | awk -F'[:[:space:]]+' '/Reference ID/{print $4}')
+            if [[ -n "$_refid" && "$_refid" != "7F7F0101" && "$_refid" != "00000000" ]]; then
+                log_ok "Hora sincronizada AGORA via NTP (ref ${_refid}): $(date '+%F %T %z')."
+            else
+                log_warn "Sem fonte NTP alcançável agora — hora mantida ($(date '+%F %T %z')). Em campo a hora real vem do CAN (PGN 65254) ou de bateria de RTC."
+            fi
+        fi
     fi
 
     # ── Persistência da hora REAL offline ────────────────────────────────────
