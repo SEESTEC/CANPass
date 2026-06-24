@@ -83,6 +83,26 @@ _list_external_mounts() {
     done < <(lsblk -P -p -o NAME,PKNAME,TYPE,SIZE,MOUNTPOINT,TRAN,MODEL 2>/dev/null)
 }
 
+# Garante o disco USB montado SEM depender do auto-mount do desktop. PROBLEMA de
+# campo (2026-06-24): num boot headless NÃO há autologin gráfico, então o udisksd
+# nunca monta o SSD (auto-mount depende de sessão gráfica) E o udisksctl a partir do
+# serviço (tty1) é negado pelo polkit. Solução: um helper root (canpass-mount-ext,
+# instalado pelo install.sh + NOPASSWD) que monta via 'mount' real — funciona no
+# contexto do serviço, sem polkit. Espera até CANPASS_EXT_WAIT s (padrão 20) o device
+# aparecer no boot. Se o helper não existir (instalação antiga), é no-op.
+_ensure_external_mounted() {
+    local helper="/usr/local/sbin/canpass-mount-ext"
+    [[ -x "$helper" ]] || return 0
+    local sudo=""; [[ $EUID -ne 0 ]] && sudo="sudo -n"
+    local wait="${CANPASS_EXT_WAIT:-20}" t=0 out
+    while (( t <= wait )); do
+        out=$($sudo "$helper" 2>/dev/null)
+        [[ -n "$out" ]] && { log_ok "Disco externo montado: $(echo $out | tr '\n' ' ')"; return 0; }
+        sleep 2; t=$((t+2))
+    done
+    log_warn "Nenhum disco USB com filesystem apareceu em ${wait}s — seguindo (interno se for o caso)."
+}
+
 # Probe de escrita NÃO-BLOQUEANTE. Um disco USB em falha (UAS reset / I/O error)
 # deixa mkdir/touch presos em D-state — e isso TRAVAVA o watchdog inteiro no boot
 # (visto em campo 2026-06-24: 'mkdir -p' no HD morto pendurado por minutos, NADA
@@ -105,6 +125,7 @@ _probe_writable() {
 # Exporta CANPASS_REC_DIR — vídeo E log CAN vão para lá (canpass-can usa
 # CANPASS_REC_DIR como fallback de CANPASS_CAN_LOGDIR).
 _choose_storage() {
+    _ensure_external_mounted   # garante o SSD montado antes de listar as opções
     local internal="${CANPASS_REC_DIR:-${HOME}/canpass_rec}"
     local -a opts_dir=("$internal")
     local -a opts_label=("Interno  — ${internal}")
@@ -164,6 +185,7 @@ _auto_storage() {
     fi
 
     if [[ "${CANPASS_REC_EXTERNAL:-1}" == "1" ]]; then
+        _ensure_external_mounted   # monta o SSD antes de escolher (não espera o desktop)
         local mp _s _t _m cand first=""
         while IFS=$'\t' read -r mp _s _t _m; do
             [[ -n "$mp" ]] || continue

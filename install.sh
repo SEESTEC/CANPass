@@ -124,6 +124,40 @@ setup_jetson_sudoers() {
     grep -aqE "nvidia" /proc/device-tree/compatible 2>/dev/null || return 0
     local sudoers_file="/etc/sudoers.d/canpass-nvargus"
 
+    # Helper root que MONTA discos USB (com filesystem) ainda não montados — sem
+    # depender do auto-mount do desktop, que num boot HEADLESS (sem autologin) não
+    # roda, e do udisksctl, que o polkit nega no contexto do serviço. Roda via
+    # 'sudo -n' (NOPASSWD abaixo) a partir do watchdog. Exclui a eMMC interna.
+    $SUDO_CMD install -d /usr/local/sbin
+    $SUDO_CMD tee /usr/local/sbin/canpass-mount-ext >/dev/null <<'MEEOF'
+#!/bin/bash
+# canpass-mount-ext — monta partições USB (com FS) não montadas, como root, em
+# /media/canpass/<dev>. Idempotente; imprime os mountpoints. Exclui mmcblk0 (eMMC).
+set -u
+while IFS= read -r line; do
+    NAME=""; PKNAME=""; FSTYPE=""; MOUNTPOINT=""; TYPE=""
+    eval "$line"
+    [[ "$TYPE" == part && -n "$FSTYPE" ]] || continue
+    [[ "$NAME" == *mmcblk0* ]] && continue
+    tran=$(lsblk -dno TRAN "${PKNAME:-$NAME}" 2>/dev/null)
+    [[ "$tran" == usb ]] || continue
+    if [[ -n "$MOUNTPOINT" ]]; then echo "$MOUNTPOINT"; continue; fi
+    mp="/media/canpass/$(basename "$NAME")"
+    mkdir -p "$mp" 2>/dev/null
+    case "$FSTYPE" in
+        vfat|exfat|ntfs|ntfs3|fuseblk) opts="rw,uid=1000,gid=1000,umask=0002" ;;
+        *)                             opts="rw" ;;
+    esac
+    if timeout 25 mount -t "$FSTYPE" -o "$opts" "$NAME" "$mp" 2>/dev/null \
+       || timeout 25 mount -o "$opts" "$NAME" "$mp" 2>/dev/null; then
+        [[ "$FSTYPE" == ext* ]] && chown 1000:1000 "$mp" 2>/dev/null
+        echo "$mp"
+    fi
+done < <(lsblk -P -p -o NAME,PKNAME,FSTYPE,MOUNTPOINT,TYPE 2>/dev/null)
+exit 0
+MEEOF
+    $SUDO_CMD chmod 755 /usr/local/sbin/canpass-mount-ext
+
     # Resolve caminhos (variam entre layouts L4T); só inclui o que existe.
     local systemctl_bin nvpmodel_bin jetson_clocks_bin ip_bin modprobe_bin reboot_bin tee_bin
     systemctl_bin="$(command -v systemctl || echo /bin/systemctl)"
@@ -155,6 +189,9 @@ setup_jetson_sudoers() {
     # autosuspend nunca era desligado. O caminho varia com a topologia USB → curinga
     # (sudoers usa fnmatch sem FNM_PATHNAME, então '*' cobre as barras do /sys).
     cmds+=("${tee_bin} /sys/devices/*/power/control")
+    # FIELD: watchdog monta o SSD externo via este helper root (boot headless não
+    # tem auto-mount). Sem tty → precisa NOPASSWD.
+    cmds+=("/usr/local/sbin/canpass-mount-ext")
 
     local joined
     joined=$(IFS=,; echo "${cmds[*]}")
