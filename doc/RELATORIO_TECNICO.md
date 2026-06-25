@@ -2,20 +2,20 @@
 
 **Plataforma de captura de vídeo e telemetria CAN para máquina pesada Caterpillar**
 
-| | |
-|---|---|
-| **Projeto** | CANPass |
-| **Plataforma alvo** | NVIDIA Jetson AGX Orin (L4T 35.2.1 / JetPack 5.1.0 / kernel 5.10.104-tegra) |
-| **Objetivo** | Gravar vídeo (CSI/GMSL/IP) sincronizado com o log do barramento J1939, em campo, de forma autônoma e à prova de parada |
-| **Versão de referência** | `v2.11.0-field` (conferir a última com `git tag --sort=-v:refname \| head -1`) |
-| **Documento** | Descritivo de hardware, comunicação, topologia e diagrama de blocos |
-| **Data** | 2026-06-24 |
+|                          |                                                                                                                        |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------|
+| **Projeto**              | CANPass                                                                                                                |
+| **Plataforma alvo**      | NVIDIA Jetson AGX Orin (L4T 35.2.1 / JetPack 5.1.0 / kernel 5.10.104-tegra)                                            |
+| **Objetivo**             | Gravar vídeo (CSI/GMSL/IP) sincronizado com o log do barramento J1939, em campo, de forma autônoma e à prova de parada |
+| **Versão de referência** | `v2.11.0-field` (conferir a última com `git tag --sort=-v:refname \| head -1`)                                         |
+| **Documento**            | Descritivo de hardware, comunicação, topologia e diagrama de blocos                                                    |
+| **Data**                 | 2026-06-24                                                                                                             |
 
 ---
 
 ## 1. Sumário executivo
 
-O CANPass é um sistema embarcado, todo em **shell script** sobre **Linux for Tegra (L4T)**, que transforma uma **NVIDIA Jetson AGX Orin** em um gravador de campo autônomo. Ele:
+O CANPass é um sistema de gravador de campo autônomo embarcado sobre **NVIDIA Jetson Orin™ AGX 64GB [Developer Kit] Linux for Tegra (L4T)**. Ele:
 
 1. **Detecta e captura** imagem de múltiplas câmeras simultâneas (uma câmera embarcada CSI/GMSL + câmeras IP de rede);
 2. **Publica** os vídeos ao vivo em RTSP / HLS / WebRTC através de um servidor **MediaMTX** (Docker);
@@ -141,6 +141,47 @@ Montagem do SSD externo no boot headless é feita por um **helper root** dedicad
    └──────────────────────────┘
 ```
 
+### 3.1 Versão Mermaid
+
+```mermaid
+flowchart TB
+    CAT["MÁQUINA CATERPILLAR<br/>J1939 · 250 kbit/s · 29-bit"]
+    CANABLE["CANable USB<br/>(driver gs_usb · listen-only)"]
+    CAT -->|CAN-H / CAN-L| CANABLE
+
+    subgraph CAMS["Câmeras"]
+        ECAM["e-CAM82 (IMX485)<br/>MIPI CSI-2 · J509"]
+        NILE["NileCAM81 (AR0821)<br/>GMSL2 · J509"]
+        HIK["Hikvision .57<br/>HEVC / H.265"]
+        VIV["Vivotek .51<br/>H.264 + áudio"]
+    end
+
+    subgraph ORIN["NVIDIA JETSON AGX ORIN — L4T 35.2.1 · headless"]
+        WD["watchdog.sh → cam_view.sh --all"]
+        CANLOG["canpass-can<br/>(log CAN epoch/humano)"]
+        MTX["MediaMTX (Docker)<br/>--network host"]
+        REC["gravadores ffmpeg<br/>(contínuo / movimento)"]
+        WD --- CANLOG
+        WD --- MTX
+        WD --- REC
+    end
+
+    CANABLE -->|USB| CANLOG
+    ECAM -->|MIPI CSI-2| WD
+    NILE -->|GMSL2| WD
+    HIK -->|RTSP| MTX
+    VIV -->|RTSP| MTX
+
+    MTX -->|"RTSP 8554 · HLS 8888 · WebRTC 8889"| CLIENTS["Clientes<br/>(browser / VLC / app)"]
+    REC -->|MP4 segments| STORE["SSD/HD USB externo<br/>→ fallback eMMC · guarda 8 GB"]
+
+    SWITCH["SWITCH / REDE ETHERNET<br/>IP cams 10.105.4.x · gestão 192.168.20.x<br/>Orin = servidor NTP (Brasília)"]
+    HIK -.-> SWITCH
+    VIV -.-> SWITCH
+    ORIN -.->|SSH · NoMachine · NTP| SWITCH
+    CLIENTS -.- SWITCH
+```
+
 ---
 
 ## 4. Diagrama de blocos funcional (software no Orin)
@@ -174,6 +215,39 @@ Montagem do SSD externo no boot headless é feita por um **helper root** dedicad
                                           │   RTSP:8554 / HLS:8888 /          │
                                           │   WebRTC:8889  +  MP4 → storage   │
                                           └──────────────────────────────────┘
+```
+
+### 4.1 Versão Mermaid
+
+```mermaid
+flowchart TB
+    SYSD["systemd → watchdog.sh --all<br/>EnvironmentFile: canpass-field.env<br/>Restart=on-failure · RestartSec=3"]
+
+    SYSD -->|supervisiona / reinicia em falha| WD["watchdog.sh"]
+
+    subgraph BG["Serviços de apoio"]
+        CANLOG["LOG CAN (background)<br/>canpass-can dump/log<br/>• acha iface por gs_usb<br/>• ip link listen-only 250k<br/>• candump supervisionado<br/>• timestamp epoch comum"]
+        CLK["RELÓGIO (sincronia)<br/>canpass-clock (RTC/fake)<br/>chrony (NTP srv+cliente)<br/>canpass-can cantime (PGN 65254)"]
+    end
+
+    subgraph CV["cam_view.sh --all"]
+        DET["(A) Detecção de câmeras<br/>CSI / V4L2 / IP"]
+        MTX["(B) ensure_mediamtx<br/>Docker · --network host"]
+        PUB["(C) Pipelines de publicação (1/cam)<br/>• CSI → NVENC → RTSP<br/>• YUV/V4L2 → NVENC<br/>• IP RTSP → republica"]
+        RECG["(D) Gravadores (1/cam)<br/>• contínuo (x264 CRF, frag-MP4)<br/>• movimento (-c copy)"]
+        DET --> MTX
+        MTX --> PUB
+        MTX --> RECG
+    end
+
+    WD --> CANLOG
+    WD --> CLK
+    WD --> CV
+
+    PUB --> OUT["RTSP 8554 · HLS 8888 · WebRTC 8889"]
+    RECG --> STORE["MP4 → storage<br/>(externo → fallback interno)"]
+    CLK -.->|timestamp comum| CANLOG
+    CLK -.->|timestamp comum| RECG
 ```
 
 ---
